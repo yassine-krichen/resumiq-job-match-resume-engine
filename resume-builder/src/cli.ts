@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 import { analyzeJob, selectAndDraft, critiqueAndRevise } from './agents';
+import { checkBridge } from './llm';
 import { render } from './renderer';
 import type { AISelection, MasterDB } from './types';
 
@@ -43,6 +44,11 @@ async function main(): Promise<void> {
   const renderOnly = process.argv.includes('--render-only');
 
   mkdirSync(join(ROOT, 'output'), { recursive: true });
+
+  if (!renderOnly) {
+    await checkBridge();
+    console.log(`✓ Bridge running at ${process.env.BRIDGE_URL ?? 'http://127.0.0.1:3000'}`);
+  }
 
   const db: MasterDB = JSON.parse(read(DB_PATH));
   const skeletonPath = join(ROOT, 'templates', 'skeleton.tex');

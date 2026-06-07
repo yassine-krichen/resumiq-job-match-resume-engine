@@ -7,8 +7,7 @@
     "render": "tsx src/cli.ts --render-only"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
-    "openai": "^4.77.0"
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
