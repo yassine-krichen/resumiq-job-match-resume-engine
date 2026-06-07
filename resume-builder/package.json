@@ -1,0 +1,18 @@
+{
+  "name": "resume-builder",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "generate": "tsx src/cli.ts",
+    "render": "tsx src/cli.ts --render-only"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

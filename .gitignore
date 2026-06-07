@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+resume-builder/output/
+*.aux
+*.log
+*.out
+*.synctex.gz

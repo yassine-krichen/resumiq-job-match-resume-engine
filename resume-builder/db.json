@@ -1,0 +1,162 @@
+{
+    "personal_info": {
+        "name": "Jane Doe",
+        "location": "San Francisco, CA",
+        "phone": "+1 555-0198",
+        "email": "jane.doe@example.com",
+        "work_authorization": ["US Citizen", "Requires no sponsorship"],
+        "clearances": ["Secret (Active)"],
+        "links": [
+            {
+                "platform": "LinkedIn",
+                "url": "https://linkedin.com/in/janedoe/"
+            },
+            { "platform": "GitHub", "url": "https://github.com/janedoe" },
+            { "platform": "Portfolio", "url": "https://janedoe.dev" },
+            { "platform": "Medium", "url": "https://medium.com/@janedoe" }
+        ]
+    },
+    "summaries": [
+        {
+            "target_role": "Backend Engineer",
+            "content": "Backend Engineer with 3+ years of experience building scalable distributed systems..."
+        },
+        {
+            "target_role": "DevRel / Advocate",
+            "content": "Developer advocate and engineer passionate about building developer tools and community..."
+        }
+    ],
+    "experience": [
+        {
+            "company": "Tech Corp",
+            "company_industry": "FinTech",
+            "role": "Software Engineer",
+            "location": "San Francisco, CA",
+            "location_type": "Hybrid",
+            "startDate": "Jun 2021",
+            "endDate": "Present",
+            "isCurrent": true,
+            "core_competencies": ["Backend", "Mentorship", "System Design"],
+            "technologies_used": ["React", "Node.js", "PostgreSQL", "GraphQL"],
+            "raw_achievements": [
+                "Migrated legacy REST APIs to GraphQL.",
+                "Led a team of 3 interns to deliver an internal analytics dashboard.",
+                "Set up CI/CD pipelines using GitHub Actions."
+            ],
+            "quantifiable_metrics": [
+                "Reduced over-fetching by 40%",
+                "Decreased deployment time from 15 mins to 3 mins",
+                "Supported 100k+ daily active users"
+            ]
+        }
+    ],
+    "education": [
+        {
+            "institution": "State University",
+            "degree_type": "Bachelor of Science",
+            "major": "Computer Science",
+            "minor": "Mathematics",
+            "location": "City, State",
+            "startDate": "Sep 2017",
+            "endDate": "May 2021",
+            "gpa": "3.8/4.0",
+            "honors": ["Summa Cum Laude", "Dean's List 2019-2021"],
+            "relevant_coursework": [
+                "Data Structures",
+                "Distributed Systems",
+                "Cryptography"
+            ],
+            "thesis_or_capstone": "Analyzed NLP performance on low-resource languages.",
+            "extracurriculars": [
+                "President of the CS Club",
+                "Robotics Team Lead"
+            ]
+        }
+    ],
+    "projects": [
+        {
+            "name": "Open Source Contribution - React",
+            "context": "Open Source",
+            "links": [
+                {
+                    "type": "Pull Request",
+                    "url": "https://github.com/facebook/react/pull/123"
+                }
+            ],
+            "startDate": "Jan 2022",
+            "endDate": "Feb 2022",
+            "technologies_used": ["TypeScript", "React"],
+            "raw_achievements": [
+                "Fixed critical bugs in the core rendering engine.",
+                "Refactored component lifecycle tests."
+            ],
+            "quantifiable_metrics": [
+                "Resolved 5 open issues",
+                "Improved test coverage for Module X by 15%"
+            ]
+        }
+    ],
+    "skills": {
+        "programming_languages": ["TypeScript", "JavaScript", "Python", "Go"],
+        "frameworks_and_libraries": ["React", "Next.js", "Express", "Django"],
+        "infrastructure_and_tools": [
+            "Git",
+            "Docker",
+            "Kubernetes",
+            "AWS",
+            "Terraform"
+        ],
+        "databases": ["PostgreSQL", "MongoDB", "Redis"],
+        "spoken_languages": [
+            { "language": "English", "fluency": "Native" },
+            {
+                "language": "Spanish",
+                "fluency": "Professional Working Proficiency"
+            },
+            { "language": "Japanese", "fluency": "Conceptual" }
+        ],
+        "soft_skills": [
+            "Cross-functional Communication",
+            "Agile Leadership",
+            "Public Speaking"
+        ]
+    },
+    "certifications": [
+        {
+            "name": "AWS Certified Solutions Architect",
+            "issuer": "Amazon Web Services",
+            "date": "Aug 2022",
+            "expiration_date": "Aug 2025",
+            "credential_id": "AWS-12345",
+            "link": "https://aws.amazon.com/...",
+            "description": "Validated expertise in designing distributed systems on AWS."
+        }
+    ],
+    "publications_and_speaking": [
+        {
+            "title": "Scaling Node.js Microservices",
+            "type": "Conference Talk",
+            "event_or_publisher": "NodeConf 2023",
+            "date": "Nov 2023",
+            "link": "https://youtube.com/...",
+            "description": "Presented a 30-minute talk on migrating monoliths to microservices to an audience of 500+ engineers."
+        }
+    ],
+    "awards_and_honors": [
+        {
+            "title": "1st Place - Global Hackathon",
+            "issuer": "TechCrunch",
+            "date": "Oct 2020",
+            "description": "Built an AI-powered accessibility tool in 48 hours, winning out of 200+ competing teams."
+        }
+    ],
+    "volunteering_and_leadership": [
+        {
+            "organization": "Code for Good",
+            "role": "Volunteer Mentor",
+            "startDate": "Jan 2022",
+            "endDate": "Present",
+            "description": "Teaching web development basics to underrepresented high school students."
+        }
+    ]
+}
