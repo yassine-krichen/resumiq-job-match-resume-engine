@@ -131,6 +131,7 @@ export const UserSettingsSchema = z.object({
 
 // ── Inferred Types ──────────────────────────────────────────────────────────
 
+export type MasterDB = z.infer<typeof MasterDBSchema>;
 export type CreateJobDto = z.infer<typeof CreateJobSchema>;
 export type UpdateCareerProfileDto = z.infer<typeof UpdateCareerProfileSchema>;
 export type UserSettingsDto = z.infer<typeof UserSettingsSchema>;

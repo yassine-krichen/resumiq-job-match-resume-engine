@@ -21,9 +21,7 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
-  // App-specific relations (Phase 1+)
-  // careerProfile CareerProfile?
-  // applications  Application[]
+  careerProfile CareerProfile?
 
   @@map("users")
 }
@@ -70,6 +68,34 @@ model Verification {
   updatedAt  DateTime?
 
   @@map("verifications")
+}
+
+// ── Phase 1: Career Inventory ───────────────────────────────────────────────
+
+model CareerProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // MasterDB sections stored as JSONB for schema flexibility
+  personalInfo Json @default("{}")
+  summaries    Json @default("[]")
+  experience   Json @default("[]")
+  education    Json @default("[]")
+  projects     Json @default("[]")
+  skills       Json @default("{}")
+  certifications          Json @default("[]")
+  awardsAndHonors         Json @default("[]")
+  publicationsAndSpeaking Json @default("[]")
+  volunteeringAndLeadership Json @default("[]")
+  interests    Json @default("[]")
+
+  // Computed strength score (0-100), refreshed on each update
+  strengthScore Int @default(0)
+
+  @@map("career_profiles")
 }
 
 // ── Phase 5 stubs (billing — schema ready, enforcement behind flag) ──────────
