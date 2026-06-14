@@ -1,5 +1,50 @@
 import { generateJSON } from './llm';
-import type { AISelection, JobDNA, MasterDB } from './types';
+import type { AISelection, CompatibilityResult, JobDNA, MasterDB } from './types';
+
+// ── Compatibility Check ─────────────────────────────────────────────────────
+
+const COMPAT_SYSTEM = `\
+You are a technical career advisor assessing candidate-job fit before resume generation.
+
+Rules:
+- Mark compatible:false ONLY when a mandatory_technical_skill has zero coverage across the candidate's
+  entire history (no match in any technologies_used across experience or projects, no match in skills).
+  Account for common synonyms: React = React.js, Node = Node.js, Postgres = PostgreSQL, K8s = Kubernetes.
+- Missing quantifiable metrics: warning only, never a blocker.
+- Missing soft skills: warning only, never a blocker.
+- Missing nice_to_have_skills: warning only.
+- score (0-100): percentage of mandatory_technical_skills covered, weighted by depth of coverage.
+- suggestions must be specific: "Add a project using X to projects section" not "improve your DB".
+
+Return ONLY valid JSON. No markdown. No explanation outside the JSON.`;
+
+function compatUser(jobDNA: JobDNA, db: MasterDB): string {
+  const techProfile = {
+    skills: db.skills,
+    experience_tech: db.experience.map((e) => ({ company: e.company, technologies: e.technologies_used })),
+    project_tech: db.projects.map((p) => ({ name: p.name, technologies: p.technologies_used })),
+  };
+
+  return `\
+Assess whether this candidate should apply for this job.
+
+<job_dna>
+${JSON.stringify(jobDNA, null, 2)}
+</job_dna>
+
+<candidate_tech_profile>
+${JSON.stringify(techProfile, null, 2)}
+</candidate_tech_profile>
+
+Return JSON matching this exact schema:
+{
+  "compatible": boolean,
+  "score": number (0-100),
+  "blockers": ["mandatory tech with zero DB coverage — one per string"],
+  "warnings": ["string — weak coverage, missing metrics, or missing nice-to-haves"],
+  "suggestions": ["string — specific actionable DB improvements"]
+}`;
+}
 
 // ── Agent 1: Job Analyzer ───────────────────────────────────────────────────
 
@@ -61,9 +106,14 @@ HARD RULES — each violation invalidates the output:
 
 Return ONLY valid JSON. No markdown. No explanation.`;
 
-function agent2User(jobDNA: JobDNA, db: MasterDB): string {
+function agent2User(jobDNA: JobDNA, db: MasterDB, pages: 1 | 2 = 2): string {
+  const pageConstraint =
+    pages === 1
+      ? '\nPAGE CONSTRAINT (1-PAGE): Must fit one page. Max 2 experience entries, max 2 projects, max 2 bullets each. Skip volunteering/publications/interests. Keep skills concise (≤5 items per category).'
+      : '\nPAGE CONSTRAINT (2-PAGE): Use both pages well. Include all relevant sections. Up to 4 bullets per experience, 3 per project.';
+
   return `\
-Select and draft resume content for this candidate targeting this specific role.
+Select and draft resume content for this candidate targeting this specific role.${pageConstraint}
 
 <job_dna>
 ${JSON.stringify(jobDNA, null, 2)}
@@ -76,7 +126,7 @@ ${JSON.stringify(db, null, 2)}
 Return JSON matching this exact schema:
 {
   "reasoning": "string — brief explanation of your selection and ordering strategy",
-  "section_order": ["array of: education | experience | projects | skills | certifications | awards — ordered by relevance to this role"],
+  "section_order": ["ordered array of section names to include. Available: education | experience | projects | skills | certifications | awards | summary | spoken_languages | volunteering | publications | interests"],
   "summary": "string or null — include only if a targeted summary adds real value for this specific role",
   "experience": [
     {
@@ -98,7 +148,9 @@ Return JSON matching this exact schema:
     "databases": ["string — from candidate database only"]
   },
   "certifications": ["string — cert names from database, include only if relevant to this role"],
-  "awards": ["string — award titles from database, include only if they strengthen this specific application"]
+  "awards": ["string — award titles from database, include only if they strengthen this specific application"],
+  "volunteering": ["string — organization names from volunteering_and_leadership, include if relevant to this role or shows soft skills"],
+  "publications": ["string — publication titles from publications_and_speaking, include if relevant"]
 }`;
 }
 
@@ -120,6 +172,10 @@ Also check:
 - All skills listed exist in the candidate's database skills section.
 - Section order is strategically correct for this specific role.
 - Summary (if present) is targeted — not a generic elevator pitch.
+
+After revising, add:
+- match_score (0-100): how strongly the final resume targets this specific role, based on ATS keyword coverage, bullet quality, and section relevance.
+- match_reasoning: one sentence explaining the score.
 
 Return the complete revised AISelection JSON. Keep reasoning updated with what you changed and why.
 Return ONLY valid JSON. No markdown. No explanation outside the JSON.`;
@@ -145,12 +201,20 @@ Return the complete improved AISelection JSON with the same schema.`;
 
 // ── Exported Functions ──────────────────────────────────────────────────────
 
+export async function checkCompatibility(jobDNA: JobDNA, db: MasterDB): Promise<CompatibilityResult> {
+  return generateJSON<CompatibilityResult>(COMPAT_SYSTEM, compatUser(jobDNA, db));
+}
+
 export async function analyzeJob(jd: string, companyInfo: string): Promise<JobDNA> {
   return generateJSON<JobDNA>(AGENT1_SYSTEM, agent1User(jd, companyInfo));
 }
 
-export async function selectAndDraft(jobDNA: JobDNA, db: MasterDB): Promise<AISelection> {
-  return generateJSON<AISelection>(AGENT2_SYSTEM, agent2User(jobDNA, db));
+export async function selectAndDraft(
+  jobDNA: JobDNA,
+  db: MasterDB,
+  pages: 1 | 2 = 2,
+): Promise<AISelection> {
+  return generateJSON<AISelection>(AGENT2_SYSTEM, agent2User(jobDNA, db, pages));
 }
 
 export async function critiqueAndRevise(

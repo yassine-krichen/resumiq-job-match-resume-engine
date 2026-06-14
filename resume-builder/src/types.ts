@@ -67,6 +67,24 @@ export interface Award {
   description: string;
 }
 
+export interface Publication {
+  title: string;
+  venue?: string;
+  date: string;
+  url?: string;
+  description?: string;
+}
+
+export interface VolunteeringEntry {
+  organization: string;
+  role: string;
+  location?: string;
+  startDate: string;
+  endDate?: string;
+  isCurrent?: boolean;
+  description?: string;
+}
+
 export interface Skills {
   programming_languages: string[];
   frameworks_and_libraries: string[];
@@ -85,8 +103,8 @@ export interface MasterDB {
   skills: Skills;
   certifications: Certification[];
   awards_and_honors: Award[];
-  publications_and_speaking: unknown[];
-  volunteering_and_leadership: unknown[];
+  publications_and_speaking: Publication[];
+  volunteering_and_leadership: VolunteeringEntry[];
   interests: string[];
 }
 
@@ -109,10 +127,16 @@ export type SectionType =
   | 'skills'
   | 'certifications'
   | 'awards'
-  | 'summary';
+  | 'summary'
+  | 'spoken_languages'
+  | 'volunteering'
+  | 'publications'
+  | 'interests';
 
 export interface AISelection {
   reasoning: string;
+  match_score?: number;
+  match_reasoning?: string;
   section_order: SectionType[];
   summary?: string;
   experience: Array<{
@@ -132,4 +156,14 @@ export interface AISelection {
   };
   certifications: string[];
   awards: string[];
+  volunteering?: string[];
+  publications?: string[];
+}
+
+export interface CompatibilityResult {
+  compatible: boolean;
+  score: number;
+  blockers: string[];
+  warnings: string[];
+  suggestions: string[];
 }

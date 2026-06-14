@@ -1,3 +1,48 @@
-Optional: paste company information here (values, culture, about page, tech blog excerpts).
+STARK TECH
 
-Leave this file as-is if you don't have company context — the generator works without it.
+Overview:
+Stark Tech is a technology and energy solutions company focused on building optimization, sustainability, automation, and integrated systems. The company operates with a customer-first mindset and emphasizes solving complex problems through innovation and long-term partnerships.
+
+Mission:
+Deliver smart, reliable, and innovative solutions that improve efficiency, performance, and sustainability.
+
+Culture:
+- Built differently.
+- Do the right thing.
+- Challenge the status quo.
+- Prioritize customers.
+- Focus on long-term impact.
+- Value teamwork and mutual success.
+
+Core Values:
+- Integrity and honesty.
+- Accountability.
+- Customer-first thinking.
+- Innovation and continuous improvement.
+- Collaboration and respect.
+- Curiosity and problem solving.
+- Reliability and craftsmanship.
+- Growth and learning.
+- Sustainability.
+
+Behavioral Principles:
+- Listen before acting.
+- Tailor solutions instead of forcing them.
+- Use technology to solve real problems.
+- Favor trust and relationships over transactions.
+- Empower people with tools and autonomy.
+- Maintain high standards.
+- Pursue measurable results.
+- Think long-term rather than short-term gains.
+
+Personality:
+Professional, dependable, innovative, pragmatic, collaborative, and impact-driven.
+
+Tagline:
+"Built Differently. Driven by Doing What's Right."
+
+Industries:
+Building automation, energy management, renewable energy, HVAC, security systems, analytics, and sustainability.
+
+Ideal Mindset:
+Own problems, act with integrity, innovate continuously, collaborate openly, and deliver solutions that stand the test of time.

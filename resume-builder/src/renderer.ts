@@ -1,6 +1,21 @@
 import { readFileSync } from 'fs';
 import type { AISelection, MasterDB } from './types';
 
+// ── Date Utilities ──────────────────────────────────────────────────────────
+
+const MONTHS: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+
+function parseDateToSortKey(dateStr: string | undefined): number {
+  if (!dateStr) return 0;
+  const parts = dateStr.trim().toLowerCase().split(/\s+/);
+  const month = MONTHS[parts[0]?.slice(0, 3)] ?? 0;
+  const year = parseInt(parts[1] ?? '0', 10);
+  return year * 100 + month;
+}
+
 // ── LaTeX Escaping ──────────────────────────────────────────────────────────
 
 function tex(str: string): string {
@@ -65,10 +80,16 @@ function renderEducation(db: MasterDB): string {
     '  \\resumeSubHeadingListStart',
   ];
 
-  for (const edu of db.education) {
+  const sortedEdu = [...db.education].sort(
+    (a, b) => parseDateToSortKey(b.startDate) - parseDateToSortKey(a.startDate),
+  );
+
+  for (const edu of sortedEdu) {
     let degreeStr = `${edu.degree_type} in ${edu.major}`;
     if (edu.gpa) degreeStr += `, GPA: ${edu.gpa}`;
-    if (edu.honors.length > 0) degreeStr += ` -- ${edu.honors.join(', ')}`;
+    // Honor list can be long — cap at 2 to prevent tabular overflow
+    const honors = edu.honors ?? [];
+    if (honors.length > 0) degreeStr += ` -- ${honors.slice(0, 2).join(', ')}`;
 
     // Education: {Institution}{Location} / {Degree + GPA}{Start -- End}
     lines.push('    \\resumeSubheading');
@@ -89,15 +110,25 @@ function renderExperience(selection: AISelection, db: MasterDB): string {
     '  \\resumeSubHeadingListStart',
   ];
 
-  for (const exp of selection.experience) {
+  const sorted = [...selection.experience].sort((a, b) => {
+    const dbA = db.experience.find((e) => e.company.toLowerCase().includes(a.company.toLowerCase()) || a.company.toLowerCase().includes(e.company.toLowerCase()));
+    const dbB = db.experience.find((e) => e.company.toLowerCase().includes(b.company.toLowerCase()) || b.company.toLowerCase().includes(e.company.toLowerCase()));
+    return parseDateToSortKey(dbB?.startDate) - parseDateToSortKey(dbA?.startDate);
+  });
+
+  for (const exp of sorted) {
     const dbExp = db.experience.find(
-      (e) => e.company.toLowerCase() === exp.company.toLowerCase(),
+      (e) =>
+        e.company.toLowerCase() === exp.company.toLowerCase() ||
+        e.company.toLowerCase().includes(exp.company.toLowerCase()) ||
+        exp.company.toLowerCase().includes(e.company.toLowerCase()),
     );
     if (!dbExp) {
-      throw new Error(
-        `Experience "${exp.company}" in AI selection not found in database.\n` +
-          `Available: ${db.experience.map((e) => e.company).join(', ')}`,
+      console.warn(
+        `Experience "${exp.company}" in AI selection not found in DB — skipping.\n` +
+          `  Available: ${db.experience.map((e) => e.company).join(', ')}`,
       );
+      continue;
     }
 
     const dateRange = dbExp.isCurrent
@@ -134,19 +165,24 @@ function renderProjects(selection: AISelection, db: MasterDB): string {
 
   for (const proj of selection.projects) {
     const dbProj = db.projects.find(
-      (p) => p.name.toLowerCase() === proj.name.toLowerCase(),
+      (p) =>
+        p.name.toLowerCase() === proj.name.toLowerCase() ||
+        p.name.toLowerCase().includes(proj.name.toLowerCase()) ||
+        proj.name.toLowerCase().includes(p.name.toLowerCase()),
     );
     if (!dbProj) {
-      throw new Error(
-        `Project "${proj.name}" in AI selection not found in database.\n` +
-          `Available: ${db.projects.map((p) => p.name).join(', ')}`,
+      console.warn(
+        `Project "${proj.name}" in AI selection not found in DB — skipping.\n` +
+          `  Available: ${db.projects.map((p) => p.name).join(', ')}`,
       );
+      continue;
     }
 
-    const techList = tex(dbProj.technologies_used.join(', '));
+    // Cap at 6 techs — more than that overflows the single-line project heading
+    const techList = tex(dbProj.technologies_used.slice(0, 6).join(', '));
     const dateRange = `${tex(dbProj.startDate)} -- ${tex(dbProj.endDate)}`;
 
-    const repoLink = dbProj.links.find(
+    const repoLink = dbProj.links?.find(
       (l) => l.type === 'Repository' || l.type === 'GitHub' || l.type === 'Pull Request',
     );
     const nameLatex = repoLink
@@ -209,7 +245,10 @@ function renderCertifications(selection: AISelection, db: MasterDB): string {
     const dbCert = db.certifications.find(
       (c) => c.name.toLowerCase() === certName.toLowerCase(),
     );
-    if (!dbCert) continue; // AI hallucinated cert name — skip silently
+    if (!dbCert) {
+      console.warn(`Cert "${certName}" in AI selection not found in DB — skipping`);
+      continue;
+    }
 
     lines.push('    \\resumeSubheading');
     lines.push(`      {${tex(dbCert.name)}}{${tex(dbCert.date)}}`);
@@ -233,7 +272,10 @@ function renderAwards(selection: AISelection, db: MasterDB): string {
     const dbAward = db.awards_and_honors.find(
       (a) => a.title.toLowerCase() === awardTitle.toLowerCase(),
     );
-    if (!dbAward) continue;
+    if (!dbAward) {
+      console.warn(`Award "${awardTitle}" in AI selection not found in DB — skipping`);
+      continue;
+    }
 
     lines.push('    \\resumeSubheading');
     lines.push(`      {${tex(dbAward.title)}}{${tex(dbAward.date)}}`);
@@ -242,6 +284,107 @@ function renderAwards(selection: AISelection, db: MasterDB): string {
 
   lines.push('  \\resumeSubHeadingListEnd');
   return lines.join('\n');
+}
+
+function renderSpokenLanguages(db: MasterDB): string {
+  const langs = db.skills.spoken_languages;
+  if (!langs?.length) return '';
+
+  const langStr = langs
+    .map((l) => `${l.language} (${l.fluency}${l.note ? `, ${l.note}` : ''})`)
+    .join(', ');
+
+  return [
+    '%-----------LANGUAGES-----------',
+    '\\section{Languages}',
+    ' \\begin{itemize}[leftmargin=0.15in, label={}]',
+    '    \\small{\\item{',
+    `     ${tex(langStr)}`,
+    '    }}',
+    ' \\end{itemize}',
+  ].join('\n');
+}
+
+function renderVolunteering(selection: AISelection, db: MasterDB): string {
+  if (!selection.volunteering?.length) return '';
+
+  const lines: string[] = [
+    '%-----------VOLUNTEERING-----------',
+    '\\section{Volunteering \\& Leadership}',
+    '  \\resumeSubHeadingListStart',
+  ];
+
+  for (const orgName of selection.volunteering) {
+    const entry = db.volunteering_and_leadership.find(
+      (v) => v.organization.toLowerCase() === orgName.toLowerCase(),
+    );
+    if (!entry) {
+      console.warn(`Volunteering "${orgName}" in AI selection not found in DB — skipping`);
+      continue;
+    }
+
+    const dateRange = entry.isCurrent
+      ? `${tex(entry.startDate)} -- Present`
+      : `${tex(entry.startDate)} -- ${tex(entry.endDate ?? '')}`;
+
+    lines.push('    \\resumeSubheading');
+    lines.push(`      {${tex(entry.organization)}}{${dateRange}}`);
+    lines.push(`      {${tex(entry.role)}}{${tex(entry.location ?? '')}}`);
+
+    if (entry.description) {
+      lines.push('      \\resumeItemListStart');
+      lines.push(`        \\resumeItem{${tex(entry.description)}}`);
+      lines.push('      \\resumeItemListEnd');
+    }
+  }
+
+  lines.push('  \\resumeSubHeadingListEnd');
+  return lines.join('\n');
+}
+
+function renderPublications(selection: AISelection, db: MasterDB): string {
+  if (!selection.publications?.length) return '';
+
+  const lines: string[] = [
+    '%-----------PUBLICATIONS-----------',
+    '\\section{Publications \\& Speaking}',
+    '  \\resumeSubHeadingListStart',
+  ];
+
+  for (const title of selection.publications) {
+    const entry = db.publications_and_speaking.find(
+      (p) => p.title.toLowerCase() === title.toLowerCase(),
+    );
+    if (!entry) {
+      console.warn(`Publication "${title}" in AI selection not found in DB — skipping`);
+      continue;
+    }
+
+    const nameLatex = entry.url
+      ? `\\href{${entry.url}}{\\underline{${tex(entry.title)}}}`
+      : tex(entry.title);
+
+    lines.push('    \\resumeSubheading');
+    lines.push(`      {${nameLatex}}{${tex(entry.date)}}`);
+    lines.push(`      {${tex(entry.venue ?? '')}}{}`);
+  }
+
+  lines.push('  \\resumeSubHeadingListEnd');
+  return lines.join('\n');
+}
+
+function renderInterests(db: MasterDB): string {
+  if (!db.interests?.length) return '';
+
+  return [
+    '%-----------INTERESTS-----------',
+    '\\section{Interests}',
+    ' \\begin{itemize}[leftmargin=0.15in, label={}]',
+    '    \\small{\\item{',
+    `     ${tex(db.interests.join(', '))}`,
+    '    }}',
+    ' \\end{itemize}',
+  ].join('\n');
 }
 
 // ── Main Render ─────────────────────────────────────────────────────────────
@@ -281,6 +424,18 @@ function buildContent(selection: AISelection, db: MasterDB): string {
         break;
       case 'awards':
         rendered = renderAwards(selection, db);
+        break;
+      case 'spoken_languages':
+        rendered = renderSpokenLanguages(db);
+        break;
+      case 'volunteering':
+        rendered = renderVolunteering(selection, db);
+        break;
+      case 'publications':
+        rendered = renderPublications(selection, db);
+        break;
+      case 'interests':
+        rendered = renderInterests(db);
         break;
       case 'summary':
         break; // already rendered above if present

@@ -6,10 +6,11 @@ V1 is a local CLI: paste job offer → AI selects + tailors content from your DB
 
 ## V2: Web App
 
-**Stack (decided):** Next.js (frontend) · NestJS (backend) · PostgreSQL w/ JSONB (user DBs) · Clerk (auth)
+**Stack (decided):** Next.js (frontend) · NestJS (backend) · PostgreSQL w/ JSONB (user DBs) · Better-Auth (auth)
 **Hosting:** Vercel (frontend) · Render/Railway (backend)
 
 **Core features:**
+
 - User accounts + persisted career DB (JSONB columns)
 - `/dashboard` — view/edit DB via form UI, auto-saves to backend
 - `/generate` — paste JD, see SSE stream progress ("Analyzing job…", "Selecting content…", "Drafting bullets…")
@@ -18,6 +19,7 @@ V1 is a local CLI: paste job offer → AI selects + tailors content from your DB
 - Resume versioning — store past generations with their job target
 
 **Business model (freemium / credit-based):**
+
 - Free tier: DB management + gap analysis + 1–2 free generations
 - Pay-as-you-go: $10 / 10 resumes
 - Pro: $15/month, unlimited generations + priority AI

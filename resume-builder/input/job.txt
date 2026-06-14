@@ -1,4 +1,15 @@
-Paste the job description here.
+Job Requirements
+The Senior Software Developer works within our collaborative RD team to build and support software solutions for commercial HVAC operations. In this role, you will help develop and maintain applications that support automation, internal tools, and system development initiatives.
+You will contribute across the software development lifecycle, including writing clean, testable code, debugging applications, participating in code reviews, and collaborating with teammates on evolving projects. This position also involves supporting existing systems, deploying cloud-based solutions in Microsoft Azure, and contributing to testing and CI/CD pipelines. Success in this role requires strong problem-solving skills, curiosity, and the ability to work independently in an RD environment where projects may evolve.
 
-Delete this placeholder text and replace it with the full job posting.
-Include the role title, responsibilities, requirements, and any tech stack details.
+Work Experience
+
+Bachelor’s degree in Computer Science, Software Engineering, or a related field, or equivalent experience.
+Strong programming fundamentals (Python preferred).
+Understanding of object-oriented programming principles.
+Familiarity with Git and basic software development practices such as testing and debugging.
+Ability to work independently and solve technical problems in an evolving environment.
+Willingness to maintain and improve existing systems as well as develop new solutions.
+Exposure to technologies such as Docker, SQL, REST APIs, FastAPI, or cloud platforms (Azure preferred) is a plus.
+Benefits
+Advance your career with Stark Tech, a leader in facilities and energy solutions. We specialize in integrating systems, providing energy-efficient equipment and services, and supporting sustainability through innovative technologies like renewable natural gas conversion and energy storage solutions. At Stark Tech, we prioritize employee well-being and offer comprehensive benefits including paid time off, 401(k) with employer match, medical coverage, wellness programs, and career development opportunities. Join our fast-growing, customer-focused organization where your skills and dedication will be valued and rewarded with competitive pay and a positive work environment.

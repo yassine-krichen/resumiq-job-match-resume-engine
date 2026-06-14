@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "generate": "tsx src/cli.ts",
-    "render": "tsx src/cli.ts --render-only"
+    "render": "tsx src/cli.ts --render-only",
+    "validate-db": "tsx src/validate-db.ts",
+    "ingest": "tsx src/ingest.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

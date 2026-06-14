@@ -1,6 +1,6 @@
 %-------------------------
 % Resume skeleton — preamble + macros only.
-% Content is injected at %%CONTENT%% by the renderer.
+% Content is injected by the renderer (see npm run generate).
 % Edit margins, fonts, and spacing here freely.
 % Based on Jake Gutierrez's template: https://github.com/sb2nov/resume
 %------------------------
@@ -18,9 +18,8 @@
 \usepackage{fancyhdr}
 \usepackage[english]{babel}
 \usepackage{tabularx}
-\input{glyphtounicode}
-
-% Unicode support for pdflatex (tectonic handles it natively — uncomment only if using pdflatex):
+% Unicode: tectonic handles it natively. pdflatex users: uncomment the 3 lines below.
+% \input{glyphtounicode}
 % \usepackage[utf8]{inputenc}
 % \usepackage[T1]{fontenc}
 
@@ -54,7 +53,7 @@
   \vspace{-4pt}\scshape\raggedright\large
 }{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
 
-\pdfgentounicode=1
+% \pdfgentounicode=1  % pdflatex only — tectonic doesn't need this
 
 %--- Custom Commands ---
 

@@ -1,33 +1,156 @@
-# AI Career Copilot & Resume Database
+# AI Resume Generator
 
-Welcome to the **AI Career Copilot** project. This platform shifts the paradigm of job hunting from reactively writing one-off resumes to proactively managing a centralized "Career Database." By maintaining a comprehensive JSON database of your skills, achievements, and metrics, you can leverage advanced AI to instantly generate highly tailored, ATS-optimized, and pristine LaTeX resumes for any job application.
+Local CLI that generates tailored, ATS-optimized LaTeX resumes from a career database and a job description.
 
-## 🚀 The Core Concept
+Paste a job posting → 3-agent AI pipeline analyzes, selects, and critiques content from your DB → outputs a compiled PDF.
 
-Instead of tweaking a Word document every time you apply for a job, you maintain a "Master Database" (JSON). When you find a job you want, the AI evaluates your database against the job description. If you're a match, it generates a perfectly crafted LaTeX resume. If there's a gap, the AI acts as your career coach, telling you exactly what to learn or build to become a top candidate.
+---
 
-## 📂 Project Structure
+## How It Works
 
-- `product_specification.md`: The detailed product spec, outlining the MVP features, user flows, and technical architecture.
-- `resume-builder/`: The development directory for the new system.
-    - `db.json`: The standard schema template for the master career database.
-- `data_inventory.json`: Legacy/Personal baseline database (Do not modify).
-- `resume_template.tex`: The base LaTeX template used for rendering the output.
+```
+input/job.txt + data_inventory.json
+        ↓
+Agent 1: Analyze job → JobDNA (title, seniority, ATS keywords, culture)
+        ↓
+Compatibility check → blocks if mandatory tech has zero DB coverage
+        ↓
+Agent 2: Select content + draft bullets (respects DB facts, no invented metrics)
+        ↓
+Agent 3: Critique + revise (so-what test, metric tracing, verb quality)
+        ↓
+output/resume.json  →  output/resume.tex  →  output/resume.pdf
+```
 
-## 💡 Upcoming Features & Roadmap (Post-MVP)
+Every run saves a versioned copy under `output/versions/`.
 
-While the MVP focuses on manual job entry and user-side LaTeX compilation (via Overleaf), here is the vision for the future of the product:
+---
 
-1. **Automated Job & Profile Fetching:**
-    - Integrating web scrapers or official APIs (e.g., LinkedIn, Indeed, Greenhouse) so users can just paste a URL, and the system fetches the job description, company tech stack, and company values automatically.
-    - "Sync with LinkedIn" feature to automatically ingest new roles/skills into the Master Database.
-2. **Integrated Web-based LaTeX Compilation:**
-    - Moving away from the Overleaf handoff. Integrating a LaTeX compiler (like TeX Live via a Dockerized microservice or a WASM-based compiler like tectonic) directly into the app so users can see a live PDF preview and download it in one click.
-3. **The "Holistic Application" Checker:**
-    - The AI will review the user's online presence (GitHub, Personal Website, LinkedIn) as part of the readiness score and provide tips on networking (e.g., "Message an Engineering Manager before applying").
-    - Email template generation for cold outreach and referrals.
-4. **Interactive AI Interview Simulator:**
-    - Voice or text-based mock interviews using LLM agents tailored to the generated resume, the company's specific interview style (e.g., FAANG behavioral, technical trivia), and the job description.
-5. **Analytics & Auto-Apply:**
-    - Tracking application success rates (Resume Score vs. Interview Rate).
-    - Exploring auto-apply agents that navigate ATS portals (e.g., Workday, Lever) on behalf of the user.
+## Prerequisites
+
+- **Node.js 18+**
+- **[claude-web-bridge](https://github.com/yassine-kr/claude-web-bridge)** running locally (provides Claude + ChatGPT via browser automation — no API key needed)
+- **LaTeX compiler** (optional): [tectonic](https://tectonic-typesetting.github.io) or pdflatex. If neither is present, the CLI prints Overleaf upload instructions.
+
+---
+
+## Setup
+
+```bash
+cd resume-builder
+cp .env.example .env          # edit BRIDGE_URL if bridge runs on a different port
+npm install
+```
+
+Start `claude-web-bridge` in a separate terminal:
+
+```bash
+cd <bridge-dir>
+npm run dev
+```
+
+---
+
+## Usage
+
+### Generate a resume
+
+1. Edit `data_inventory.json` with your career data (run `npm run validate-db` to check it).
+2. Paste the job description into `input/job.txt`.
+3. Optionally paste company context into `input/company.txt`.
+
+```bash
+npm run generate
+```
+
+Flags:
+| Flag | Effect |
+|------|--------|
+| `--verbose` | Show ATS keywords, section order, match reasoning, DB suggestions |
+| `--no-critique` | Skip Agent 3 (faster, lower quality) |
+| `--pages 1` | 1-page mode: tighter bullet limits, no optional sections |
+| `--pages 2` | Default — targets two pages |
+
+After generation, the CLI prompts to open `output/resume.json` for manual bullet edits before rendering.
+
+### Re-render after manual edits
+
+```bash
+npm run render
+```
+
+Reads `output/resume.json`, re-renders LaTeX, recompiles PDF. No AI calls.
+
+### Validate your career database
+
+```bash
+npm run validate-db
+```
+
+Checks required fields, date formats, and that `technologies_used` / `raw_achievements` are populated (agents depend on these).
+
+### Add new data to the database
+
+```bash
+npm run ingest
+```
+
+Paste raw career text (job recap, project notes, LinkedIn export snippet) → AI parses into a structured entry → confirms before merging into `data_inventory.json`.
+
+---
+
+## Configuration (`.env`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BRIDGE_URL` | `http://127.0.0.1:3000` | claude-web-bridge server URL |
+| `LLM_PREFERRED` | `claude` | First provider to try (`claude` or `chatgpt`) |
+| `LLM_FALLBACK` | `chatgpt` | Fallback provider (`claude`, `chatgpt`, or `none`) |
+| `EDITOR` | `notepad` / `vi` | Editor opened for post-generate bullet review |
+
+---
+
+## Career Database Schema
+
+`data_inventory.json` at the project root. Full TypeScript interfaces in `resume-builder/src/types.ts`.
+
+Key fields agents rely on:
+- `experience[].technologies_used` — verified against bullet tech claims
+- `experience[].raw_achievements` — source of truth for bullet content
+- `experience[].quantifiable_metrics` — only numbers that appear here can appear in bullets
+- `projects[].technologies_used` — same verification
+
+---
+
+## Output
+
+| File | Description |
+|------|-------------|
+| `output/resume.json` | AI selection (editable before re-render) |
+| `output/resume.tex` | LaTeX source |
+| `output/resume.pdf` | Compiled PDF (if compiler present) |
+| `output/versions/<date>_<time>_<role>/` | Versioned copy of each generation |
+
+---
+
+## Project Structure
+
+```
+resume-builder/
+  src/
+    cli.ts           — orchestrator: flags, pipeline, versioning
+    agents.ts        — 3 AI agents + compatibility check
+    llm.ts           — bridge HTTP client, provider fallback, JSON extraction
+    renderer.ts      — LaTeX section builders
+    types.ts         — TypeScript interfaces (MasterDB, AISelection, JobDNA...)
+    validate-db.ts   — DB validator script
+    ingest.ts        — AI-powered DB ingestion script
+  templates/
+    skeleton.tex     — LaTeX preamble + macros
+  input/
+    job.txt          — paste job description here
+    company.txt      — optional company context
+  output/            — generated files (gitignored)
+```
+
+See `ROADMAP.md` for V2 (web app), V3 (gap analysis), V4 (job scraping), V5 (auto-apply).
