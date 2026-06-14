@@ -1,8 +1,15 @@
 node_modules/
 dist/
+.next/
+out/
 .env
+.env.local
+.env.*.local
 resume-builder/output/
 *.aux
 *.log
 *.out
 *.synctex.gz
+.turbo/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,136 @@
+import { z } from 'zod';
+
+// ── Career Profile Schemas ──────────────────────────────────────────────────
+
+export const PersonalInfoSchema = z.object({
+  name: z.string().min(1),
+  location: z.string(),
+  phone: z.string(),
+  email: z.string().email(),
+  work_authorization: z.array(z.string()),
+  clearances: z.array(z.string()),
+  links: z.array(z.object({ platform: z.string(), url: z.string().url() })),
+});
+
+export const ExperienceEntrySchema = z.object({
+  company: z.string().min(1),
+  company_industry: z.string(),
+  role: z.string().min(1),
+  location: z.string(),
+  location_type: z.string(),
+  startDate: z.string(),
+  endDate: z.string(),
+  isCurrent: z.boolean(),
+  core_competencies: z.array(z.string()),
+  technologies_used: z.array(z.string()),
+  raw_achievements: z.array(z.string()),
+  quantifiable_metrics: z.array(z.string()),
+});
+
+export const ProjectEntrySchema = z.object({
+  name: z.string().min(1),
+  context: z.string(),
+  links: z.array(z.object({ type: z.string(), url: z.string().url() })),
+  startDate: z.string(),
+  endDate: z.string(),
+  technologies_used: z.array(z.string()),
+  raw_achievements: z.array(z.string()),
+  quantifiable_metrics: z.array(z.string()),
+});
+
+export const EducationEntrySchema = z.object({
+  institution: z.string().min(1),
+  degree_type: z.string().min(1),
+  major: z.string().min(1),
+  minor: z.string(),
+  location: z.string(),
+  startDate: z.string(),
+  endDate: z.string(),
+  gpa: z.string(),
+  honors: z.array(z.string()),
+  relevant_coursework: z.array(z.string()),
+  thesis_or_capstone: z.string(),
+  extracurriculars: z.array(z.string()),
+  description: z.string(),
+});
+
+export const SkillsSchema = z.object({
+  programming_languages: z.array(z.string()),
+  frameworks_and_libraries: z.array(z.string()),
+  infrastructure_and_tools: z.array(z.string()),
+  databases: z.array(z.string()),
+  spoken_languages: z.array(
+    z.object({ language: z.string(), fluency: z.string(), note: z.string().optional() }),
+  ),
+  soft_skills: z.array(z.string()),
+});
+
+export const MasterDBSchema = z.object({
+  personal_info: PersonalInfoSchema,
+  summaries: z.array(z.object({ target_role: z.string(), content: z.string() })),
+  experience: z.array(ExperienceEntrySchema),
+  education: z.array(EducationEntrySchema),
+  projects: z.array(ProjectEntrySchema),
+  skills: SkillsSchema,
+  certifications: z.array(
+    z.object({
+      name: z.string(),
+      issuer: z.string(),
+      date: z.string(),
+      expiration_date: z.string(),
+      credential_id: z.string(),
+      link: z.string(),
+      description: z.string(),
+    }),
+  ),
+  awards_and_honors: z.array(
+    z.object({ title: z.string(), issuer: z.string(), date: z.string(), description: z.string() }),
+  ),
+  publications_and_speaking: z.array(
+    z.object({
+      title: z.string(),
+      venue: z.string().optional(),
+      date: z.string(),
+      url: z.string().optional(),
+      description: z.string().optional(),
+    }),
+  ),
+  volunteering_and_leadership: z.array(
+    z.object({
+      organization: z.string(),
+      role: z.string(),
+      location: z.string().optional(),
+      startDate: z.string(),
+      endDate: z.string().optional(),
+      isCurrent: z.boolean().optional(),
+      description: z.string().optional(),
+    }),
+  ),
+  interests: z.array(z.string()),
+});
+
+// ── API Request/Response Schemas ────────────────────────────────────────────
+
+export const CreateJobSchema = z.object({
+  raw_jd: z.string().min(50, 'Job description too short'),
+  company_info: z.string().optional(),
+  pages: z.union([z.literal(1), z.literal(2)]).default(2),
+});
+
+export const UpdateCareerProfileSchema = MasterDBSchema.partial();
+
+export const UserSettingsSchema = z.object({
+  match_threshold: z.number().min(0).max(100).default(50),
+  preferred_locations: z.array(z.string()).default([]),
+  target_roles: z.array(z.string()).default([]),
+  seniority: z.string().optional(),
+  resume_template: z.string().default('default'),
+  ai_provider_override: z.string().optional(),
+  auto_send_email: z.boolean().default(false),
+});
+
+// ── Inferred Types ──────────────────────────────────────────────────────────
+
+export type CreateJobDto = z.infer<typeof CreateJobSchema>;
+export type UpdateCareerProfileDto = z.infer<typeof UpdateCareerProfileSchema>;
+export type UserSettingsDto = z.infer<typeof UserSettingsSchema>;
