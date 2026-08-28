@@ -119,6 +119,8 @@ export const CreateJobSchema = z.object({
 
 export const UpdateCareerProfileSchema = MasterDBSchema.partial();
 
+export const IngestBodySchema = z.object({ raw_text: z.string().min(1) });
+
 export const UserSettingsSchema = z.object({
   match_threshold: z.number().min(0).max(100).default(50),
   preferred_locations: z.array(z.string()).default([]),
@@ -134,4 +136,5 @@ export const UserSettingsSchema = z.object({
 export type MasterDB = z.infer<typeof MasterDBSchema>;
 export type CreateJobDto = z.infer<typeof CreateJobSchema>;
 export type UpdateCareerProfileDto = z.infer<typeof UpdateCareerProfileSchema>;
+export type IngestBodyDto = z.infer<typeof IngestBodySchema>;
 export type UserSettingsDto = z.infer<typeof UserSettingsSchema>;

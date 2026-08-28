@@ -8,14 +8,13 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import { OnboardingService } from './onboarding.service';
 import { ProfileService } from '../profile/profile.service';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { MasterDB } from '@resumiq/ai-bridge';
-
-interface IngestBody {
-  raw_text: string;
-}
+import { IngestBodySchema, type IngestBodyDto } from '@resumiq/schemas';
 
 @Controller('onboarding')
 @UseGuards(AuthGuard)
@@ -32,10 +31,11 @@ export class OnboardingController {
    */
   @Post('ingest/stream')
   @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async ingestStream(
     @Req() req: { user: { id: string } },
     @Res() res: Response,
-    @Body() body: IngestBody,
+    @Body(new ZodValidationPipe(IngestBodySchema)) body: IngestBodyDto,
   ) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');

@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: job-match-api
+    env: node
+    plan: free
+    buildCommand: npm install && npx turbo build --filter=@resumiq/api
+    startCommand: node apps/api/dist/main.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: API_URL
+        sync: false
+      - key: TRUSTED_ORIGINS
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false
+      - key: FREELLMAPI_API_KEY
+        sync: false
+      - key: FREELLMAPI_MODEL
+        value: auto
+      - key: FREELLMAPI_BASE_URL
+        value: https://freellmapi-19vj.onrender.com/v1
+      - key: USE_LLM_BRIDGE
+        value: "false"

@@ -9,7 +9,8 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { ProfileService } from './profile.service';
-import type { MasterDB } from '@resumiq/ai-bridge';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { UpdateCareerProfileSchema, type UpdateCareerProfileDto } from '@resumiq/schemas';
 
 @Controller('profile')
 @UseGuards(AuthGuard)
@@ -26,7 +27,7 @@ export class ProfileController {
   @Patch()
   async updateProfile(
     @Req() req: { user: { id: string } },
-    @Body() body: Partial<MasterDB>,
+    @Body(new ZodValidationPipe(UpdateCareerProfileSchema)) body: UpdateCareerProfileDto,
   ) {
     return this.profileService.upsertProfile(req.user.id, body);
   }
