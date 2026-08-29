@@ -5,6 +5,7 @@ const EnvSchema = z
     DATABASE_URL: z.string().min(1),
     API_URL: z.string().min(1),
     TRUSTED_ORIGINS: z.string().min(1),
+    BETTER_AUTH_SECRET: z.string().min(1),
     GITHUB_CLIENT_ID: z.string().min(1),
     GITHUB_CLIENT_SECRET: z.string().min(1),
     LINKEDIN_CLIENT_ID: z.string().min(1),

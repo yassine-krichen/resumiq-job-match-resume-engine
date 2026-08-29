@@ -4,6 +4,7 @@ const baseEnv = {
   DATABASE_URL: 'postgresql://localhost:5432/db',
   API_URL: 'http://localhost:3001',
   TRUSTED_ORIGINS: 'http://localhost:3000',
+  BETTER_AUTH_SECRET: 'test-secret',
   GITHUB_CLIENT_ID: 'github-id',
   GITHUB_CLIENT_SECRET: 'github-secret',
   LINKEDIN_CLIENT_ID: 'linkedin-id',
