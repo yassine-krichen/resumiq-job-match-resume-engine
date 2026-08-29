@@ -11,5 +11,6 @@ resume-builder/output/
 *.out
 *.synctex.gz
 .turbo/
+.vercel/
 .DS_Store
 Thumbs.db

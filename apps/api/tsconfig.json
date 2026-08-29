@@ -18,11 +18,7 @@
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
     "esModuleInterop": true,
-    "strict": true,
-    "paths": {
-      "@resumiq/ai-bridge": ["../../packages/ai-bridge/src/index.ts"],
-      "@resumiq/schemas": ["../../packages/schemas/src/index.ts"]
-    }
+    "strict": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
