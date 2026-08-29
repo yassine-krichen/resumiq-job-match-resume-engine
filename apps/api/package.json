@@ -8,6 +8,7 @@
     "start": "node dist/main",
     "type-check": "tsc --noEmit",
     "test": "jest",
+    "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
