@@ -2,6 +2,7 @@
   "name": "@resumiq/web",
   "version": "0.1.0",
   "private": true,
+  "description": "Next.js frontend — auth, career profile, onboarding UI.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

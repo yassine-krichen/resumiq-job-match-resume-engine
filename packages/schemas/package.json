@@ -2,6 +2,7 @@
   "name": "@resumiq/schemas",
   "version": "0.0.0",
   "private": true,
+  "description": "Shared Zod schemas and inferred types for the career profile domain model, used by both apps/api and apps/web.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {

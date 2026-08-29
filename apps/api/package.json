@@ -2,6 +2,7 @@
   "name": "@resumiq/api",
   "version": "0.0.0",
   "private": true,
+  "description": "NestJS backend — auth, career profile, AI-powered onboarding ingest.",
   "scripts": {
     "build": "nest build",
     "dev": "nodemon",
