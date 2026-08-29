@@ -35,6 +35,19 @@ function createAuth() {
       },
     },
     trustedOrigins: process.env.TRUSTED_ORIGINS!.split(','),
+    // /api/auth/* is mounted directly on the raw express instance in
+    // main.ts, bypassing Nest's pipeline entirely — ThrottlerGuard cannot
+    // reach it. better-auth's own rate limiter covers this gap instead.
+    // Explicitly enabled (rather than relying on its isProduction default)
+    // so it's on regardless of how NODE_ENV ends up configured on Render.
+    // window/max chosen to roughly match the Nest-side global throttler
+    // (20 req/min) for consistency.
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 20,
+      storage: 'memory',
+    },
   });
 }
 

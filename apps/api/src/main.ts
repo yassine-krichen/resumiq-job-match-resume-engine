@@ -27,8 +27,8 @@ async function bootstrap(): Promise<void> {
   // Mount better-auth before any body parser — it handles its own parsing.
   // Note: these routes bypass Nest's pipeline entirely (mounted directly on
   // the underlying express server), so ThrottlerGuard cannot reach them.
-  // better-auth has its own built-in `rateLimit` config option — evaluate
-  // separately as a follow-up.
+  // Rate limiting for this mount is instead handled by better-auth's own
+  // built-in `rateLimit` config, set inside createAuth() in auth.config.ts.
   const server = app.getHttpAdapter().getInstance() as express.Express;
   server.use('/api/auth', toNodeHandler(getAuth()));
 
