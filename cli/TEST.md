@@ -1,6 +1,6 @@
 # Test Guide — AI Resume Generator CLI
 
-Run these tests in order. Each builds on the previous. All commands from `resume-builder/` directory.
+Run these tests in order. Each builds on the previous. All commands from `cli/` directory.
 
 ---
 

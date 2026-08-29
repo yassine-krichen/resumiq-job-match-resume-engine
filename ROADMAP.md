@@ -53,11 +53,6 @@ V1 is a local CLI: paste job offer → AI selects + tailors content from your DB
 
 ---
 
-## Files to delete once V2 scaffolding starts
+## Status
 
-- `ai_features_bulletpoints.txt` — brain dump, superseded by this file
-- `resume-builder/product_specification.md` — superseded by this file
-- `resume-builder/system_design.md` — superseded by this file (stack decided above)
-- `resume_template.tex` (root) — Jake placeholder, not used
-- `resume-builder/resume_template.tex` — same, not used; `templates/skeleton.tex` is canonical
-- `README.md` — roadmap section superseded here; keep or rewrite as project overview
+V2 scaffolding is underway — see `ROADMAP_v2.md` for the current architecture and phase breakdown, and the root `README.md` for the live project overview. The V1 CLI now lives at `cli/` (renamed from `resume-builder/`). The files this section originally flagged for deletion (`ai_features_bulletpoints.txt`, `resume-builder/product_specification.md`, `resume-builder/system_design.md`, both `resume_template.tex` copies) have already been removed.
