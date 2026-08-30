@@ -6,6 +6,7 @@ out/
 .env.local
 .env.*.local
 cli/output/
+apps/api/storage/
 /*.tex
 *.aux
 *.log

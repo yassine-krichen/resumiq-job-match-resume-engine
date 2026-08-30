@@ -115,9 +115,81 @@ export const CreateJobSchema = z.object({
   raw_jd: z.string().min(50, 'Job description too short'),
   company_info: z.string().optional(),
   pages: z.union([z.literal(1), z.literal(2)]).default(2),
+  source_url: z.string().url().optional(),
+  title: z.string().optional(),
+  company_name: z.string().optional(),
+  location: z.string().optional(),
+  remote: z.boolean().optional(),
+  salary_range: z.string().optional(),
 });
 
 export const UpdateCareerProfileSchema = MasterDBSchema.partial();
+
+// ── Phase 2: Applications — resume selection / email draft edits ───────────
+
+const SectionTypeSchema = z.enum([
+  'education',
+  'experience',
+  'projects',
+  'skills',
+  'certifications',
+  'awards',
+  'summary',
+  'spoken_languages',
+  'volunteering',
+  'publications',
+  'interests',
+]);
+
+export const UpdateResumeSelectionSchema = z.object({
+  reasoning: z.string(),
+  match_score: z.number().min(0).max(100).optional(),
+  match_reasoning: z.string().optional(),
+  section_order: z.array(SectionTypeSchema),
+  summary: z.string().optional(),
+  experience: z.array(
+    z.object({
+      company: z.string(),
+      role: z.string(),
+      bullets: z.array(z.string()),
+    }),
+  ),
+  projects: z.array(
+    z.object({
+      name: z.string(),
+      bullets: z.array(z.string()),
+    }),
+  ),
+  skills: z.object({
+    languages: z.array(z.string()),
+    frameworks_and_libraries: z.array(z.string()),
+    infrastructure_and_tools: z.array(z.string()),
+    databases: z.array(z.string()),
+  }),
+  certifications: z.array(z.string()),
+  awards: z.array(z.string()),
+  volunteering: z.array(z.string()).optional(),
+  publications: z.array(z.string()).optional(),
+});
+
+export const UpdateEmailDraftSchema = z.object({
+  subject: z.string().min(1),
+  body: z.string().min(1),
+});
+
+export const UpdateGapReportSchema = z.object({
+  match_score: z.number().min(0).max(100),
+  missing_skills: z.array(
+    z.object({
+      skill: z.string(),
+      priority: z.enum(['mandatory', 'nice-to-have']),
+      suggested_resources: z.array(z.string()),
+      completed: z.boolean().optional(),
+    }),
+  ),
+  strengths: z.array(z.string()),
+  recommendations: z.array(z.string()),
+});
 
 export const IngestBodySchema = z.object({ raw_text: z.string().min(1) });
 
@@ -138,3 +210,6 @@ export type CreateJobDto = z.infer<typeof CreateJobSchema>;
 export type UpdateCareerProfileDto = z.infer<typeof UpdateCareerProfileSchema>;
 export type IngestBodyDto = z.infer<typeof IngestBodySchema>;
 export type UserSettingsDto = z.infer<typeof UserSettingsSchema>;
+export type UpdateResumeSelectionDto = z.infer<typeof UpdateResumeSelectionSchema>;
+export type UpdateEmailDraftDto = z.infer<typeof UpdateEmailDraftSchema>;
+export type UpdateGapReportDto = z.infer<typeof UpdateGapReportSchema>;

@@ -1,11 +1,13 @@
 services:
   - type: web
     name: job-match-api
-    env: node
+    env: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
     plan: free
-    buildCommand: npm install && npx turbo build --filter=@resumiq/api
-    startCommand: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/main.js
     envVars:
+      - key: RESUME_RENDER_ENGINE
+        value: latex
       - key: DATABASE_URL
         sync: false
       - key: API_URL

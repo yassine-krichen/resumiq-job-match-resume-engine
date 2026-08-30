@@ -5,6 +5,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { ApplicationsModule } from './modules/applications/applications.module';
+import { ResumeModule } from './modules/resume/resume.module';
 
 @Module({
   imports: [
@@ -13,6 +15,8 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module';
     AuthModule,
     ProfileModule,
     OnboardingModule,
+    ResumeModule,
+    ApplicationsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

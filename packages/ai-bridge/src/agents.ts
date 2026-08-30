@@ -1,5 +1,12 @@
 import { generateJSON } from './llm';
-import type { AISelection, CompatibilityResult, GapReport, JobDNA, MasterDB } from './types';
+import type {
+  AISelection,
+  CompatibilityResult,
+  EmailDraft,
+  GapReport,
+  JobDNA,
+  MasterDB,
+} from './types';
 
 // ── Compatibility Check ─────────────────────────────────────────────────────
 
@@ -15,6 +22,13 @@ Rules:
 - Missing nice_to_have_skills: warning only.
 - score (0-100): percentage of mandatory_technical_skills covered, weighted by depth of coverage.
 - suggestions must be specific: "Add a project using X to projects section" not "improve your DB".
+- reasons: explain the score in plain language — matched skills, gaps, and seniority fit. This is shown
+  to the user directly as "why this score", so write for a human, not a debugger.
+- Also produce a full gap-analysis (missing_skills, strengths, recommendations) in the SAME response,
+  so a below-threshold result needs no follow-up call. Only flag "mandatory" priority for skills that
+  appear in mandatory_technical_skills. For each missing skill, give 2-3 specific learning resources
+  (courses, projects, certifications). Strengths must be backed by the candidate's actual experience —
+  do not invent achievements. Recommendations must be concrete and achievable within 1-3 months.
 
 Return ONLY valid JSON. No markdown. No explanation outside the JSON.`;
 
@@ -48,7 +62,17 @@ Return JSON matching this exact schema:
   "score": number (0-100),
   "blockers": ["mandatory tech with zero DB coverage — one per string"],
   "warnings": ["string — weak coverage, missing metrics, or missing nice-to-haves"],
-  "suggestions": ["string — specific actionable DB improvements"]
+  "suggestions": ["string — specific actionable DB improvements"],
+  "reasons": ["string — plain-language explanation of the score: matched skills, gaps, seniority fit"],
+  "missing_skills": [
+    {
+      "skill": "string",
+      "priority": "mandatory" | "nice-to-have",
+      "suggested_resources": ["string — specific course, project idea, or certification"]
+    }
+  ],
+  "strengths": ["string — specific strengths backed by the candidate's experience"],
+  "recommendations": ["string — concrete actionable steps to improve candidacy within 1-3 months"]
 }`;
 }
 
@@ -246,6 +270,54 @@ Return JSON matching this exact schema:
 }`;
 }
 
+// ── Cold Email Agent ────────────────────────────────────────────────────────
+
+const EMAIL_SYSTEM = `\
+You are an expert cold-email copywriter for job applications. Draft a short, personalized email
+that gets read, gets opened, and gets a response.
+
+The email is judged on three sections, weighted roughly by how much they drive the outcome:
+1. Subject line (drives OPEN, ~30%): 36-50 characters, personalized off a concrete detail from the
+   job description or company info — a specific product, initiative, tech stack choice, or value
+   mentioned in <job_dna> or <company_info>. NEVER use a generic subject like "Job Inquiry",
+   "Application for X", or a {first_name}-style mail-merge template — recruiters filter these out.
+2. Opening line (drives CONTINUED READ, ~30%): first sentence must earn the second sentence. Reference
+   something specific and true about the company or role, not a generic compliment.
+3. Value-prop + ask (drives RESPONSE, ~40%): 2-3 sentences connecting the candidate's strongest,
+   verifiable resume points to what this specific role needs, ending with a clear, low-friction ask
+   (e.g. a quick call, or simply reviewing the attached resume).
+
+Rules:
+- Keep the whole body under 150 words. No filler, no clichés ("I am writing to express my interest").
+- Only reference facts present in the candidate's selection (resume) or the job/company info provided.
+- Match tone_recommendation from the job DNA.
+- Sign off with the candidate's name only — no fabricated contact details.
+
+Return ONLY valid JSON. No markdown. No explanation outside the JSON.`;
+
+function emailUser(jobDNA: JobDNA, companyInfo: string, selection: AISelection): string {
+  return `\
+Draft a cold outreach email for this application.
+
+<job_dna>
+${JSON.stringify(jobDNA, null, 2)}
+</job_dna>
+
+<company_info>
+${companyInfo || 'Not provided'}
+</company_info>
+
+<candidate_resume_selection>
+${JSON.stringify(selection, null, 2)}
+</candidate_resume_selection>
+
+Return JSON matching this exact schema:
+{
+  "subject": "string — 36-50 characters, personalized from a concrete job/company detail",
+  "body": "string — full email body, under 150 words, plain text (no markdown, no HTML)"
+}`;
+}
+
 // ── Exported Functions ──────────────────────────────────────────────────────
 
 export async function checkCompatibility(
@@ -277,4 +349,12 @@ export async function critiqueAndRevise(
 
 export async function generateGapReport(jobDNA: JobDNA, db: MasterDB): Promise<GapReport> {
   return generateJSON<GapReport>(GAP_SYSTEM, gapUser(jobDNA, db));
+}
+
+export async function generateEmail(
+  jobDNA: JobDNA,
+  companyInfo: string,
+  selection: AISelection,
+): Promise<EmailDraft> {
+  return generateJSON<EmailDraft>(EMAIL_SYSTEM, emailUser(jobDNA, companyInfo, selection));
 }

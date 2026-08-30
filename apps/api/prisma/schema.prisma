@@ -22,6 +22,7 @@ model User {
   accounts      Account[]
 
   careerProfile CareerProfile?
+  applications  Application[]
 
   @@map("users")
 }
@@ -80,22 +81,69 @@ model CareerProfile {
   updatedAt DateTime @updatedAt
 
   // MasterDB sections stored as JSONB for schema flexibility
-  personalInfo Json @default("{}")
-  summaries    Json @default("[]")
-  experience   Json @default("[]")
-  education    Json @default("[]")
-  projects     Json @default("[]")
-  skills       Json @default("{}")
-  certifications          Json @default("[]")
-  awardsAndHonors         Json @default("[]")
-  publicationsAndSpeaking Json @default("[]")
+  personalInfo              Json @default("{}")
+  summaries                 Json @default("[]")
+  experience                Json @default("[]")
+  education                 Json @default("[]")
+  projects                  Json @default("[]")
+  skills                    Json @default("{}")
+  certifications            Json @default("[]")
+  awardsAndHonors           Json @default("[]")
+  publicationsAndSpeaking   Json @default("[]")
   volunteeringAndLeadership Json @default("[]")
-  interests    Json @default("[]")
+  interests                 Json @default("[]")
 
   // Computed strength score (0-100), refreshed on each update
   strengthScore Int @default(0)
 
   @@map("career_profiles")
+}
+
+// ── Phase 2: Manual Job Application Flow ────────────────────────────────────
+
+model Job {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  source      String  @default("manual") // 'manual' | 'scraper'
+  sourceUrl   String?
+  title       String
+  companyName String
+  companyInfo Json? // values, tone, culture signals, tech stack
+  rawJd       String  @db.Text
+  parsedJd    Json? // { required_skills[], nice_to_have[], seniority, keywords[] } — JobDNA
+  location    String?
+  remote      Boolean @default(false)
+  salaryRange String?
+
+  applications Application[]
+
+  @@map("jobs")
+}
+
+model Application {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId  String
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  matchScore   Int
+  matchReasons Json // string[] — explainability reasons from checkCompatibility()
+  status       String @default("gap_reported") // 'gap_reported' | 'resume_drafted' | 'email_drafted' | 'archived'
+
+  gapReport       Json? // GapReport-shaped, null once matched
+  resumeSelection Json? // editable AISelection draft — the review-gate field
+  resumeSource    String? @db.Text // .tex or .typ source
+  renderedWith    String? // 'latex' | 'typst'
+  resumePdfPath   String?
+  emailDraft      Json? // { subject, body }
+
+  @@index([userId])
+  @@map("applications")
 }
 
 // ── Phase 5 stubs (billing — schema ready, enforcement behind flag) ──────────

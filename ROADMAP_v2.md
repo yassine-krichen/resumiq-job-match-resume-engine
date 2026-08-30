@@ -36,8 +36,8 @@ A personal career engine that knows everything about you, finds relevant jobs, s
 | Database | PostgreSQL + Prisma ORM | |
 | Auth | better-auth (NestJS adapter) | GitHub + LinkedIn OAuth |
 | AI | **ai-bridge** (existing module) | Claude → GPT → Gemini → Groq → Ollama fallback chain. Claude API key wired in when going SaaS. |
-| Resume compile | Tectonic (Rust LaTeX engine) | Docker sidecar, `POST /compile` → returns PDF bytes |
-| Job scraping | Playwright + custom scrapers | Per-source workers |
+| Resume compile | **Dual engine: LaTeX (Tectonic) + Typst** | Both implement `RenderEngine` interface, selected via `RESUME_RENDER_ENGINE=latex\|typst` env var. See [Resume Render Engine](#resume-render-engine-dual-latex--typst) below. |
+| Job scraping | Playwright + ATS public APIs + JSON-LD | Per-source workers. See [Intelligent Scraping](#intelligent-scraping-strategy) below. |
 | Queue | BullMQ + Redis | Scraping, resume gen, email gen |
 | File storage | **Local filesystem for now** | Abstract behind a `StorageService` interface so swapping to S3/Cloudflare R2/Supabase Storage later is a one-file change |
 | Frontend UI | shadcn/ui + Tailwind CSS + Framer Motion | |
@@ -163,6 +163,7 @@ Computing match score...
 - `XX / 100` with breakdown: skills fit · experience fit · seniority fit
 - Color ring: 🟢 ≥ 70 · 🟡 50–69 · 🔴 < 50
 - Threshold configurable in settings (default: 50)
+- **Explainability (decided 2026-08-30)**: `checkCompatibility()` returns a structured `reasons: string[]` array alongside the score (matched skills, gaps, seniority fit detail) — shown as an expandable "why this score" on the card/result. Same LLM call also seeds the gap report, no duplicate call.
 
 **Outcome A — GAP REPORT** (below threshold):
 - Actionable checklist per gap: missing skill → suggested project / course / cert / book
@@ -173,15 +174,30 @@ Computing match score...
 ```
 Selecting best content from your Inventory for this role...
 Drafting tailored resume bullets...
-Compiling LaTeX PDF via Tectonic...
+[REVIEW & EDIT GATE — see below]
+Rendering PDF (LaTeX or Typst per RESUME_RENDER_ENGINE)...
 Drafting cold email in company's tone & values...
+[REVIEW & EDIT GATE — email]
 Done ✓
 ```
 
-**Review step:**
+**Review & Edit Gate (decided 2026-08-30)** — solves both "can't tweak the resume" and "silent overflow" problems:
+1. `selectAndDraft()` outputs structured `AISelection` JSON — bullets, skills, summary — not a PDF
+2. User edits this JSON in a resume editor UI: edit bullet text, reorder, toggle sections on/off
+3. Live preview recompiles on edit (debounced) — cheap/fast on Typst engine, on-demand on LaTeX engine
+4. User confirms → final render → PDF produced
+5. Email draft goes through the same pattern: AI drafts → user reviews/edits inline → confirms → ready to send
+6. Nothing is finalized (queued for send, marked "ready") without this explicit user confirmation step
+
+**Email drafting — prompt structure (decided 2026-08-30):**
+- Subject line: 36–50 chars, personalized from `parsed_jd`/`company_info` (not `{first_name}` mail-merge — reference a real JD/company detail). Generic subjects ("Job Inquiry") auto-filtered by recruiters.
+- Three explicit scored sections in the prompt: subject (drives open), opening line (drives continued read), value-prop/ask (drives response) — weighted roughly 30/30/50 per open-rate research
+- Company-profile detail folds into the email drafter directly (pulled from `company_info` already scraped with the job) — not a separate agent/feature
+
+**Review step (post-render):**
 - Left: PDF resume preview (rendered from compiled PDF)
 - Right: Email draft (editable inline)
-- Buttons: "Download .tex" · "Download PDF" · "Copy email"
+- Buttons: "Download .tex/.typ" · "Download PDF" · "Copy email"
 - If `settings.auto_send_email = true`: "Send Email" fires (Phase 4)
 - If false (default): user handles sending manually
 
@@ -257,25 +273,50 @@ Given: `parsed_jd` + `company_info` + user's `career_profile` + the tailored res
 ### Goal
 Platform scrapes jobs daily into the DB → user opens `/discover` → Tinder-style card feed → swipe right → full pipeline fires in background.
 
-### Scraping Sources (priority order)
+### Scraping Sources (priority order — revised 2026-08-30)
 
 | Source | Why | Difficulty |
 |---|---|---|
+| Greenhouse / Lever / Ashby / Workday public Boards APIs | Company-published, public, no auth, plain JSON HTTP — no headless browser needed. Used by Stripe, Airbnb, Figma, Spotify, Notion etc. Legally the safest + cheapest to maintain. | Easy |
 | Wellfound (AngelList) | Startup-heavy, structured, low bot protection | Easy |
-| Greenhouse / Lever job boards | Direct company ATS, clean HTML | Easy–Medium |
 | RemoteOK / We Work Remotely | Remote-first, RSS + HTML, minimal protection | Easy |
 | Indeed | High volume, aggressive scraping protection | Medium |
-| LinkedIn Jobs | Highest volume, hardest to scrape reliably | Hard — Phase 3b |
+| LinkedIn Jobs | Highest volume, hardest to scrape reliably, ToS risk | Hard — manual-paste only, no bulk crawl (see below) |
+
+### Intelligent Scraping Strategy (decided 2026-08-30)
+
+- **Structured data first**: check for `<script type="application/ld+json">` (`schema.org/JobPosting`) on every job page before touching the DOM — most job pages embed it, gives clean structured description/salary/location with no truncation or "read more" issues at all.
+- **DOM fallback** (when no JSON-LD): Playwright, reuse the same page object across pagination (don't respawn browser per page), wait `networkidle` after actions that fetch, loop "next"/"load more" until it disappears.
+- **Expandable content**: `locator.scroll_into_view_if_needed()` + click any "..."/"read more" toggle *before* extracting `.inner_text()` — collapsed text isn't in the DOM tree until expanded.
+- **Background API interception**: when a site loads job data via XHR/fetch, listen on `page.on('response', ...)` and grab the JSON directly — faster and less fragile than parsing rendered DOM.
+- **Do not scrape Google search results directly** (ToS-heavy, CAPTCHA-prone). If company-site resolution is needed for enrichment, use a proper search API (Serper, Brave Search API) — or skip it entirely, since the enrichment vendors below already resolve company domain → data internally.
+- **LinkedIn/Indeed**: no bulk crawling. User pastes URL or raw JD manually (`/apply/manual`); if scraping a single pasted URL server-side, treat as one-off fetch, not a crawl.
+
+### Email & Company Enrichment (decided 2026-08-30)
+
+Needed for: cold email recipient discovery + company profile detail (folded into email drafter, not a separate agent).
+
+| Need | Primary | Fallback | Why |
+|---|---|---|---|
+| Recruiter/contact email | **Hunter.io** | RocketReach | Hunter: every result has confidence score + verification, best API for automation. RocketReach covers personal-domain emails better (small companies, non-corporate addresses). |
+| Company profile enrichment | **People Data Labs** | Apollo.io | PDL: highest measured accuracy (89% correct field yield), fastest (274ms median). Clearbit's free tier is dead (HubSpot-only, no new API keys) — do not build against it. Apollo as single-vendor fallback if bundling contact+company data is preferred. |
+
+Compliance: bulk personal-email lookup for cold outreach touches GDPR/CAN-SPAM — drafted emails must include an opt-out/unsubscribe path; don't retain scraped personal emails indefinitely without basis.
+
+### Discover Feed Filters (decided 2026-08-30)
+
+Pre-swipe filter bar on `/discover`: category/field (AI, DevOps, SWE, etc.), work mode (remote/hybrid/onsite), location (abroad/local), seniority. Stored per-user in `SettingsModule` (`preferred_locations`/`target_roles`/`seniority` already in `users.settings` — extend with `category_tags: string[]` and `work_mode: string[]`). Filters narrow the `job_match_previews` query *and* feed into `checkCompatibility()` scoring weight (e.g. filtering "DevOps" boosts DevOps-relevant skill matches in the score).
 
 ### Scraping Infrastructure
 
-- **Playwright** workers, one per source, rotating user agents + delays
+- **Playwright** workers, one per source, rotating user agents + delays (DOM-fallback sources only — ATS public APIs need none of this)
 - **BullMQ** `job-scraper` queue, CRON-triggered daily via `@nestjs/schedule`
 - **Deduplication**: unique index on `(company_name, title, location)` in `jobs` table
 - **Enrichment pipeline** after each scrape:
   ```
-  Raw JD text → ai-bridge → parsed_jd JSONB
-  Company URL → scrape → company_info JSONB
+  Raw JD text → JSON-LD if present, else Playwright DOM → ai-bridge → parsed_jd JSONB
+  Company name/domain → People Data Labs → company_info JSONB
+  Hiring contact → Hunter.io (fallback RocketReach) → stored for email draft, not persisted long-term
   ```
 - Failed jobs → exponential backoff retry (BullMQ native)
 
@@ -473,16 +514,44 @@ ai-bridge    Tectonic sidecar
 
 ---
 
-## LaTeX / Resume Pipeline Detail
+## Resume Render Engine (dual: LaTeX + Typst)
 
-1. **Template**: Jake Gutierrez base (existing in CLI), parameterized with token placeholders
-2. **Content selection**: `AIModule.generateResume(careerProfile, parsedJD)` → returns structured JSON of selected bullets, ranked skills, tailored summary
-3. **Template fill**: `ResumeModule` injects JSON into `.tex` template string
-4. **Compile**: `POST /compile { tex: string }` to Tectonic sidecar → returns `{ pdf: base64 }`
-5. **Store**: `StorageService.save()` → local path today, S3 URL tomorrow, same field in DB
-6. **Serve**: file endpoint returns PDF bytes with `Content-Type: application/pdf`
+> Decided 2026-08-30. LaTeX was picked originally for visual quality (Jake Gutierrez / Awesome-CV-tier templates, cleaner than most). Two known bugs: (1) no page-count feedback — generated resume can silently overflow to page 2, (2) text sometimes fails to wrap, spills off the line, looks sloppy. Typst fixes both structurally (fast recompiles enable a fit-check loop, real scripting for auto-shrink) but must not be a visual downgrade — confirmed it isn't: `modern-cv` on Typst Universe is a direct port of Awesome-CV, plus `impressive-impression`, `brilliant-cv`, `neat-cv` are same tier. Both engines ship from day one, switchable per-request/per-env, no business-logic change either way.
 
-**Tectonic sidecar** (minimal Dockerfile):
+### Shared interface
+```typescript
+interface RenderEngine {
+  render(selection: AISelection, db: CareerProfile, templateId: string): Promise<{ pdf: Buffer; pageCount: number }>;
+}
+```
+
+```
+packages/resume-renderer/
+  render-engine.interface.ts
+  latex/latex-renderer.ts     // wraps Tectonic sidecar
+  typst/typst-renderer.ts     // wraps typst-cli or typst.ts (wasm) — no sidecar needed, compiles in-process
+  index.ts                    // resolves impl from RESUME_RENDER_ENGINE env var
+```
+
+### LaTeX path (existing, patched — no compile-loop yet)
+Since LaTeX has no cheap way to detect/retry overflow yet, mitigate at the prompt layer in `selectAndDraft()` / `critiqueAndRevise()`:
+- Hard cap: max 3 experience entries, max N bullets/entry, char-length cap per bullet
+- Tighten template spacing/margins slightly (same visual family, more headroom before overflow)
+- Real overflow-detection loop (compile → count pages → ask LLM to trim → recompile) is a Typst-only feature for now; can be backported to LaTeX later if still needed
+
+### Typst path (new, preferred going forward)
+- Port winning template to `modern-cv` (or closest Awesome-CV-tier package) — zero visual downgrade
+- Cheap compiles (200-500ms) enable a real fit loop: compile → read page count → if >1 page, auto-shrink (font/spacing step-down first, then ask LLM to trim content) → recompile → repeat until 1 page or shrink budget exhausted
+- No LaTeX line-wrap bug class — Typst's layout engine handles text flow correctly
+
+### Shared pipeline (both engines)
+1. **Content selection**: `AIModule.generateResume(careerProfile, parsedJD)` → structured `AISelection` JSON (bullets, ranked skills, tailored summary) — **not a PDF yet**
+2. **Review & Edit Gate** (see Phase 2 below): user reviews/edits the structured JSON in-app before any compile happens
+3. **Render**: `RenderEngine.render(selection, db, templateId)` → PDF bytes + page count, engine picked via env var
+4. **Store**: `StorageService.save()` → local path today, S3 URL tomorrow, same field in DB
+5. **Serve**: file endpoint returns PDF bytes with `Content-Type: application/pdf`
+
+**Tectonic sidecar** (LaTeX path only, minimal Dockerfile):
 ```
 POST /compile
 Body:     { tex: string }

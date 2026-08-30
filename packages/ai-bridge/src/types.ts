@@ -166,6 +166,16 @@ export interface CompatibilityResult {
   blockers: string[];
   warnings: string[];
   suggestions: string[];
+  /** Explainability: matched skills, gaps, seniority fit — shown as "why this score". */
+  reasons: string[];
+  /** Gap-report-shaped fields, seeded by the same call — used when score is below threshold. */
+  missing_skills: Array<{
+    skill: string;
+    priority: 'mandatory' | 'nice-to-have';
+    suggested_resources: string[];
+  }>;
+  strengths: string[];
+  recommendations: string[];
 }
 
 export interface GapReport {
@@ -177,4 +187,9 @@ export interface GapReport {
   }>;
   strengths: string[];
   recommendations: string[];
+}
+
+export interface EmailDraft {
+  subject: string;
+  body: string;
 }
