@@ -265,6 +265,18 @@ describe('ApplicationsService', () => {
       expect(prisma.application.update).not.toHaveBeenCalled();
     });
 
+    it("confirm flips status to 'ready', distinct from 'email_drafted', for the owning user", async () => {
+      prisma.application.findFirst.mockResolvedValue({ id: APP_ID, userId: OWNER });
+      prisma.application.update.mockResolvedValue({ id: APP_ID, status: 'ready' });
+
+      await service.confirm(OWNER, APP_ID);
+
+      expect(prisma.application.update).toHaveBeenCalledWith({
+        where: { id: APP_ID },
+        data: { status: 'ready' },
+      });
+    });
+
     it('getById throws NotFoundException (joined with job) when the application belongs to a different user', async () => {
       prisma.application.findFirst.mockResolvedValue(null);
 

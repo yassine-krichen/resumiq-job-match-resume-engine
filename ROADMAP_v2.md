@@ -223,7 +223,7 @@ applications
   user_id         uuid FK → users.id
   job_id          uuid FK → jobs.id
   match_score     int
-  status          text        -- 'gap_reported' | 'resume_drafted' | 'email_drafted' | 'sent' | 'archived'
+  status          text        -- 'gap_reported' | 'resume_drafted' | 'email_drafted' | 'ready' | 'sent' | 'archived'
   gap_report      jsonb       -- null if matched
   resume_tex      text        -- raw .tex source
   resume_pdf_path text        -- local path (later: S3 URL, same field)

@@ -133,7 +133,7 @@ model Application {
 
   matchScore   Int
   matchReasons Json // string[] — explainability reasons from checkCompatibility()
-  status       String @default("gap_reported") // 'gap_reported' | 'resume_drafted' | 'email_drafted' | 'archived'
+  status       String @default("gap_reported") // 'gap_reported' | 'resume_drafted' | 'email_drafted' | 'ready' | 'archived'
 
   gapReport       Json? // GapReport-shaped, null once matched
   resumeSelection Json? // editable AISelection draft — the review-gate field

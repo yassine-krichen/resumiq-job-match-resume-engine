@@ -228,12 +228,17 @@ export class ApplicationsService {
     });
   }
 
-  /** Flips status to 'email_drafted' ("ready"). Never sends the email — out of scope. */
+  /**
+   * Flips status to 'ready' — the user's explicit confirmation that the
+   * resume + email draft are final. Distinct from 'email_drafted' (drafted,
+   * awaiting review) so the review-gate step is a real persisted state, not
+   * just client-side. Never sends the email — out of scope.
+   */
   async confirm(userId: string, applicationId: string) {
     await this.findOwned(userId, applicationId);
     return this.prisma.application.update({
       where: { id: applicationId },
-      data: { status: 'email_drafted' },
+      data: { status: 'ready' },
     });
   }
 
