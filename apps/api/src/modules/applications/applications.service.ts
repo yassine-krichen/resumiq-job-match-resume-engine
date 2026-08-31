@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   analyzeJob,
@@ -11,6 +11,7 @@ import type { AISelection, GapReport, JobDNA } from '@resumiq/ai-bridge';
 import { UpdateResumeSelectionSchema } from '@resumiq/schemas';
 import type {
   CreateJobDto,
+  ListApplicationsFiltersDto,
   UpdateEmailDraftDto,
   UpdateGapReportDto,
   UpdateResumeSelectionDto,
@@ -18,6 +19,7 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProfileService } from '../profile/profile.service';
 import { ResumeService } from '../resume/resume.service';
+import { LocalStorageService } from '../../common/storage/local-storage.service';
 import { buildManualJobDedupeKey } from '../../common/jobs/dedupe-key';
 
 type Json = Prisma.InputJsonValue;
@@ -43,12 +45,51 @@ interface ResumeSelectionDraftResult {
  * compatibility score clears `DEFAULT_MATCH_THRESHOLD`. */
 type DraftForJobResult = GapReportDraftResult | ResumeSelectionDraftResult;
 
+/** Thin, explicit-select application shape shared by `listApplications` and
+ * `getDashboardSummary`'s `recentActivity` — deliberately excludes the
+ * gapReport/resumeSelection/resumeSource JSON blobs no caller of these two
+ * needs. */
+const APPLICATION_LIST_SELECT = {
+  id: true,
+  status: true,
+  matchScore: true,
+  createdAt: true,
+  updatedAt: true,
+  job: {
+    select: { id: true, title: true, companyName: true, location: true },
+  },
+} satisfies Prisma.ApplicationSelect;
+
+export interface ListApplicationsResult {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: Prisma.ApplicationGetPayload<{ select: typeof APPLICATION_LIST_SELECT }>[];
+}
+
+export interface DashboardSummary {
+  totalApplications: number;
+  avgMatchScore: number;
+  resumesGenerated: number;
+  gapReportsSaved: number;
+  recentActivity: Prisma.ApplicationGetPayload<{ select: typeof APPLICATION_LIST_SELECT }>[];
+  // Bounded (max 5) exception to the thin-select convention above — the
+  // frontend's GapReportView needs the full gapReport JSON (and other full
+  // fields) for its checkbox interactivity, and 5 rows is small enough that
+  // returning full rows here doesn't reintroduce the over-fetch risk the
+  // thin select exists to prevent.
+  savedGapReports: Prisma.ApplicationGetPayload<{ include: { job: true } }>[];
+}
+
 @Injectable()
 export class ApplicationsService {
+  private readonly logger = new Logger(ApplicationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly profileService: ProfileService,
     private readonly resumeService: ResumeService,
+    private readonly storage: LocalStorageService,
   ) {}
 
   /**
@@ -104,12 +145,27 @@ export class ApplicationsService {
   }
 
   /**
-   * Runs the scoring/gap-report/drafting leg shared by both entry points:
-   * `analyzeAndDraft` (Job just created from a manual paste) and
+   * Runs the scoring/gap-report/drafting leg shared by three entry points:
+   * `analyzeAndDraft` (Job just created from a manual paste),
    * `draftForExistingJob` (Job already ingested by the scraper pipeline,
-   * `parsedJd` already computed at ingestion time). `pages` defaults to 2 —
+   * `parsedJd` already computed at ingestion time), and `regenerate` (an
+   * existing application, re-drafted from scratch). `pages` defaults to 2 —
    * same default CreateJobSchema applies for the manual-paste entry point —
    * since the scraper entry point has no per-request page-count preference.
+   *
+   * `existingApplicationId`, when set (the `regenerate` case), updates that
+   * row in place instead of creating a new Application — and each branch
+   * below explicitly nulls out the *other* branch's field (gapReport vs.
+   * resumeSelection), plus the previously-rendered PDF/email fields
+   * (resumeSource/renderedWith/resumePdfPath/emailDraft), all as part of
+   * the SAME atomic update — so a regenerate that flips branches, or that
+   * re-drafts a previously resume-drafted application, never leaves a stale
+   * value from the previous draft behind, and a failed draft (LLM error,
+   * schema-validation failure, etc.) never partially clears the row.
+   *
+   * PRECONDITION: callers passing `existingApplicationId` MUST have already
+   * verified the application belongs to `userId` — this method does not
+   * scope its update by userId (see `regenerate`'s `findOwnedWithJob` call).
    */
   private async draftForJob(
     userId: string,
@@ -117,6 +173,7 @@ export class ApplicationsService {
     jobDNA: JobDNA,
     onProgress: (step: string) => void,
     pages: 1 | 2 = 2,
+    existingApplicationId?: string,
   ): Promise<DraftForJobResult> {
     const db = await this.profileService.getProfile(userId);
     if (!db) {
@@ -132,32 +189,39 @@ export class ApplicationsService {
 
     if (compat.score < threshold) {
       onProgress('Building gap report...');
-      const application = await this.prisma.application.create({
-        data: {
-          userId,
-          jobId: job.id,
-          matchScore: compat.score,
-          matchReasons: compat.reasons as unknown as Json,
-          status: 'gap_reported',
-          gapReport: {
-            match_score: compat.score,
-            missing_skills: compat.missing_skills,
-            strengths: compat.strengths,
-            recommendations: compat.recommendations,
-          } as unknown as Json,
-        },
-      });
+      const gapReport = {
+        match_score: compat.score,
+        missing_skills: compat.missing_skills,
+        strengths: compat.strengths,
+        recommendations: compat.recommendations,
+      };
+      const data = {
+        matchScore: compat.score,
+        matchReasons: compat.reasons as unknown as Json,
+        status: 'gap_reported',
+        gapReport: gapReport as unknown as Json,
+        resumeSelection: Prisma.JsonNull, // clear any stale selection from a prior draft
+        // regenerate case only: clear a previously rendered PDF/email as
+        // part of this same atomic write — see this method's docstring.
+        ...(existingApplicationId && {
+          resumeSource: null,
+          renderedWith: null,
+          resumePdfPath: null,
+          emailDraft: Prisma.JsonNull,
+        }),
+      };
+      const application = existingApplicationId
+        ? await this.prisma.application.update({
+            where: { id: existingApplicationId },
+            data,
+          })
+        : await this.prisma.application.create({ data: { userId, jobId: job.id, ...data } });
 
       return {
         applicationId: application.id,
         matchScore: compat.score,
         reasons: compat.reasons,
-        gapReport: {
-          match_score: compat.score,
-          missing_skills: compat.missing_skills,
-          strengths: compat.strengths,
-          recommendations: compat.recommendations,
-        },
+        gapReport,
       };
     }
 
@@ -178,16 +242,24 @@ export class ApplicationsService {
     }
     const selection: AISelection = parsedSelection.data;
 
-    const application = await this.prisma.application.create({
-      data: {
-        userId,
-        jobId: job.id,
-        matchScore: compat.score,
-        matchReasons: compat.reasons as unknown as Json,
-        status: 'gap_reported', // no resume rendered yet — flips to resume_drafted at finalize
-        resumeSelection: selection as unknown as Json,
-      },
-    });
+    const data = {
+      matchScore: compat.score,
+      matchReasons: compat.reasons as unknown as Json,
+      status: 'gap_reported', // no resume rendered yet — flips to resume_drafted at finalize
+      resumeSelection: selection as unknown as Json,
+      gapReport: Prisma.JsonNull, // clear any stale gap report from a prior draft
+      // regenerate case only: clear a previously rendered PDF/email as
+      // part of this same atomic write — see this method's docstring.
+      ...(existingApplicationId && {
+        resumeSource: null,
+        renderedWith: null,
+        resumePdfPath: null,
+        emailDraft: Prisma.JsonNull,
+      }),
+    };
+    const application = existingApplicationId
+      ? await this.prisma.application.update({ where: { id: existingApplicationId }, data })
+      : await this.prisma.application.create({ data: { userId, jobId: job.id, ...data } });
 
     return {
       applicationId: application.id,
@@ -220,6 +292,137 @@ export class ApplicationsService {
     }
     const jobDNA = job.parsedJd as unknown as JobDNA;
     return this.draftForJob(userId, job, jobDNA, onProgress);
+  }
+
+  /**
+   * Re-drafts an existing application from scratch against its Job's
+   * already-parsed JD. "Start over" semantics: any previously rendered
+   * PDF/email is cleared, but ONLY as part of `draftForJob`'s own atomic
+   * update once the LLM drafting pipeline has actually succeeded — nothing
+   * destructive happens beforehand, so if `draftForJob` throws (LLM
+   * timeout, schema-validation failure, etc.), the row and its PDF file
+   * are left completely untouched and the application remains usable. The
+   * old PDF file (if any) is only deleted from disk after that successful
+   * update — best-effort, since a failed cleanup should never block the
+   * regenerate itself from having succeeded.
+   */
+  async regenerate(
+    userId: string,
+    applicationId: string,
+    onProgress: (step: string) => void,
+  ): Promise<DraftForJobResult> {
+    const application = await this.findOwnedWithJob(userId, applicationId);
+    const job = application.job;
+    // Same guard as draftForExistingJob — a scraper-ingested Job's parsedJd
+    // can legitimately be null if analyzeJob() failed at ingestion time.
+    if (!job.parsedJd) {
+      throw new BadRequestException(
+        'This job has not been analyzed yet — no parsed job description available',
+      );
+    }
+    const jobDNA = job.parsedJd as unknown as JobDNA;
+    const oldResumePdfPath = application.resumePdfPath;
+
+    // Ownership already verified above via findOwnedWithJob — satisfies
+    // draftForJob's existingApplicationId precondition.
+    const result = await this.draftForJob(userId, job, jobDNA, onProgress, 2, applicationId);
+
+    // Only delete the old PDF once the new draft has been persisted.
+    if (oldResumePdfPath) {
+      try {
+        await this.storage.delete(oldResumePdfPath);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to delete stale resume PDF at ${oldResumePdfPath} during regenerate: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * The applications dashboard's filterable list — thin explicit select,
+   * paginated the same way `getDiscoverFeed` is.
+   */
+  async listApplications(
+    userId: string,
+    filters: ListApplicationsFiltersDto,
+  ): Promise<ListApplicationsResult> {
+    const where: Prisma.ApplicationWhereInput = { userId };
+    if (filters.status) where.status = filters.status;
+    if (filters.company) {
+      where.job = { companyName: { contains: filters.company, mode: 'insensitive' } };
+    }
+    if (filters.date_from || filters.date_to) {
+      where.createdAt = {
+        ...(filters.date_from && { gte: filters.date_from }),
+        ...(filters.date_to && { lte: filters.date_to }),
+      };
+    }
+    if (filters.match_score_min !== undefined || filters.match_score_max !== undefined) {
+      where.matchScore = {
+        ...(filters.match_score_min !== undefined && { gte: filters.match_score_min }),
+        ...(filters.match_score_max !== undefined && { lte: filters.match_score_max }),
+      };
+    }
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.application.count({ where }),
+      this.prisma.application.findMany({
+        where,
+        select: APPLICATION_LIST_SELECT,
+        orderBy: { createdAt: 'desc' },
+        skip: (filters.page - 1) * filters.page_size,
+        take: filters.page_size,
+      }),
+    ]);
+
+    return { total, page: filters.page, pageSize: filters.page_size, items };
+  }
+
+  /**
+   * Summary stats for the applications dashboard landing view.
+   */
+  async getDashboardSummary(userId: string): Promise<DashboardSummary> {
+    const [totalApplications, avgMatchScoreResult, resumesGenerated, gapReportsSaved, recentActivity, savedGapReports] =
+      await this.prisma.$transaction([
+        this.prisma.application.count({ where: { userId } }),
+        // Across ALL applications, including below-threshold gap-reported
+        // ones — a more honest number than only counting drafted ones.
+        this.prisma.application.aggregate({ where: { userId }, _avg: { matchScore: true } }),
+        this.prisma.application.count({ where: { userId, resumePdfPath: { not: null } } }),
+        // Prisma.AnyNull (not DbNull) — DbNull only excludes SQL NULL, so
+        // `{ not: DbNull }` would incorrectly match rows with a *stored JSON
+        // null* gapReport (resume-drafted applications, see draftForJob's
+        // `gapReport: Prisma.JsonNull` clear). AnyNull excludes both SQL NULL
+        // and JSON null, matching only a genuinely populated gap report.
+        this.prisma.application.count({ where: { userId, gapReport: { not: Prisma.AnyNull } } }),
+        this.prisma.application.findMany({
+          where: { userId },
+          select: APPLICATION_LIST_SELECT,
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
+        // Bounded (max 5), full rows — the frontend's GapReportView needs
+        // the full gapReport JSON (and other full fields) for its checkbox
+        // interactivity, unlike listApplications/recentActivity's thin select.
+        this.prisma.application.findMany({
+          where: { userId, status: 'gap_reported', gapReport: { not: Prisma.AnyNull } },
+          include: { job: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        }),
+      ]);
+
+    return {
+      totalApplications,
+      avgMatchScore: Math.round(avgMatchScoreResult._avg.matchScore ?? 0),
+      resumesGenerated,
+      gapReportsSaved,
+      recentActivity,
+      savedGapReports,
+    };
   }
 
   async updateResumeSelection(

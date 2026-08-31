@@ -84,7 +84,13 @@ export const MasterDBSchema = z.object({
     }),
   ),
   awards_and_honors: z.array(
-    z.object({ title: z.string(), issuer: z.string(), date: z.string(), description: z.string() }),
+    z.object({
+      title: z.string(),
+      issuer: z.string(),
+      date: z.string(),
+      description: z.string(),
+      related_skills: z.array(z.string()).optional(),
+    }),
   ),
   publications_and_speaking: z.array(
     z.object({
@@ -231,6 +237,29 @@ export const UserSettingsSchema = z.object({
 
 export const UpdateUserSettingsSchema = UserSettingsSchema.partial();
 
+// ── Phase 4: Application Dashboard ──────────────────────────────────────────
+
+// Only the 4 statuses actually ever set by real code — 'archived'/'sent' are
+// mentioned in comments/roadmap but no code path sets them yet, so they're
+// deliberately not filterable values here.
+const ApplicationStatusSchema = z.enum([
+  'gap_reported',
+  'resume_drafted',
+  'email_drafted',
+  'ready',
+]);
+
+export const ListApplicationsFiltersSchema = z.object({
+  status: ApplicationStatusSchema.optional(),
+  company: z.string().optional(),
+  date_from: z.coerce.date().optional(),
+  date_to: z.coerce.date().optional(),
+  match_score_min: z.coerce.number().int().min(0).max(100).optional(),
+  match_score_max: z.coerce.number().int().min(0).max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(50).default(20),
+});
+
 // ── Inferred Types ──────────────────────────────────────────────────────────
 
 export type MasterDB = z.infer<typeof MasterDBSchema>;
@@ -243,3 +272,4 @@ export type UpdateResumeSelectionDto = z.infer<typeof UpdateResumeSelectionSchem
 export type UpdateEmailDraftDto = z.infer<typeof UpdateEmailDraftSchema>;
 export type UpdateGapReportDto = z.infer<typeof UpdateGapReportSchema>;
 export type DiscoverFeedFiltersDto = z.infer<typeof DiscoverFeedFiltersSchema>;
+export type ListApplicationsFiltersDto = z.infer<typeof ListApplicationsFiltersSchema>;

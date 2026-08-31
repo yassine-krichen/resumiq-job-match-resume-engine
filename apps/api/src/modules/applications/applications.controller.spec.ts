@@ -1,9 +1,11 @@
 import { Response } from 'express';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { ListApplicationsFiltersSchema } from '@resumiq/schemas';
 import { ApplicationsController } from './applications.controller';
 import { ApplicationsService } from './applications.service';
 import { LocalStorageService } from '../../common/storage/local-storage.service';
 import { AuthGuard } from '../auth/auth.guard';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 
 // better-auth (and better-auth/node) are ESM-only and would otherwise fail
 // to parse under Jest's default CommonJS transform — stub them since this
@@ -68,10 +70,14 @@ describe('ApplicationsController', () => {
     confirm: jest.Mock;
     getById: jest.Mock;
     getResumePdfPath: jest.Mock;
+    listApplications: jest.Mock;
+    getDashboardSummary: jest.Mock;
+    regenerate: jest.Mock;
   };
   let storage: { get: jest.Mock };
   let controller: ApplicationsController;
   const req = { user: { id: 'user-1' } };
+  const ATTACKER = { user: { id: 'user-attacker' } };
 
   beforeEach(() => {
     applicationsService = {
@@ -84,6 +90,9 @@ describe('ApplicationsController', () => {
       confirm: jest.fn(),
       getById: jest.fn(),
       getResumePdfPath: jest.fn(),
+      listApplications: jest.fn(),
+      getDashboardSummary: jest.fn(),
+      regenerate: jest.fn(),
     };
     storage = { get: jest.fn() };
     controller = new ApplicationsController(
@@ -249,6 +258,199 @@ describe('ApplicationsController', () => {
       expect(storage.get).toHaveBeenCalledWith('user-1/app-1/resume.pdf');
       expect(res.headers['Content-Type']).toBe('application/pdf');
       expect(res.sent).toEqual(Buffer.from('%PDF-1.4'));
+    });
+  });
+
+  describe('list', () => {
+    it('scopes the list query to the authenticated session user, never a client-supplied id', async () => {
+      const filters = { page: 1, page_size: 20 } as never;
+      applicationsService.listApplications.mockResolvedValue({
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        items: [],
+      });
+
+      await controller.list(req, filters);
+
+      expect(applicationsService.listApplications).toHaveBeenCalledWith('user-1', filters);
+    });
+
+    it('returns the paginated result from listApplications unchanged', async () => {
+      const result = { total: 2, page: 1, pageSize: 20, items: [{ id: 'app-1' }, { id: 'app-2' }] };
+      applicationsService.listApplications.mockResolvedValue(result);
+
+      const response = await controller.list(req, { page: 1, page_size: 20 } as never);
+
+      expect(response).toEqual(result);
+    });
+
+    it('does not fall through to getById — a client hitting GET /applications with no id resolves to the list handler', async () => {
+      applicationsService.listApplications.mockResolvedValue({
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        items: [],
+      });
+
+      await controller.list(req, { page: 1, page_size: 20 } as never);
+
+      expect(applicationsService.getById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ListApplicationsFiltersSchema (as wired via ZodValidationPipe on GET /applications)', () => {
+    it('coerces query-string page, page_size, and match_score bounds to numbers', () => {
+      const pipe = new ZodValidationPipe(ListApplicationsFiltersSchema);
+
+      const parsed = pipe.transform({
+        page: '2',
+        page_size: '10',
+        match_score_min: '50',
+        match_score_max: '90',
+        status: 'ready',
+        company: 'Acme',
+      });
+
+      expect(parsed).toEqual({
+        page: 2,
+        page_size: 10,
+        match_score_min: 50,
+        match_score_max: 90,
+        status: 'ready',
+        company: 'Acme',
+      });
+    });
+
+    it('defaults page to 1 and page_size to 20 when omitted', () => {
+      const pipe = new ZodValidationPipe(ListApplicationsFiltersSchema);
+
+      expect(pipe.transform({})).toEqual({ page: 1, page_size: 20 });
+    });
+
+    it('rejects a page_size above its max of 50', () => {
+      const pipe = new ZodValidationPipe(ListApplicationsFiltersSchema);
+
+      expect(() => pipe.transform({ page_size: '500' })).toThrow();
+    });
+
+    it('rejects a match_score_min above its max of 100', () => {
+      const pipe = new ZodValidationPipe(ListApplicationsFiltersSchema);
+
+      expect(() => pipe.transform({ match_score_min: '150' })).toThrow();
+    });
+
+    it('rejects a status value outside the four filterable statuses', () => {
+      const pipe = new ZodValidationPipe(ListApplicationsFiltersSchema);
+
+      expect(() => pipe.transform({ status: 'archived' })).toThrow();
+    });
+  });
+
+  describe('dashboardSummary', () => {
+    it('scopes the dashboard summary lookup to the authenticated session user, never a client-supplied id', async () => {
+      const summary = {
+        totalApplications: 5,
+        avgMatchScore: 72,
+        resumesGenerated: 2,
+        gapReportsSaved: 3,
+        recentActivity: [],
+        savedGapReports: [],
+      };
+      applicationsService.getDashboardSummary.mockResolvedValue(summary);
+
+      const response = await controller.dashboardSummary(req);
+
+      expect(applicationsService.getDashboardSummary).toHaveBeenCalledWith('user-1');
+      expect(response).toEqual(summary);
+    });
+  });
+
+  describe('regenerateStream (SSE)', () => {
+    it('streams progress events then a done event matching the finalize/stream SSE frame convention', async () => {
+      const res = fakeResponse();
+      applicationsService.regenerate.mockImplementation(async (userId, id, onProgress) => {
+        onProgress('Comparing against your Career Inventory...');
+        onProgress('Selecting best content from your Inventory for this role...');
+        return { applicationId: 'app-1', matchScore: 85, reasons: [], selection: {} };
+      });
+
+      await controller.regenerateStream(req, res, 'app-1');
+
+      expect(res.headers['Content-Type']).toBe('text/event-stream');
+      const frames = parseSSEFrames(res.writes);
+      expect(frames[0].event).toBe('progress');
+      expect(frames[1].event).toBe('progress');
+      expect(frames[2]).toEqual({
+        event: 'done',
+        data: { applicationId: 'app-1', matchScore: 85, reasons: [], selection: {} },
+      });
+      expect(res.ended).toBe(true);
+    });
+
+    it('streams an error event (not an uncaught exception) when regenerating an application owned by someone else', async () => {
+      const res = fakeResponse();
+      applicationsService.regenerate.mockRejectedValue(new Error('Application not found'));
+
+      await controller.regenerateStream(ATTACKER, res, 'someone-elses-app');
+
+      const frames = parseSSEFrames(res.writes);
+      expect(frames).toEqual([{ event: 'error', data: { message: 'Application not found' } }]);
+      expect(res.ended).toBe(true);
+    });
+
+    it('streams an error event (not an uncaught exception) when the underlying job has no parsed JD yet', async () => {
+      const res = fakeResponse();
+      applicationsService.regenerate.mockRejectedValue(
+        new Error('This job has not been analyzed yet — no parsed job description available'),
+      );
+
+      await controller.regenerateStream(req, res, 'app-1');
+
+      const frames = parseSSEFrames(res.writes);
+      expect(frames).toEqual([
+        {
+          event: 'error',
+          data: { message: 'This job has not been analyzed yet — no parsed job description available' },
+        },
+      ]);
+      expect(res.ended).toBe(true);
+    });
+
+    it('scopes the regenerate call to the authenticated session user and route id, never a client-supplied userId', async () => {
+      const res = fakeResponse();
+      applicationsService.regenerate.mockResolvedValue({ applicationId: 'app-1' });
+
+      await controller.regenerateStream(req, res, 'app-1');
+
+      expect(applicationsService.regenerate).toHaveBeenCalledWith(
+        'user-1',
+        'app-1',
+        expect.any(Function),
+      );
+    });
+  });
+
+  describe('route declaration order (dashboard-summary vs :id greedy-match regression)', () => {
+    // NestJS's RouterExplorer registers routes by walking
+    // Object.getOwnPropertyNames(prototype) in declaration order, then
+    // Express matches same-specificity routes in registration order. If
+    // `getById` (`@Get(':id')`) were declared before `dashboardSummary`
+    // (`@Get('dashboard-summary')`), `GET /applications/dashboard-summary`
+    // would be greedily swallowed by `:id` with id === 'dashboard-summary'.
+    // This inspects the actual mechanism Nest relies on for registration
+    // order — it is NOT a substitute for an e2e/HTTP-level test hitting the
+    // real router (see report).
+    it('declares dashboardSummary before getById on the controller prototype', () => {
+      const methodNames = Object.getOwnPropertyNames(ApplicationsController.prototype);
+
+      expect(methodNames.indexOf('dashboardSummary')).toBeLessThan(methodNames.indexOf('getById'));
+    });
+
+    it('declares list before getById on the controller prototype', () => {
+      const methodNames = Object.getOwnPropertyNames(ApplicationsController.prototype);
+
+      expect(methodNames.indexOf('list')).toBeLessThan(methodNames.indexOf('getById'));
     });
   });
 });

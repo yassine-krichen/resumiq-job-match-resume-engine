@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -18,10 +19,12 @@ import { LocalStorageService } from '../../common/storage/local-storage.service'
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import {
   CreateJobSchema,
+  ListApplicationsFiltersSchema,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
   UpdateResumeSelectionSchema,
   type CreateJobDto,
+  type ListApplicationsFiltersDto,
   type UpdateEmailDraftDto,
   type UpdateGapReportDto,
   type UpdateResumeSelectionDto,
@@ -151,6 +154,67 @@ export class ApplicationsController {
   @Post(':id/confirm')
   async confirm(@Req() req: { user: { id: string } }, @Param('id') id: string) {
     return this.applicationsService.confirm(req.user.id, id);
+  }
+
+  /**
+   * GET /api/applications
+   * The applications dashboard's filterable, paginated list. Declared before
+   * `@Get(':id')` below — NestJS matches routes in declaration order, so a
+   * static/query-string route placed after `:id` would never be reached
+   * (this one doesn't collide since it has no path segment, but the
+   * dashboard-summary route below would if it were declared later).
+   */
+  @Get()
+  async list(
+    @Req() req: { user: { id: string } },
+    @Query(new ZodValidationPipe(ListApplicationsFiltersSchema)) filters: ListApplicationsFiltersDto,
+  ) {
+    return this.applicationsService.listApplications(req.user.id, filters);
+  }
+
+  /**
+   * GET /api/applications/dashboard-summary
+   * Must be declared before `@Get(':id')` — otherwise NestJS's `:id` route
+   * would greedily match `/applications/dashboard-summary` as if
+   * `id === 'dashboard-summary'`.
+   */
+  @Get('dashboard-summary')
+  async dashboardSummary(@Req() req: { user: { id: string } }) {
+    return this.applicationsService.getDashboardSummary(req.user.id);
+  }
+
+  /**
+   * POST /api/applications/:id/regenerate/stream
+   * SSE: re-drafts an existing application from scratch, same progress/done/
+   * error framing as `finalize/stream`.
+   */
+  @Post(':id/regenerate/stream')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async regenerateStream(
+    @Req() req: { user: { id: string } },
+    @Res() res: Response,
+    @Param('id') id: string,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      const result = await this.applicationsService.regenerate(req.user.id, id, (step) =>
+        send('progress', { step }),
+      );
+      send('done', result);
+      res.end();
+    } catch (err) {
+      send('error', { message: (err as Error).message });
+      res.end();
+    }
   }
 
   @Get(':id')
