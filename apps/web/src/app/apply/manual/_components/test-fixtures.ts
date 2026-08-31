@@ -1,10 +1,16 @@
 // Shared fixture builders for the /apply/manual flow's test suite.
 // Not a test file itself — colocated here since every test in this folder
-// needs realistic, schema-shaped `ApplicationRecord` data.
+// needs realistic, schema-shaped `ApplicationRecord` data. Also reused by
+// applications/[id]'s own test suites (page.test.tsx, the interview-prep
+// component tests) since ApplicationRecord — including InterviewPrepState —
+// is defined here.
+import type { InterviewPrepIntakeAnswersDto, InterviewPrepReportDto } from '@resumiq/schemas';
 import type {
   ApplicationRecord,
   EmailDraft,
   GapReport,
+  InterviewPrepIntakeState,
+  InterviewPrepState,
   ResumeSelection,
 } from './types';
 
@@ -60,6 +66,71 @@ export function buildEmailDraft(overrides: Partial<EmailDraft> = {}): EmailDraft
   };
 }
 
+export function buildInterviewPrepIntakeAnswers(
+  overrides: Partial<InterviewPrepIntakeAnswersDto> = {},
+): InterviewPrepIntakeAnswersDto {
+  return {
+    interview_format: 'one_on_one',
+    interviewers: 'Engineering manager',
+    concerns: 'Depth of system design questions',
+    weak_topics_selected: ['Kubernetes'],
+    dynamic_question_answers: [
+      { question: 'Why this company?', answer: 'Their mission aligns with my values.' },
+    ],
+    ...overrides,
+  };
+}
+
+export function buildInterviewPrepIntakeState(
+  overrides: Partial<InterviewPrepIntakeState> = {},
+): InterviewPrepIntakeState {
+  return {
+    weak_topics: ['Kubernetes', 'System design'],
+    questions: [{ question: 'Why this company?', reasoning: 'Tests culture fit.' }],
+    ...overrides,
+  };
+}
+
+export function buildInterviewPrepReport(
+  overrides: Partial<InterviewPrepReportDto> = {},
+): InterviewPrepReportDto {
+  return {
+    technical_topics: [
+      { topic: 'Kubernetes', probability: 'high', reasoning: 'Listed as a required skill.' },
+    ],
+    gaps_to_address: [
+      {
+        gap: 'No production Kubernetes experience',
+        suggested_framing: 'Frame via container orchestration exposure on Docker projects.',
+      },
+    ],
+    behavioral_questions: [
+      {
+        question: 'Tell me about a conflict with a teammate.',
+        company_signal: 'Values collaborative problem-solving.',
+        suggested_angle: 'Use the Acme Corp scaling story.',
+      },
+    ],
+    talking_points: [
+      {
+        point: 'Scaled a distributed system to handle 10x traffic.',
+        matched_to: 'Backend Engineer scalability requirement.',
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export function buildInterviewPrepState(
+  overrides: Partial<InterviewPrepState> = {},
+): InterviewPrepState {
+  return {
+    intake: buildInterviewPrepIntakeState(),
+    report: null,
+    ...overrides,
+  };
+}
+
 export function buildApplication(
   overrides: Partial<ApplicationRecord> = {},
 ): ApplicationRecord {
@@ -74,6 +145,7 @@ export function buildApplication(
     renderedWith: null,
     resumePdfPath: null,
     emailDraft: null,
+    interviewPrep: null,
     job: { id: 'job-1', title: 'Backend Engineer', companyName: 'Acme Corp' },
     ...overrides,
   };

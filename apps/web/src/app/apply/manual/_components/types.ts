@@ -3,6 +3,9 @@ import type {
   UpdateResumeSelectionDto,
   UpdateGapReportDto,
   UpdateEmailDraftDto,
+  InterviewIntakeQuestionsDto,
+  InterviewPrepIntakeAnswersDto,
+  InterviewPrepReportDto,
 } from '@resumiq/schemas';
 
 // Response/request shapes reuse the same Zod-inferred types the backend
@@ -40,6 +43,21 @@ export interface RenderPreviewResult {
   pageCount: number;
 }
 
+/** Mirrors the backend's `InterviewPrepIntakeState`/`InterviewPrepState`
+ * (apps/api's applications.service.ts) — not exported from @resumiq/schemas
+ * since those interfaces aren't Zod schemas, only their leaf fields are, so
+ * they're redeclared here from the schema-inferred sub-types. */
+export interface InterviewPrepIntakeState {
+  weak_topics: string[];
+  questions: InterviewIntakeQuestionsDto;
+  answers?: InterviewPrepIntakeAnswersDto;
+}
+
+export interface InterviewPrepState {
+  intake: InterviewPrepIntakeState;
+  report: InterviewPrepReportDto | null;
+}
+
 /** Response of GET /api/applications/:id — the persisted Application row + its Job. */
 export interface ApplicationRecord {
   id: string;
@@ -52,6 +70,7 @@ export interface ApplicationRecord {
   renderedWith: string | null;
   resumePdfPath: string | null;
   emailDraft: EmailDraft | null;
+  interviewPrep: InterviewPrepState | null;
   job: {
     id: string;
     title: string;

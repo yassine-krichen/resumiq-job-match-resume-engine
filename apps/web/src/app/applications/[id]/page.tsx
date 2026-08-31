@@ -15,6 +15,7 @@ import { GapReportView } from '../../apply/manual/_components/gap-report-view';
 import { MatchScoreDisplay } from '../../apply/manual/_components/match-score-display';
 import { ResumeReviewEditor } from '../../apply/manual/_components/resume-review-editor';
 import type { ApplicationRecord } from '../../apply/manual/_components/types';
+import { InterviewPrepPanel } from './_components/interview-prep-panel';
 
 type Step = 'gap' | 'review' | 'email' | 'ready';
 
@@ -101,6 +102,7 @@ export default function ApplicationReviewPage(): React.JSX.Element {
             {hasDownloads && <DownloadButtons app={app} />}
           </div>
           {renderRegenerateBar(step)}
+          <InterviewPrepPanel applicationId={app.id} interviewPrep={app.interviewPrep} />
         </div>
       );
     }
@@ -138,6 +140,7 @@ export default function ApplicationReviewPage(): React.JSX.Element {
           <>
             {hasDownloads && <DownloadButtons app={app} />}
             <EmailReviewGate applicationId={app.id} draft={app.emailDraft} />
+            <InterviewPrepPanel applicationId={app.id} interviewPrep={app.interviewPrep} />
           </>
         )}
 

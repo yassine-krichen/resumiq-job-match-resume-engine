@@ -1,8 +1,10 @@
+import type { InterviewPrepIntakeAnswersDto } from '@resumiq/schemas';
 import { apiFetch } from '@/lib/api';
 import type {
   ApplicationRecord,
   EmailDraft,
   GapReport,
+  InterviewPrepState,
   RenderPreviewResult,
   ResumeSelection,
 } from './types';
@@ -54,5 +56,21 @@ export function saveEmailDraft(
 export function confirmApplication(applicationId: string): Promise<ApplicationRecord> {
   return apiFetch<ApplicationRecord>(`/applications/${applicationId}/confirm`, {
     method: 'POST',
+  });
+}
+
+export function generateInterviewPrepIntake(applicationId: string): Promise<InterviewPrepState> {
+  return apiFetch<InterviewPrepState>(`/applications/${applicationId}/interview-prep/intake`, {
+    method: 'POST',
+  });
+}
+
+export function updateInterviewPrepIntakeAnswers(
+  applicationId: string,
+  answers: InterviewPrepIntakeAnswersDto,
+): Promise<InterviewPrepState> {
+  return apiFetch<InterviewPrepState>(`/applications/${applicationId}/interview-prep/intake`, {
+    method: 'PATCH',
+    body: JSON.stringify(answers),
   });
 }

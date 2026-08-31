@@ -64,6 +64,12 @@ vi.mock('../../apply/manual/_components/resume-review-editor', () => ({
 vi.mock('../../apply/manual/_components/email-review-gate', () => ({
   EmailReviewGate: () => <div>email-review-gate-stub</div>,
 }));
+// InterviewPrepPanel has its own dedicated test suite
+// (./_components/interview-prep-panel.test.tsx) — stubbed here so this suite
+// stays focused on which step (and which panels) the page decides to render.
+vi.mock('./_components/interview-prep-panel', () => ({
+  InterviewPrepPanel: () => <div>interview-prep-panel-stub</div>,
+}));
 
 let paramsId = 'app-1';
 vi.mock('next/navigation', () => ({
@@ -114,6 +120,7 @@ describe('ApplicationReviewPage', () => {
     expect(screen.getByText('match-score-display-stub')).toBeInTheDocument();
     expect(screen.queryByText(/resume-review-editor-stub/)).not.toBeInTheDocument();
     expect(screen.queryByText('email-review-gate-stub')).not.toBeInTheDocument();
+    expect(screen.queryByText('interview-prep-panel-stub')).not.toBeInTheDocument();
   });
 
   it('resolves to the resume-review step when resumeSelection is populated, even if gapReport is also present', async () => {
@@ -128,6 +135,7 @@ describe('ApplicationReviewPage', () => {
     );
     expect(screen.getByText('match-score-display-stub')).toBeInTheDocument();
     expect(screen.queryByText('gap-report-view-stub')).not.toBeInTheDocument();
+    expect(screen.queryByText('interview-prep-panel-stub')).not.toBeInTheDocument();
   });
 
   it('resolves to the email-review step when emailDraft is populated, even if resumeSelection and gapReport are also present', async () => {
@@ -146,6 +154,8 @@ describe('ApplicationReviewPage', () => {
     expect(screen.queryByText('match-score-display-stub')).not.toBeInTheDocument();
     expect(screen.queryByText('gap-report-view-stub')).not.toBeInTheDocument();
     expect(screen.queryByText(/resume-review-editor-stub/)).not.toBeInTheDocument();
+    // Interview prep is offered once the email draft is ready to send.
+    expect(screen.getByText('interview-prep-panel-stub')).toBeInTheDocument();
   });
 
   it('resolves to the ready (terminal) step when status is "ready", overriding gapReport/resumeSelection/emailDraft still populated from earlier stages', async () => {
@@ -163,6 +173,8 @@ describe('ApplicationReviewPage', () => {
     await waitFor(() => expect(screen.getByText('Application ready')).toBeInTheDocument());
     expect(screen.getByText(/Backend Engineer @ Acme Corp/)).toBeInTheDocument();
     expect(screen.queryByText('email-review-gate-stub')).not.toBeInTheDocument();
+    // Interview prep remains available once the application reaches "ready".
+    expect(screen.getByText('interview-prep-panel-stub')).toBeInTheDocument();
   });
 
   it('links to the correct resume PDF download URL for a ready application', async () => {
