@@ -1,4 +1,8 @@
-import type { DiscoverFeedFiltersDto, UpdateUserSettingsDto, UserSettingsDto } from '@resumiq/schemas';
+import type { DiscoverFeedFiltersDto } from '@resumiq/schemas';
+// Settings types/API now live in the shared hook — both /discover and
+// /settings read the same persisted UserSettings resource. Re-exported here
+// so existing imports within this feature keep working.
+export type { UpdateUserSettings, UserSettings } from '@/hooks/use-user-settings';
 
 // The filter params the UI cares about — `page`/`page_size` are handled
 // internally by the feed query, not exposed through the filter bar.
@@ -39,6 +43,3 @@ export interface DiscoverFeedResult {
   pageSize: number;
   items: DiscoverFeedItem[];
 }
-
-export type UserSettings = UserSettingsDto;
-export type UpdateUserSettings = UpdateUserSettingsDto;

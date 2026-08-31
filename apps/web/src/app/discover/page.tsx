@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useUserSettings } from '@/hooks/use-user-settings';
 import {
   dismissJob,
   getDiscoverFeed,
-  getJobsSettings,
   refreshMatchPreviews,
   swipeRightJob,
 } from './_components/api';
@@ -20,7 +20,7 @@ export default function DiscoverPage(): React.JSX.Element {
   const [filters, setFilters] = useState<DiscoverFilters>({});
   const [swipeMessage, setSwipeMessage] = useState('');
 
-  const settingsQuery = useQuery({ queryKey: ['jobs-settings'], queryFn: getJobsSettings });
+  const settingsQuery = useUserSettings();
 
   // Seeds the filter bar from the persisted category_tags/work_mode settings
   // once, on first load — after that the filter bar itself is the source of
@@ -90,8 +90,8 @@ export default function DiscoverPage(): React.JSX.Element {
       const context = await optimisticallyRemove(jobId);
       setSwipeMessage(
         item
-          ? `Drafting your resume for ${item.job.companyName} in the background — you'll be able to review it once the applications list ships.`
-          : "Drafting your resume in the background — you'll be able to review it once the applications list ships.",
+          ? `Drafting your resume for ${item.job.companyName} in the background — check your Applications list to review it.`
+          : "Drafting your resume in the background — check your Applications list to review it.",
       );
       return context;
     },

@@ -1,15 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
 import DiscoverPage from './page';
-import {
-  dismissJob,
-  getDiscoverFeed,
-  getJobsSettings,
-  refreshMatchPreviews,
-  swipeRightJob,
-} from './_components/api';
+import { dismissJob, getDiscoverFeed, refreshMatchPreviews, swipeRightJob } from './_components/api';
 import { buildDiscoverJob, buildFeedItem, buildFeedResult, buildUserSettings } from './_components/test-fixtures';
+import { useUserSettings } from '@/hooks/use-user-settings';
+import type { UserSettings } from '@/hooks/use-user-settings';
 
 // `./_components/api` wraps `apiFetch` from `@/lib/api` — mock it directly so
 // these tests exercise DiscoverPage's mount/mutation/rollback logic without
@@ -19,8 +16,13 @@ vi.mock('./_components/api', () => ({
   dismissJob: vi.fn(),
   swipeRightJob: vi.fn(),
   refreshMatchPreviews: vi.fn(),
-  getJobsSettings: vi.fn(),
-  updateJobsSettings: vi.fn(),
+}));
+
+// The settings hook is shared with /settings and has its own test suite —
+// stubbed here so this suite stays focused on the feed/mutation/refresh
+// behavior DiscoverPage owns.
+vi.mock('@/hooks/use-user-settings', () => ({
+  useUserSettings: vi.fn(),
 }));
 
 // FilterBar has its own test suite — stubbed here so this suite stays
@@ -44,9 +46,11 @@ describe('DiscoverPage', () => {
     vi.mocked(dismissJob).mockReset();
     vi.mocked(swipeRightJob).mockReset();
     vi.mocked(refreshMatchPreviews).mockReset();
-    vi.mocked(getJobsSettings).mockReset();
+    vi.mocked(useUserSettings).mockReset();
 
-    vi.mocked(getJobsSettings).mockResolvedValue(buildUserSettings());
+    vi.mocked(useUserSettings).mockReturnValue({
+      data: buildUserSettings(),
+    } as UseQueryResult<UserSettings>);
     vi.mocked(refreshMatchPreviews).mockResolvedValue({ refreshed: 0 });
     vi.mocked(getDiscoverFeed).mockResolvedValue(buildFeedResult());
   });

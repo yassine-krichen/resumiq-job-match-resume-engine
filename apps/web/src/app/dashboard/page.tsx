@@ -4,6 +4,10 @@ import { useSession, signOut } from '@/lib/auth-client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { GapReportView } from '../apply/manual/_components/gap-report-view';
+import { STATUS_LABELS } from '../applications/_components/types';
+import { getDashboardSummary } from './_components/api';
 
 export default function DashboardPage() {
   const { data: session, isPending } = useSession();
@@ -15,6 +19,12 @@ export default function DashboardPage() {
     }
   }, [session, isPending, router]);
 
+  const summaryQuery = useQuery({
+    queryKey: ['dashboard-summary'],
+    queryFn: getDashboardSummary,
+    enabled: Boolean(session),
+  });
+
   if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -24,6 +34,8 @@ export default function DashboardPage() {
   }
 
   if (!session) return null;
+
+  const summary = summaryQuery.data;
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -48,7 +60,21 @@ export default function DashboardPage() {
           <p className="mt-1 text-zinc-500">Welcome back, {session.user.name}</p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {summaryQuery.isLoading && <p className="mb-8 text-zinc-500">Loading dashboard...</p>}
+        {summaryQuery.isError && (
+          <p className="mb-8 text-red-600">{(summaryQuery.error as Error).message}</p>
+        )}
+
+        {summary && (
+          <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatCard label="Applications" value={summary.totalApplications} />
+            <StatCard label="Avg. match score" value={summary.avgMatchScore} />
+            <StatCard label="Resumes generated" value={summary.resumesGenerated} />
+            <StatCard label="Gap reports saved" value={summary.gapReportsSaved} />
+          </div>
+        )}
+
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <DashCard
             title="Career Profile"
             description="View and manage your experience, projects, and skills."
@@ -56,20 +82,89 @@ export default function DashboardPage() {
             cta="View profile"
           />
           <DashCard
+            title="Discover jobs"
+            description="Swipe through matched jobs and draft resumes in the background."
+            href="/discover"
+            cta="Discover jobs"
+          />
+          <DashCard
+            title="Applications"
+            description="Browse, filter, and review every application you've drafted."
+            href="/applications"
+            cta="View applications"
+          />
+          <DashCard
+            title="Paste a job"
+            description="Paste a job description to generate a tailored resume."
+            href="/apply/manual"
+            cta="Paste a job"
+          />
+          <DashCard
+            title="Settings"
+            description="Tune match threshold, target roles, and notification preferences."
+            href="/settings"
+            cta="Edit settings"
+          />
+          <DashCard
             title="Add Entry"
             description="Paste raw text — AI parses it into your career profile."
             href="/onboarding"
             cta="Add experience"
           />
-          <DashCard
-            title="Generate Resume"
-            description="Paste a job description to generate a tailored resume."
-            href="#"
-            cta="Coming soon"
-            disabled
-          />
         </div>
+
+        {summary && summary.recentActivity.length > 0 && (
+          <section className="mb-8">
+            <h2 className="mb-3 text-lg font-semibold text-zinc-900">Recent activity</h2>
+            <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white shadow-sm">
+              {summary.recentActivity.map((item) => (
+                <Link
+                  key={item.id}
+                  href={`/applications/${item.id}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-zinc-50"
+                >
+                  <span className="font-medium text-zinc-900">
+                    {item.job.title} @ {item.job.companyName}
+                  </span>
+                  <span className="flex items-center gap-3 text-zinc-500">
+                    <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                      {STATUS_LABELS[item.status] ?? item.status}
+                    </span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {summary && summary.savedGapReports.length > 0 && (
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-zinc-900">Saved gap reports</h2>
+            <div className="space-y-6">
+              {summary.savedGapReports.map((item) => (
+                <div key={item.id}>
+                  <p className="mb-2 text-sm font-medium text-zinc-700">
+                    <Link href={`/applications/${item.id}`} className="hover:underline">
+                      {item.job.title} @ {item.job.companyName}
+                    </Link>
+                  </p>
+                  <GapReportView applicationId={item.id} gapReport={item.gapReport} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm">
+      <p className="text-3xl font-bold">{value}</p>
+      <p className="mt-1 text-sm text-zinc-500">{label}</p>
     </div>
   );
 }

@@ -4,13 +4,35 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import type { MasterDB } from '@resumiq/schemas';
+import { AddAchievementModal, type NewAchievement } from './_components/add-achievement-modal';
+
+// Presence/count-based strength — not a backend score, just a rough visual
+// nudge toward "this section could use more entries." Target counts are
+// arbitrary reasonable-fill thresholds, not derived from any scoring model.
+const STRENGTH_TARGETS = {
+  experience: 3,
+  projects: 2,
+  education: 1,
+  skills: 5,
+  certifications: 1,
+} as const;
+
+function strengthPercent(count: number, target: number): number {
+  return Math.min(100, Math.round((count / target) * 100));
+}
 
 export default function ProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<MasterDB | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [savingAchievement, setSavingAchievement] = useState(false);
+  const [achievementError, setAchievementError] = useState('');
 
+  // Fetch once on mount only. `router` from next/navigation isn't a value
+  // this effect should react to — including it here re-fires the fetch (and
+  // wipes out the achievement update above) whenever the router identity
+  // changes, e.g. right after `setProfile` triggers a re-render.
   useEffect(() => {
     apiFetch<MasterDB>('/profile')
       .then(setProfile)
@@ -22,7 +44,30 @@ export default function ProfilePage() {
         }
       })
       .finally(() => setLoading(false));
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleAddAchievement(achievement: NewAchievement): Promise<void> {
+    if (!profile) return;
+    setSavingAchievement(true);
+    setAchievementError('');
+    try {
+      const updated = await apiFetch<MasterDB>('/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          awards_and_honors: [...profile.awards_and_honors, achievement],
+        }),
+      });
+      setProfile(updated);
+    } catch (e) {
+      setAchievementError((e as Error).message);
+      // Re-thrown so the modal itself knows the save failed and can keep
+      // the dialog open with the entered data intact instead of clearing it.
+      throw e;
+    } finally {
+      setSavingAchievement(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -45,6 +90,8 @@ export default function ProfilePage() {
   const eduCount = profile?.education?.length ?? 0;
   const skillCount = (profile?.skills?.programming_languages?.length ?? 0)
     + (profile?.skills?.frameworks_and_libraries?.length ?? 0);
+  const certCount = profile?.certifications?.length ?? 0;
+  const awards = profile?.awards_and_honors ?? [];
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -77,6 +124,22 @@ export default function ProfilePage() {
               <p className="mt-1 text-sm text-zinc-500">{label}</p>
             </div>
           ))}
+        </div>
+
+        {/* Section strength */}
+        <div className="mb-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold">Profile strength</h2>
+          <div className="space-y-3">
+            <StrengthBar label="Experience" count={expCount} target={STRENGTH_TARGETS.experience} />
+            <StrengthBar label="Projects" count={projCount} target={STRENGTH_TARGETS.projects} />
+            <StrengthBar label="Education" count={eduCount} target={STRENGTH_TARGETS.education} />
+            <StrengthBar label="Skills" count={skillCount} target={STRENGTH_TARGETS.skills} />
+            <StrengthBar
+              label="Certifications"
+              count={certCount}
+              target={STRENGTH_TARGETS.certifications}
+            />
+          </div>
         </div>
 
         {/* Experience */}
@@ -141,6 +204,46 @@ export default function ProfilePage() {
           </ProfileSection>
         )}
 
+        {/* Awards & achievements */}
+        <div className="mb-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold">Awards & achievements</h2>
+            <AddAchievementModal onAdd={handleAddAchievement} submitting={savingAchievement} />
+          </div>
+          {achievementError && (
+            <p className="mb-3 text-sm text-red-600">{achievementError}</p>
+          )}
+          {awards.length === 0 ? (
+            <p className="text-sm text-zinc-400">No achievements added yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {awards.map((award, i) => (
+                <div key={i} className="rounded-lg border border-zinc-100 p-4">
+                  <div className="flex items-start justify-between">
+                    <p className="font-medium">{award.title}</p>
+                    {award.date && <p className="shrink-0 text-sm text-zinc-400">{award.date}</p>}
+                  </div>
+                  {award.description && (
+                    <p className="mt-1 text-sm text-zinc-500">{award.description}</p>
+                  )}
+                  {(award.related_skills?.length ?? 0) > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {award.related_skills!.map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {expCount === 0 && projCount === 0 && eduCount === 0 && (
           <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-12 text-center">
             <p className="text-zinc-400">No career data yet.</p>
@@ -162,6 +265,32 @@ function ProfileSection({ title, children }: { title: string; children: React.Re
     <div className="mb-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
       <h2 className="mb-4 text-base font-semibold">{title}</h2>
       <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function StrengthBar({
+  label,
+  count,
+  target,
+}: {
+  label: string;
+  count: number;
+  target: number;
+}) {
+  const percent = strengthPercent(count, target);
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-sm">
+        <span className="text-zinc-700">{label}</span>
+        <span className="text-zinc-400">{count}</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+        <div
+          className={`h-full rounded-full ${percent >= 100 ? 'bg-emerald-500' : 'bg-zinc-400'}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
     </div>
   );
 }

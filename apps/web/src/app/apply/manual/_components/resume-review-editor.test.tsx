@@ -11,7 +11,10 @@ vi.mock('./api', () => ({
   saveResumeSelection: vi.fn(),
 }));
 
-function renderEditor(selection: ResumeSelection = buildResumeSelection()) {
+function renderEditor(
+  selection: ResumeSelection = buildResumeSelection(),
+  props: Partial<{ disabled: boolean }> = {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const onFinalize = vi.fn();
   const utils = render(
@@ -23,6 +26,7 @@ function renderEditor(selection: ResumeSelection = buildResumeSelection()) {
         finalizing={false}
         progress=""
         error=""
+        disabled={props.disabled}
       />
     </QueryClientProvider>,
   );
@@ -177,6 +181,15 @@ describe('ResumeReviewEditor', () => {
       );
       // The stale response must never reach the point of building a preview blob at all.
       expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('cross-disabling with an in-flight regenerate', () => {
+    it('disables Save draft and Confirm & continue when `disabled` is true', () => {
+      renderEditor(buildResumeSelection(), { disabled: true });
+
+      expect(screen.getByRole('button', { name: /save draft/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /confirm & continue/i })).toBeDisabled();
     });
   });
 

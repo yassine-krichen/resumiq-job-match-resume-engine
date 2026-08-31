@@ -1,15 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { UseMutationResult } from '@tanstack/react-query';
 import { FilterBar } from './filter-bar';
-import { updateJobsSettings } from './api';
-import type { DiscoverFilters, UserSettings } from './types';
+import { useUpdateUserSettings } from '@/hooks/use-user-settings';
+import type { UpdateUserSettings, UserSettings } from '@/hooks/use-user-settings';
+import type { DiscoverFilters } from './types';
 
-// `./api` wraps `apiFetch` from `@/lib/api` — mock it directly so these
-// tests exercise FilterBar's filter/persist logic without hitting the network.
-vi.mock('./api', () => ({
-  updateJobsSettings: vi.fn(),
+// The settings hook is shared with /settings and has its own test suite —
+// stubbed here so this suite stays focused on FilterBar's filter/persist
+// logic, not the hook's fetch/cache plumbing.
+vi.mock('@/hooks/use-user-settings', () => ({
+  useUpdateUserSettings: vi.fn(),
 }));
+
+function mockMutation(
+  overrides: Partial<UseMutationResult<UserSettings, Error, UpdateUserSettings>> = {},
+) {
+  const mutate = vi.fn();
+  vi.mocked(useUpdateUserSettings).mockReturnValue({
+    mutate,
+    isPending: false,
+    isError: false,
+    error: null,
+    ...overrides,
+  } as UseMutationResult<UserSettings, Error, UpdateUserSettings>);
+  return mutate;
+}
 
 function renderBar(filters: DiscoverFilters = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -24,8 +41,8 @@ function renderBar(filters: DiscoverFilters = {}) {
 
 describe('FilterBar', () => {
   beforeEach(() => {
-    vi.mocked(updateJobsSettings).mockReset();
-    vi.mocked(updateJobsSettings).mockResolvedValue({} as UserSettings);
+    vi.mocked(useUpdateUserSettings).mockReset();
+    mockMutation();
   });
 
   it('splits and trims comma-separated category tags before calling onChange', () => {
@@ -82,7 +99,8 @@ describe('FilterBar', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ location: 'Berlin' }));
   });
 
-  it('persists only category_tags and work_mode via PATCH /jobs/settings — location and seniority stay session-only', async () => {
+  it('persists only category_tags and work_mode via PATCH /jobs/settings — location and seniority stay session-only', () => {
+    const mutate = mockMutation();
     renderBar();
 
     fireEvent.change(screen.getByLabelText(/category \/ field/i), { target: { value: 'backend' } });
@@ -91,24 +109,21 @@ describe('FilterBar', () => {
     fireEvent.change(screen.getByLabelText(/seniority/i), { target: { value: 'Senior' } });
     fireEvent.click(screen.getByRole('button', { name: /apply filters/i }));
 
-    await waitFor(() => expect(updateJobsSettings).toHaveBeenCalledTimes(1));
-    expect(updateJobsSettings).toHaveBeenCalledWith(
-      {
-        category_tags: ['backend'],
-        work_mode: ['remote'],
-      },
-      expect.anything(),
-    );
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledWith({
+      category_tags: ['backend'],
+      work_mode: ['remote'],
+    });
   });
 
-  it('shows an error message when persisting filter settings fails, without blocking the onChange callback', async () => {
-    vi.mocked(updateJobsSettings).mockRejectedValue(new Error('API 500: failed'));
+  it('shows an error message when persisting filter settings fails, without blocking the onChange callback', () => {
+    mockMutation({ isError: true, error: new Error('API 500: failed') });
     const { onChange } = renderBar();
 
     fireEvent.click(screen.getByRole('button', { name: /apply filters/i }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    await screen.findByText("Couldn't save filter preferences.");
+    expect(screen.getByText("Couldn't save filter preferences.")).toBeInTheDocument();
   });
 
   it('seeds the category/work-mode inputs from the filters prop passed in on mount', () => {

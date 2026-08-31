@@ -1,10 +1,5 @@
 import { apiFetch } from '@/lib/api';
-import type {
-  DiscoverFeedResult,
-  DiscoverFilters,
-  UpdateUserSettings,
-  UserSettings,
-} from './types';
+import type { DiscoverFeedResult, DiscoverFilters } from './types';
 
 function buildDiscoverQuery(filters: DiscoverFilters, page: number): string {
   const params = new URLSearchParams();
@@ -34,15 +29,4 @@ export function swipeRightJob(jobId: string): Promise<{ queued: boolean }> {
 /** Login-trigger substitute — see the backend's `refreshPreviews` doc comment. */
 export function refreshMatchPreviews(): Promise<{ refreshed: number }> {
   return apiFetch('/jobs/refresh-previews', { method: 'POST' });
-}
-
-export function getJobsSettings(): Promise<UserSettings> {
-  return apiFetch('/jobs/settings');
-}
-
-export function updateJobsSettings(patch: UpdateUserSettings): Promise<UserSettings> {
-  return apiFetch('/jobs/settings', {
-    method: 'PATCH',
-    body: JSON.stringify(patch),
-  });
 }

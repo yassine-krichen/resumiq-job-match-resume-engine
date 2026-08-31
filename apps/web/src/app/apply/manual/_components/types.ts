@@ -48,6 +48,8 @@ export interface ApplicationRecord {
   status: string;
   gapReport: GapReport | null;
   resumeSelection: ResumeSelection | null;
+  resumeSource: string | null;
+  renderedWith: string | null;
   resumePdfPath: string | null;
   emailDraft: EmailDraft | null;
   job: {

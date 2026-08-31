@@ -70,6 +70,8 @@ export function buildApplication(
     status: 'analyzed',
     gapReport: null,
     resumeSelection: null,
+    resumeSource: null,
+    renderedWith: null,
     resumePdfPath: null,
     emailDraft: null,
     job: { id: 'job-1', title: 'Backend Engineer', companyName: 'Acme Corp' },

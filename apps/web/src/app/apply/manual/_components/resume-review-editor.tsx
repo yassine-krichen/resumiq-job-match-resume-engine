@@ -52,6 +52,10 @@ interface ResumeReviewEditorProps {
   finalizing: boolean;
   progress: string;
   error: string;
+  /** True while a regenerate is in flight for this application — disables
+   * Save draft/Confirm & continue so a finalize can't race a regenerate
+   * against the same application row. */
+  disabled?: boolean;
 }
 
 export function ResumeReviewEditor({
@@ -61,6 +65,7 @@ export function ResumeReviewEditor({
   finalizing,
   progress,
   error,
+  disabled,
 }: ResumeReviewEditorProps): React.JSX.Element {
   const queryClient = useQueryClient();
   const [selection, setSelection] = useState<ResumeSelection>(initialSelection);
@@ -275,14 +280,14 @@ export function ResumeReviewEditor({
             type="button"
             variant="outline"
             onClick={() => saveMutation.mutate(selection)}
-            disabled={saveMutation.isPending || finalizing}
+            disabled={saveMutation.isPending || finalizing || disabled}
           >
             Save draft
           </Button>
           <Button
             type="button"
             onClick={handleConfirmAndContinue}
-            disabled={finalizing || saveMutation.isPending}
+            disabled={finalizing || saveMutation.isPending || disabled}
           >
             {finalizing ? progress || 'Finalizing...' : 'Confirm & continue'}
           </Button>

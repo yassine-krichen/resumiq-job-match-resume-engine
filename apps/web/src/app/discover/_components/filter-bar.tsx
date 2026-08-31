@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { updateJobsSettings } from './api';
+import { useUpdateUserSettings } from '@/hooks/use-user-settings';
 import type { DiscoverFilters } from './types';
 
 const WORK_MODES = ['remote', 'hybrid', 'onsite'] as const;
@@ -34,7 +33,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps): React.JSX.Elem
     setWorkMode(filters.work_mode ?? []);
   }
 
-  const settingsMutation = useMutation({ mutationFn: updateJobsSettings });
+  const settingsMutation = useUpdateUserSettings();
 
   function toggleWorkMode(mode: string) {
     setWorkMode((prev) => (prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode]));
