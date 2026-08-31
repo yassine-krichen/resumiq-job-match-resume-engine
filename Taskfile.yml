@@ -1,0 +1,89 @@
+version: '3'
+
+# Turborepo monorepo task runner (go-task).
+#
+# Port map:
+#   apps/api -> 3001 (already wired via apps/api's own .env; untouched here)
+#   apps/web -> 3002 (overridden here at the task level; apps/web/.env is left
+#                     untouched and still defaults to Next.js' implicit 3000,
+#                     so anything invoking `next dev`/`next start` outside of
+#                     this Taskfile still gets the old default)
+#
+# NOTE: apps/* and packages/* are intentionally not read/edited by this
+# Taskfile's author. `start-api`/`start-web` assume the conventional Nest.js
+# ("start"/"start:prod") and Next.js ("start") production scripts exist in
+# those packages' package.json — verify before relying on `task run`.
+
+vars:
+  API_PORT: '3001'
+  WEB_PORT: '3002'
+
+tasks:
+  help:
+    desc: List all available tasks
+    cmds:
+      - task --list
+
+  install:
+    desc: Install all workspace dependencies (npm workspaces, root-level)
+    cmds:
+      - npm install
+
+  dev-api:
+    internal: true
+    cmds:
+      - npx turbo run dev --filter=./apps/api
+
+  dev-web:
+    internal: true
+    env:
+      PORT: '{{.WEB_PORT}}'
+    cmds:
+      - npx turbo run dev --filter=./apps/web
+
+  dev:
+    desc: Run api (port {{.API_PORT}}) and web (port {{.WEB_PORT}}) concurrently for local development
+    deps:
+      - dev-api
+      - dev-web
+
+  build:
+    internal: true
+    cmds:
+      - npx turbo run build
+
+  start-api:
+    internal: true
+    cmds:
+      - npx turbo run start --filter=./apps/api
+
+  start-web:
+    internal: true
+    env:
+      PORT: '{{.WEB_PORT}}'
+    cmds:
+      - npx turbo run start --filter=./apps/web
+
+  start:
+    internal: true
+    deps:
+      - start-api
+      - start-web
+
+  run:
+    desc: Production-style run - build all apps, then start api (port {{.API_PORT}}) and web (port {{.WEB_PORT}})
+    cmds:
+      - task: build
+      - task: start
+
+  stop:
+    desc: Best-effort teardown of anything listening on {{.API_PORT}}/{{.WEB_PORT}} (standalone use only; process-compose handles its own teardown)
+    platforms: [windows]
+    ignore_error: true
+    cmds:
+      - powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort {{.API_PORT}},{{.WEB_PORT}} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id \$_ -Force -ErrorAction SilentlyContinue }"
+
+  test:
+    desc: Run the monorepo's test suite(s) via turbo
+    cmds:
+      - npx turbo run test
