@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { API_URL, apiSSE } from '@/lib/api';
+import { useFinalizeApplication } from '@/hooks/use-finalize-application';
 import { getApplication } from './api';
 import { EmailReviewGate } from './email-review-gate';
 import { GapReportView } from './gap-report-view';
@@ -25,20 +26,30 @@ function deriveStep(app: ApplicationRecord): Step | null {
 export function ApplyManualFlow(): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
   const applicationId = searchParams.get('applicationId');
 
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeProgress, setAnalyzeProgress] = useState('');
   const [analyzeError, setAnalyzeError] = useState('');
 
-  const [finalizing, setFinalizing] = useState(false);
-  const [finalizeProgress, setFinalizeProgress] = useState('');
-  const [finalizeError, setFinalizeError] = useState('');
+  const {
+    finalizing,
+    progress: finalizeProgress,
+    error: finalizeError,
+    finalize: handleFinalize,
+  } = useFinalizeApplication(applicationId);
 
-  // Holds the cancel handle for whichever SSE stream (analyze/finalize) is
-  // currently in flight, so navigating away or starting a new stream doesn't
-  // leave the previous fetch/read loop running against an unmounted component.
+  // Holds the cancel handle for the in-flight analyze SSE stream, so
+  // navigating away or starting a new stream doesn't leave the previous
+  // fetch/read loop running against an unmounted component.
+  //
+  // Note: this ref is independently owned from the finalize stream's cancel
+  // ref inside useFinalizeApplication below — the two streams no longer
+  // share one ref like they did pre-extraction. Harmless today because the
+  // UI never renders both streams concurrently (analyze only runs before an
+  // applicationId exists; finalize only runs after), but if that ever
+  // changes, starting one stream will no longer automatically cancel the
+  // other.
   const cancelStreamRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -67,26 +78,6 @@ export function ApplyManualFlow(): React.JSX.Element {
       onError: (msg) => {
         setAnalyzing(false);
         setAnalyzeError(msg);
-      },
-    });
-  }
-
-  function handleFinalize() {
-    if (!applicationId) return;
-    cancelStreamRef.current?.();
-    setFinalizing(true);
-    setFinalizeError('');
-    setFinalizeProgress('Starting...');
-
-    cancelStreamRef.current = apiSSE(`/applications/${applicationId}/finalize/stream`, undefined, {
-      onProgress: setFinalizeProgress,
-      onDone: () => {
-        setFinalizing(false);
-        queryClient.invalidateQueries({ queryKey: ['application', applicationId] });
-      },
-      onError: (msg) => {
-        setFinalizing(false);
-        setFinalizeError(msg);
       },
     });
   }
