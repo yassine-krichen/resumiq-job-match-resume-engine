@@ -1,14 +1,51 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+// Default request timeout for plain request/response calls. Long-running
+// streaming calls go through `apiSSE` instead and are deliberately exempt.
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 export async function apiFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(`${API_URL}/api${path}`, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
-  });
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), DEFAULT_TIMEOUT_MS);
+
+  // If the caller passed their own signal, forward its abort to the timeout
+  // controller so both sources can cancel the request. We deliberately avoid
+  // `AbortSignal.any` here since it isn't reliably supported across the
+  // browser range this app targets (no browserslist floor is pinned).
+  const callerSignal = options?.signal;
+  const onCallerAbort = () => timeoutController.abort();
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      timeoutController.abort();
+    } else {
+      callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+    }
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api${path}`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      ...options,
+      signal: timeoutController.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') {
+      // Only a genuine timeout should be reported as such — if the caller's
+      // own signal triggered the abort, surface the original AbortError.
+      if (!callerSignal?.aborted) {
+        throw new Error(`API request timed out after ${DEFAULT_TIMEOUT_MS / 1000}s: ${path}`);
+      }
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+    callerSignal?.removeEventListener('abort', onCallerAbort);
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');

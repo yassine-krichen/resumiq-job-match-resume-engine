@@ -4,16 +4,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { ApplicationsFilters } from './types';
+import { STATUS_LABELS, type ApplicationsFilters } from './types';
 
-const STATUSES = ['gap_reported', 'resume_drafted', 'email_drafted', 'ready'] as const;
-
-const STATUS_LABELS: Record<(typeof STATUSES)[number], string> = {
-  gap_reported: 'Gap reported',
-  resume_drafted: 'Resume drafted',
-  email_drafted: 'Email drafted',
-  ready: 'Ready',
-};
+const STATUSES = Object.keys(STATUS_LABELS) as Array<keyof typeof STATUS_LABELS>;
 
 interface FiltersBarProps {
   filters: ApplicationsFilters;

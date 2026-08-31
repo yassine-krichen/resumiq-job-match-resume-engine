@@ -17,23 +17,69 @@ function parseDateToSortKey(dateStr: string | undefined): number {
 
 // ── LaTeX Escaping ──────────────────────────────────────────────────────────
 
+// Maps each character that is syntactically meaningful to TeX to its escaped
+// form. A single-pass replace keyed off this map (rather than chained
+// sequential `.replace()` calls) is required: chaining re-scans the string
+// after every step, so a backslash escaped first into `\textbackslash{}`
+// would have its newly-inserted `{`/`}` re-matched and escaped again by a
+// later step, producing `\textbackslash\{\}` instead of the intended
+// `\textbackslash{}`.
+const TEX_ESCAPES: Record<string, string> = {
+  '\\': '\\textbackslash{}',
+  '&': '\\&',
+  '%': '\\%',
+  $: '\\$',
+  '#': '\\#',
+  _: '\\_',
+  '{': '\\{',
+  '}': '\\}',
+  '~': '\\textasciitilde{}',
+  '^': '\\textasciicircum{}',
+};
+
 function tex(str: string): string {
   if (!str) return '';
-  return str
-    .replace(/\\/g, '\\textbackslash{}')
-    .replace(/&/g, '\\&')
-    .replace(/%/g, '\\%')
-    .replace(/\$/g, '\\$')
-    .replace(/#/g, '\\#')
-    .replace(/_/g, '\\_')
-    .replace(/\{/g, '\\{')
-    .replace(/\}/g, '\\}')
-    .replace(/~/g, '\\textasciitilde{}')
-    .replace(/\^/g, '\\textasciicircum{}');
+  return str.replace(/[\\&%$#_{}~^]/g, (char) => TEX_ESCAPES[char]);
 }
 
 function urlDisplay(url: string): string {
   return url.replace(/^https?:\/\//, '');
+}
+
+// Subset of TEX_ESCAPES relevant inside `\href{}`'s URL-mode argument — see
+// the docstring below for why `~`/`^`/`$` are deliberately excluded here.
+const TEX_URL_ESCAPES: Record<string, string> = {
+  '\\': TEX_ESCAPES['\\'],
+  '%': TEX_ESCAPES['%'],
+  '#': TEX_ESCAPES['#'],
+  _: TEX_ESCAPES['_'],
+  '&': TEX_ESCAPES['&'],
+  '{': TEX_ESCAPES['{'],
+  '}': TEX_ESCAPES['}'],
+};
+
+/**
+ * Escapes a value for interpolation inside a `\href{...}` (or `mailto:`)
+ * command argument. Distinct from `tex()`: `\href`'s first argument is
+ * consumed by hyperref's URL-mode scanner, not typeset as ordinary markup, so
+ * markup-escaping characters like `~`/`^`/`$` here would corrupt otherwise
+ * valid URLs. Only the characters that are still syntactically meaningful to
+ * TeX inside that argument — `\`, `%`, `#`, `_`, `&`, `{`, `}` — need
+ * escaping. Without this, an untrusted URL/email containing e.g. `}` or `%`
+ * could break out of the `\href{}` argument and inject arbitrary LaTeX.
+ *
+ * Backslashes use the same `\textbackslash{}` macro as `tex()` (not `\\`,
+ * which is LaTeX's line-break token and would corrupt the URL rather than
+ * render a literal backslash). `\textbackslash{}` is safe inside `\href{}`'s
+ * argument: hyperref's URL scanner still treats `\` as an escape and simply
+ * passes the macro through to be typeset in the link text/target.
+ */
+function texUrl(str: string): string {
+  if (!str) return '';
+  // Single-pass replace — see TEX_ESCAPES comment for why chained sequential
+  // `.replace()` calls would double-escape the braces inserted by the
+  // backslash escape.
+  return str.replace(/[\\%#_&{}]/g, (char) => TEX_URL_ESCAPES[char]);
 }
 
 // ── Section Renderers ───────────────────────────────────────────────────────
@@ -42,13 +88,13 @@ function renderHeader(db: MasterDB): string {
   const p = db.personal_info;
 
   const linkParts = p.links.map(
-    (l) => `\\href{${l.url}}{\\underline{${tex(urlDisplay(l.url))}}}`,
+    (l) => `\\href{${texUrl(l.url)}}{\\underline{${tex(urlDisplay(l.url))}}}`,
   );
 
   const contactLine = [
     tex(p.location),
     tex(p.phone),
-    `\\href{mailto:${p.email}}{\\underline{${tex(p.email)}}}`,
+    `\\href{mailto:${texUrl(p.email)}}{\\underline{${tex(p.email)}}}`,
     ...linkParts,
   ].join(' $|$ ');
 
@@ -189,7 +235,7 @@ function renderProjects(selection: AISelection, db: MasterDB): string {
       (l) => l.type === 'Repository' || l.type === 'GitHub' || l.type === 'Pull Request',
     );
     const nameLatex = repoLink
-      ? `\\href{${repoLink.url}}{\\textbf{${tex(dbProj.name)}}}`
+      ? `\\href{${texUrl(repoLink.url)}}{\\textbf{${tex(dbProj.name)}}}`
       : `\\textbf{${tex(dbProj.name)}}`;
 
     lines.push('      \\resumeProjectHeading');
@@ -362,7 +408,7 @@ function renderPublications(selection: AISelection, db: MasterDB): string {
     }
 
     const nameLatex = entry.url
-      ? `\\href{${entry.url}}{\\underline{${tex(entry.title)}}}`
+      ? `\\href{${texUrl(entry.url)}}{\\underline{${tex(entry.title)}}}`
       : tex(entry.title);
 
     lines.push('    \\resumeSubheading');
