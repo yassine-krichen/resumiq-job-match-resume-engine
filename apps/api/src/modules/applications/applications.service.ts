@@ -7,7 +7,7 @@ import {
   generateEmail,
   selectAndDraft,
 } from '@resumiq/ai-bridge';
-import type { AISelection, JobDNA } from '@resumiq/ai-bridge';
+import type { AISelection, GapReport, JobDNA } from '@resumiq/ai-bridge';
 import { UpdateResumeSelectionSchema } from '@resumiq/schemas';
 import type {
   CreateJobDto,
@@ -18,11 +18,30 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProfileService } from '../profile/profile.service';
 import { ResumeService } from '../resume/resume.service';
+import { buildManualJobDedupeKey } from '../../common/jobs/dedupe-key';
 
 type Json = Prisma.InputJsonValue;
 
 const DEFAULT_MATCH_THRESHOLD = 50;
 const DEFAULT_TEMPLATE_ID = 'default';
+
+interface GapReportDraftResult {
+  applicationId: string;
+  matchScore: number;
+  reasons: string[];
+  gapReport: GapReport;
+}
+
+interface ResumeSelectionDraftResult {
+  applicationId: string;
+  matchScore: number;
+  reasons: string[];
+  selection: AISelection;
+}
+
+/** `draftForJob` returns one of these two shapes depending on whether the
+ * compatibility score clears `DEFAULT_MATCH_THRESHOLD`. */
+type DraftForJobResult = GapReportDraftResult | ResumeSelectionDraftResult;
 
 @Injectable()
 export class ApplicationsService {
@@ -41,7 +60,7 @@ export class ApplicationsService {
     userId: string,
     dto: CreateJobDto,
     onProgress: (step: string) => void,
-  ) {
+  ): Promise<DraftForJobResult> {
     const db = await this.profileService.getProfile(userId);
     if (!db) {
       throw new BadRequestException(
@@ -52,25 +71,62 @@ export class ApplicationsService {
     onProgress('Extracting job details...');
     const jobDNA: JobDNA = await analyzeJob(dto.raw_jd, dto.company_info ?? '');
 
-    onProgress('Comparing against your Career Inventory...');
-    // Run before persisting the Job row: if checkCompatibility throws, no
-    // Job row is created that no Application would ever reference.
-    const compat = await checkCompatibility(jobDNA, db);
+    const title = dto.title ?? jobDNA.job_title;
+    const companyName = dto.company_name ?? 'Unknown Company';
+    // Scoped to (userId + content), never the scraper's shared dedupe
+    // namespace — see buildManualJobDedupeKey's docstring for why: reusing
+    // that namespace let any user's predictable company/title/location combo
+    // overwrite a scraper-owned or another user's Job row via this upsert.
+    const dedupeKey = buildManualJobDedupeKey(userId, companyName, title, dto.location, dto.raw_jd);
 
-    const job = await this.prisma.job.create({
-      data: {
-        source: 'manual',
-        sourceUrl: dto.source_url,
-        title: dto.title ?? jobDNA.job_title,
-        companyName: dto.company_name ?? 'Unknown Company',
-        companyInfo: dto.company_info ? ({ raw: dto.company_info } as Json) : undefined,
-        rawJd: dto.raw_jd,
-        parsedJd: jobDNA as unknown as Json,
-        location: dto.location,
-        remote: dto.remote ?? false,
-        salaryRange: dto.salary_range,
-      },
+    // Job.dedupeKey is unique — upsert rather than create so re-analyzing the
+    // same job (same user re-pasting/re-submitting the identical JD) reuses
+    // the existing row instead of throwing a unique-constraint error.
+    const jobData = {
+      source: 'manual',
+      sourceUrl: dto.source_url,
+      title,
+      companyName,
+      companyInfo: dto.company_info ? ({ raw: dto.company_info } as Json) : undefined,
+      rawJd: dto.raw_jd,
+      parsedJd: jobDNA as unknown as Json,
+      location: dto.location,
+      remote: dto.remote ?? false,
+      salaryRange: dto.salary_range,
+    };
+    const job = await this.prisma.job.upsert({
+      where: { dedupeKey },
+      create: { ...jobData, dedupeKey },
+      update: jobData,
     });
+
+    return this.draftForJob(userId, job, jobDNA, onProgress, dto.pages);
+  }
+
+  /**
+   * Runs the scoring/gap-report/drafting leg shared by both entry points:
+   * `analyzeAndDraft` (Job just created from a manual paste) and
+   * `draftForExistingJob` (Job already ingested by the scraper pipeline,
+   * `parsedJd` already computed at ingestion time). `pages` defaults to 2 —
+   * same default CreateJobSchema applies for the manual-paste entry point —
+   * since the scraper entry point has no per-request page-count preference.
+   */
+  private async draftForJob(
+    userId: string,
+    job: { id: string; parsedJd: unknown },
+    jobDNA: JobDNA,
+    onProgress: (step: string) => void,
+    pages: 1 | 2 = 2,
+  ): Promise<DraftForJobResult> {
+    const db = await this.profileService.getProfile(userId);
+    if (!db) {
+      throw new BadRequestException(
+        'Career profile required before analyzing a job — complete onboarding first',
+      );
+    }
+
+    onProgress('Comparing against your Career Inventory...');
+    const compat = await checkCompatibility(jobDNA, db);
 
     const threshold = DEFAULT_MATCH_THRESHOLD;
 
@@ -106,7 +162,7 @@ export class ApplicationsService {
     }
 
     onProgress('Selecting best content from your Inventory for this role...');
-    const draft = await selectAndDraft(jobDNA, db, dto.pages);
+    const draft = await selectAndDraft(jobDNA, db, pages);
 
     onProgress('Drafting tailored resume bullets...');
     const rawSelection = await critiqueAndRevise(draft, jobDNA, db);
@@ -139,6 +195,31 @@ export class ApplicationsService {
       reasons: compat.reasons,
       selection,
     };
+  }
+
+  /**
+   * Drafts an application for a Job already ingested by the scraper
+   * pipeline — `parsedJd` (JobDNA) was already computed at ingestion time
+   * (see jobs.service.ts's `ingestFromScanner`), so there's no `analyzeJob()`
+   * call here, unlike `analyzeAndDraft`'s manual-paste entry point.
+   */
+  async draftForExistingJob(
+    userId: string,
+    jobId: string,
+    onProgress: (step: string) => void,
+  ): Promise<DraftForJobResult> {
+    const job = await this.prisma.job.findUniqueOrThrow({ where: { id: jobId } });
+    // parsedJd can legitimately be null — analyzeJob() may have failed during
+    // scraper ingestion (see jobs.service.ts's ingestFromScanner) and left it
+    // unset. Fail with a clear, typed error instead of a raw TypeError from
+    // deep inside checkCompatibility.
+    if (!job.parsedJd) {
+      throw new BadRequestException(
+        'This job has not been analyzed yet — no parsed job description available',
+      );
+    }
+    const jobDNA = job.parsedJd as unknown as JobDNA;
+    return this.draftForJob(userId, job, jobDNA, onProgress);
   }
 
   async updateResumeSelection(

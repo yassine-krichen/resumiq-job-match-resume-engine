@@ -1,0 +1,40 @@
+[
+  {
+    "name": "Stripe",
+    "provider": "greenhouse",
+    "careers_url": "https://job-boards.greenhouse.io/stripe",
+    "enabled": true
+  },
+  {
+    "name": "Lever (demo board)",
+    "provider": "lever",
+    "careers_url": "https://jobs.lever.co/leverdemo",
+    "enabled": true
+  },
+  {
+    "name": "Linear",
+    "provider": "ashby",
+    "careers_url": "https://jobs.ashbyhq.com/linear",
+    "enabled": true
+  },
+  {
+    "name": "RemoteOK",
+    "provider": "remoteok",
+    "enabled": true
+  },
+  {
+    "name": "Himalayas",
+    "provider": "himalayas",
+    "enabled": true
+  },
+  {
+    "name": "Remotive",
+    "provider": "remotive",
+    "enabled": true
+  },
+  {
+    "name": "We Work Remotely",
+    "provider": "weworkremotely",
+    "enabled": true
+  }
+]

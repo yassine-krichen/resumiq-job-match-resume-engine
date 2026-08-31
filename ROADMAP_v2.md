@@ -37,7 +37,7 @@ A personal career engine that knows everything about you, finds relevant jobs, s
 | Auth | better-auth (NestJS adapter) | GitHub + LinkedIn OAuth |
 | AI | **ai-bridge** (existing module) | Claude → GPT → Gemini → Groq → Ollama fallback chain. Claude API key wired in when going SaaS. |
 | Resume compile | **Dual engine: LaTeX (Tectonic) + Typst** | Both implement `RenderEngine` interface, selected via `RESUME_RENDER_ENGINE=latex\|typst` env var. See [Resume Render Engine](#resume-render-engine-dual-latex--typst) below. |
-| Job scraping | Playwright + ATS public APIs + JSON-LD | Per-source workers. See [Intelligent Scraping](#intelligent-scraping-strategy) below. |
+| Job scraping | Vendored career-ops `providers/*.mjs` (~90 ATS/board sources) + Playwright/JSON-LD fallback | `packages/job-scanner`. See [Scraping Sources](#scraping-sources--vendored-from-career-ops-decided-2026-08-31) below. |
 | Queue | BullMQ + Redis | Scraping, resume gen, email gen |
 | File storage | **Local filesystem for now** | Abstract behind a `StorageService` interface so swapping to S3/Cloudflare R2/Supabase Storage later is a one-file change |
 | Frontend UI | shadcn/ui + Tailwind CSS + Framer Motion | |
@@ -273,17 +273,22 @@ Given: `parsed_jd` + `company_info` + user's `career_profile` + the tailored res
 ### Goal
 Platform scrapes jobs daily into the DB → user opens `/discover` → Tinder-style card feed → swipe right → full pipeline fires in background.
 
-### Scraping Sources (priority order — revised 2026-08-30)
+### Scraping Sources — vendored from career-ops (decided 2026-08-31)
 
-| Source | Why | Difficulty |
-|---|---|---|
-| Greenhouse / Lever / Ashby / Workday public Boards APIs | Company-published, public, no auth, plain JSON HTTP — no headless browser needed. Used by Stripe, Airbnb, Figma, Spotify, Notion etc. Legally the safest + cheapest to maintain. | Easy |
-| Wellfound (AngelList) | Startup-heavy, structured, low bot protection | Easy |
-| RemoteOK / We Work Remotely | Remote-first, RSS + HTML, minimal protection | Easy |
-| Indeed | High volume, aggressive scraping protection | Medium |
-| LinkedIn Jobs | Highest volume, hardest to scrape reliably, ToS risk | Hard — manual-paste only, no bulk crawl (see below) |
+**Strategy superseded.** Rather than hand-building ~4 ATS providers, vendor the provider layer from [santifer/career-ops](https://github.com/santifer/career-ops) (MIT licensed, 69k+ stars, actively maintained) — specifically its `providers/` directory, not its AI-CLI agent framework.
 
-### Intelligent Scraping Strategy (decided 2026-08-30)
+career-ops splits cleanly into two layers: an agentic eval layer (`modes/*.md`, meant to be run interactively inside an AI coding CLI — Claude Code, Codex, etc.) and a **"zero-token scanner"** — `scan.mjs` + `providers/*.mjs` — that is pure deterministic HTTP+JSON, zero LLM calls, zero AI-CLI dependency. Only the second layer is relevant to us; we already have our own eval layer (`checkCompatibility`/`selectAndDraft`/etc. in `ai-bridge`).
+
+**What we're vendoring:**
+- `providers/*.mjs` — ~90 modules, one per ATS/job board (Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Personio, Teamtailor, Recruitee, Workable, BambooHR, iCIMS, + dozens more incl. remote boards: WeWorkRemotely, RemoteOK, Himalayas, Remotive). Each exports `{id, detect(entry), fetch(entry, ctx) → [{title, url, company, location, description, postedAt}]}`. Confirmed by reading source: Greenhouse (`content=true` param) and Lever (`descriptionPlain` field) both return **full job description text** in the same request, not just listing metadata — no separate per-job detail fetch needed for those two.
+- Shared helpers: `_http.mjs`, `_registry.mjs`, `_trust-validator.mjs`, `_ip-guard.mjs` — includes real SSRF hardening (hostname allowlisting per provider, `redirect:'error'`, HTTPS-only) worth keeping as-is rather than re-deriving.
+- Do **not** vendor: `modes/`, the markdown tracker (`data/applications.md`, `tracker.mjs`), `scan.mjs` itself (their orchestrator is built around their own file-based tracker/dedup — we write our own thin orchestrator against Postgres instead), any of the eval/scoring/PDF-generation scripts (`generate-pdf.mjs`, `openai-eval.mjs`, etc. — redundant with `ai-bridge`/`resume-renderer`).
+- Provider `fetch()` output maps ~1:1 onto `CreateJobSchema`: `title`→title, `company`→company_name, `location`→location, `description`→raw_jd, `url`→source_url.
+- License compliance: MIT requires preserving copyright/license notice in vendored files — keep their `LICENSE` header intact in whichever files get copied in, and note the origin in a `NOTICE`/README comment in the vendor directory.
+
+This drops LinkedIn/Indeed bulk-scraping entirely (never had a provider covering them anyway — their own README lists them among the highest-friction sources); those stay manual-paste-only per `/apply/manual`, which was already the plan.
+
+Applies when no career-ops provider matches a target company/board (decided 2026-08-30, kept as fallback 2026-08-31):
 
 - **Structured data first**: check for `<script type="application/ld+json">` (`schema.org/JobPosting`) on every job page before touching the DOM — most job pages embed it, gives clean structured description/salary/location with no truncation or "read more" issues at all.
 - **DOM fallback** (when no JSON-LD): Playwright, reuse the same page object across pagination (don't respawn browser per page), wait `networkidle` after actions that fetch, loop "next"/"load more" until it disappears.
@@ -309,16 +314,21 @@ Pre-swipe filter bar on `/discover`: category/field (AI, DevOps, SWE, etc.), wor
 
 ### Scraping Infrastructure
 
-- **Playwright** workers, one per source, rotating user agents + delays (DOM-fallback sources only — ATS public APIs need none of this)
-- **BullMQ** `job-scraper` queue, CRON-triggered daily via `@nestjs/schedule`
-- **Deduplication**: unique index on `(company_name, title, location)` in `jobs` table
+- **`packages/job-scanner`** (new) — vendored career-ops `providers/*.mjs` + shared helpers, plus our own thin orchestrator (much smaller than career-ops's `scan.mjs`: no markdown tracker, no dedup-tracker/pipeline-lock — we dedupe/persist straight to Postgres). Reads our own tracked-companies config (start with a curated portals list, not all ~90 providers), calls `provider.fetch()` per company, maps results into `Job` row shape.
+- For any URL/board not covered by a career-ops provider: fall back to the JSON-LD-first / Playwright-DOM strategy below (still relevant — kept as the generic-site fallback, not replaced).
+- **BullMQ** `job-scraper` queue, CRON-triggered daily via `@nestjs/schedule`, calls into `packages/job-scanner`.
+- **Deduplication**: unique index on `(company_name, title, location)` in `jobs` table.
 - **Enrichment pipeline** after each scrape:
   ```
-  Raw JD text → JSON-LD if present, else Playwright DOM → ai-bridge → parsed_jd JSONB
+  Provider fetch() already returns clean {title, url, company, location, description} for ~90 sources
+  → ai-bridge → parsed_jd JSONB (skip re-scraping description where the provider already supplied it)
+  Sources with no provider coverage → JSON-LD if present, else Playwright DOM (fallback strategy below)
   Company name/domain → People Data Labs → company_info JSONB
   Hiring contact → Hunter.io (fallback RocketReach) → stored for email draft, not persisted long-term
   ```
 - Failed jobs → exponential backoff retry (BullMQ native)
+
+### Generic-Site Fallback Strategy (for sources with no career-ops provider)
 
 ### Page: `/discover`
 

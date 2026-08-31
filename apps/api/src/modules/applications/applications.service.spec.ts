@@ -12,6 +12,7 @@ import {
 } from '@resumiq/ai-bridge';
 import type { AISelection, JobDNA, MasterDB } from '@resumiq/ai-bridge';
 import type { CreateJobDto } from '@resumiq/schemas';
+import { buildManualJobDedupeKey } from '../../common/jobs/dedupe-key';
 
 jest.mock('@resumiq/ai-bridge', () => ({
   analyzeJob: jest.fn(),
@@ -83,7 +84,7 @@ function createJobDtoFixture(overrides: Partial<CreateJobDto> = {}): CreateJobDt
 
 describe('ApplicationsService', () => {
   let prisma: {
-    job: { create: jest.Mock };
+    job: { upsert: jest.Mock; findUniqueOrThrow: jest.Mock };
     application: { create: jest.Mock; update: jest.Mock; findFirst: jest.Mock };
   };
   let profileService: { getProfile: jest.Mock };
@@ -94,7 +95,7 @@ describe('ApplicationsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = {
-      job: { create: jest.fn() },
+      job: { upsert: jest.fn(), findUniqueOrThrow: jest.fn() },
       application: { create: jest.fn(), update: jest.fn(), findFirst: jest.fn() },
     };
     profileService = { getProfile: jest.fn() };
@@ -121,7 +122,7 @@ describe('ApplicationsService', () => {
     it('persists a gap report and skips resume drafting when the compatibility score is below threshold', async () => {
       profileService.getProfile.mockResolvedValue(masterDBFixture());
       analyzeJobMock.mockResolvedValue(jobDNAFixture());
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
+      prisma.job.upsert.mockResolvedValue({ id: 'job-1' });
       checkCompatibilityMock.mockResolvedValue({
         compatible: false,
         score: 20,
@@ -160,7 +161,7 @@ describe('ApplicationsService', () => {
     it('drafts and critiques a resume selection when the compatibility score meets threshold', async () => {
       profileService.getProfile.mockResolvedValue(masterDBFixture());
       analyzeJobMock.mockResolvedValue(jobDNAFixture());
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
+      prisma.job.upsert.mockResolvedValue({ id: 'job-1' });
       checkCompatibilityMock.mockResolvedValue({
         compatible: true,
         score: 75,
@@ -198,7 +199,7 @@ describe('ApplicationsService', () => {
     it('reports progress at each step of the analyze pipeline', async () => {
       profileService.getProfile.mockResolvedValue(masterDBFixture());
       analyzeJobMock.mockResolvedValue(jobDNAFixture());
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
+      prisma.job.upsert.mockResolvedValue({ id: 'job-1' });
       checkCompatibilityMock.mockResolvedValue({
         compatible: false,
         score: 10,
@@ -216,6 +217,143 @@ describe('ApplicationsService', () => {
 
       expect(onProgress).toHaveBeenCalled();
       expect(onProgress.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('scopes the upsert dedupeKey to this user + content, never the scraper\'s shared company/title/location namespace', async () => {
+      profileService.getProfile.mockResolvedValue(masterDBFixture());
+      analyzeJobMock.mockResolvedValue(jobDNAFixture());
+      prisma.job.upsert.mockResolvedValue({ id: 'job-1' });
+      checkCompatibilityMock.mockResolvedValue({
+        compatible: false,
+        score: 10,
+        blockers: [],
+        warnings: [],
+        suggestions: [],
+        reasons: [],
+        missing_skills: [],
+        strengths: [],
+        recommendations: [],
+      });
+      prisma.application.create.mockResolvedValue({ id: APP_ID });
+      const dto = createJobDtoFixture({
+        company_name: 'Stripe',
+        title: 'Backend Engineer',
+        location: 'Remote',
+      });
+
+      await service.analyzeAndDraft(OWNER, dto, onProgress);
+
+      const expectedKey = buildManualJobDedupeKey(
+        OWNER,
+        'Stripe',
+        'Backend Engineer',
+        'Remote',
+        dto.raw_jd,
+      );
+      expect(prisma.job.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { dedupeKey: expectedKey },
+          create: expect.objectContaining({ dedupeKey: expectedKey }),
+        }),
+      );
+      // The pure content-based key the scraper's ingestion pipeline uses for
+      // this same company/title/location must never appear anywhere here.
+      expect(expectedKey).not.toBe('stripe|backend engineer|remote');
+    });
+
+    it('produces a different dedupeKey for two different users submitting the identical company/title/location/JD, preventing cross-user Job row collision', async () => {
+      const dto = createJobDtoFixture({
+        company_name: 'Stripe',
+        title: 'Backend Engineer',
+        location: 'Remote',
+        raw_jd: 'identical job description text',
+      });
+
+      const keyForOwner = buildManualJobDedupeKey(
+        OWNER,
+        dto.company_name!,
+        dto.title!,
+        dto.location,
+        dto.raw_jd,
+      );
+      const keyForAttacker = buildManualJobDedupeKey(
+        OTHER_USER,
+        dto.company_name!,
+        dto.title!,
+        dto.location,
+        dto.raw_jd,
+      );
+
+      expect(keyForOwner).not.toBe(keyForAttacker);
+    });
+
+    it('produces a different dedupeKey for the same user submitting genuinely different JD text for the same company/title/location', async () => {
+      const keyA = buildManualJobDedupeKey(OWNER, 'Stripe', 'Backend Engineer', 'Remote', 'JD text A');
+      const keyB = buildManualJobDedupeKey(OWNER, 'Stripe', 'Backend Engineer', 'Remote', 'JD text B');
+
+      expect(keyA).not.toBe(keyB);
+    });
+  });
+
+  describe('draftForExistingJob', () => {
+    const JOB_ID = 'job-scraped-1';
+
+    it('loads the Job by id, reuses its already-computed parsedJd, and delegates to the same drafting logic as analyzeAndDraft', async () => {
+      prisma.job.findUniqueOrThrow.mockResolvedValue({ id: JOB_ID, parsedJd: jobDNAFixture() });
+      profileService.getProfile.mockResolvedValue(masterDBFixture());
+      checkCompatibilityMock.mockResolvedValue({
+        compatible: true,
+        score: 80,
+        blockers: [],
+        warnings: [],
+        suggestions: [],
+        reasons: ['Strong match'],
+        missing_skills: [],
+        strengths: [],
+        recommendations: [],
+      });
+      const draft = selectionFixture();
+      selectAndDraftMock.mockResolvedValue(draft);
+      critiqueAndReviseMock.mockResolvedValue(draft);
+      prisma.application.create.mockResolvedValue({ id: APP_ID });
+
+      const result = await service.draftForExistingJob(OWNER, JOB_ID, onProgress);
+
+      expect(prisma.job.findUniqueOrThrow).toHaveBeenCalledWith({ where: { id: JOB_ID } });
+      // No re-analysis of the JD — parsedJd was already computed at ingestion time.
+      expect(analyzeJobMock).not.toHaveBeenCalled();
+      expect(checkCompatibilityMock).toHaveBeenCalledWith(jobDNAFixture(), masterDBFixture());
+      expect(prisma.application.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ userId: OWNER, jobId: JOB_ID, matchScore: 80 }),
+        }),
+      );
+      expect(result).toEqual({
+        applicationId: APP_ID,
+        matchScore: 80,
+        reasons: ['Strong match'],
+        selection: draft,
+      });
+    });
+
+    it('throws BadRequestException when the user has no career profile yet', async () => {
+      prisma.job.findUniqueOrThrow.mockResolvedValue({ id: JOB_ID, parsedJd: jobDNAFixture() });
+      profileService.getProfile.mockResolvedValue(null);
+
+      await expect(service.draftForExistingJob(OWNER, JOB_ID, onProgress)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(checkCompatibilityMock).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when the Job has no parsedJd (analyzeJob failed during scraper ingestion)', async () => {
+      prisma.job.findUniqueOrThrow.mockResolvedValue({ id: JOB_ID, parsedJd: null });
+      profileService.getProfile.mockResolvedValue(masterDBFixture());
+
+      await expect(service.draftForExistingJob(OWNER, JOB_ID, onProgress)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(checkCompatibilityMock).not.toHaveBeenCalled();
     });
   });
 

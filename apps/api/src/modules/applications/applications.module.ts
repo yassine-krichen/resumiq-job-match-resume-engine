@@ -9,5 +9,6 @@ import { StorageModule } from '../../common/storage/storage.module';
   imports: [ProfileModule, ResumeModule, StorageModule],
   controllers: [ApplicationsController],
   providers: [ApplicationsService],
+  exports: [ApplicationsService],
 })
 export class ApplicationsModule {}

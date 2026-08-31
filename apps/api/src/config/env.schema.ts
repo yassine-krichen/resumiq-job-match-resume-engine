@@ -3,6 +3,12 @@ import { z } from 'zod';
 const EnvSchema = z
   .object({
     DATABASE_URL: z.string().min(1),
+    // Upstash Redis connection string (TCP/TLS endpoint, not the REST API) —
+    // backs the BullMQ queues in QueueModule (job-scraper, match-preview,
+    // resume-gen). Required at boot, same fail-fast convention as
+    // DATABASE_URL, rather than letting QueueModule hang or fail silently
+    // the first time a queue is actually used.
+    REDIS_URL: z.string().min(1),
     API_URL: z.string().min(1),
     TRUSTED_ORIGINS: z.string().min(1),
     BETTER_AUTH_SECRET: z.string().min(1),

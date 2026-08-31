@@ -18,11 +18,14 @@ model User {
   createdAt     DateTime
   updatedAt     DateTime
   role          String    @default("user")
+  settings      Json      @default("{}")
   sessions      Session[]
   accounts      Account[]
 
   careerProfile CareerProfile?
   applications  Application[]
+  matchPreviews JobMatchPreview[]
+  dismissedJobs DismissedJob[]
 
   @@map("users")
 }
@@ -116,7 +119,16 @@ model Job {
   remote      Boolean @default(false)
   salaryRange String?
 
-  applications Application[]
+  // Normalized `slugify(companyName)|slugify(title)|slugify(location ?? '')`,
+  // computed in TS at ingestion time (see jobs.service.ts). Replaces a raw
+  // (companyName, title, location) composite unique, which breaks on NULL
+  // locations (Postgres treats each NULL as distinct) and casing/whitespace
+  // drift across scrape runs.
+  dedupeKey String @unique
+
+  applications  Application[]
+  matchPreviews JobMatchPreview[]
+  dismissedBy   DismissedJob[]
 
   @@map("jobs")
 }
@@ -144,6 +156,35 @@ model Application {
 
   @@index([userId])
   @@map("applications")
+}
+
+// ── Phase 3: Job Discovery (Swipe Feed) ─────────────────────────────────────
+
+model JobMatchPreview {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId  String
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  matchScore Int
+  computedAt DateTime @default(now())
+
+  @@unique([userId, jobId])
+  @@index([userId, matchScore])
+  @@map("job_match_previews")
+}
+
+model DismissedJob {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId  String
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  dismissedAt DateTime @default(now())
+
+  @@id([userId, jobId])
+  @@map("dismissed_jobs")
 }
 
 // ── Phase 5 stubs (billing — schema ready, enforcement behind flag) ──────────

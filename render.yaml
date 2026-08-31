@@ -10,6 +10,12 @@ services:
         value: latex
       - key: DATABASE_URL
         sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: HUNTER_API_KEY
+        sync: false
+      - key: PDL_API_KEY
+        sync: false
       - key: API_URL
         sync: false
       - key: TRUSTED_ORIGINS

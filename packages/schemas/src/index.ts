@@ -193,6 +193,28 @@ export const UpdateGapReportSchema = z.object({
 
 export const IngestBodySchema = z.object({ raw_text: z.string().min(1) });
 
+// ── Phase 3: Job Discovery (Swipe Feed) ─────────────────────────────────────
+
+// Query-string params arrive as strings (or repeated strings for arrays);
+// coerce accordingly rather than assuming JSON body-shaped input.
+const commaSeparatedList = z
+  .union([z.string(), z.array(z.string())])
+  .optional()
+  .transform((val) => {
+    if (val === undefined) return undefined;
+    const items = Array.isArray(val) ? val : val.split(',');
+    return items.map((s) => s.trim()).filter(Boolean);
+  });
+
+export const DiscoverFeedFiltersSchema = z.object({
+  category_tags: commaSeparatedList,
+  work_mode: commaSeparatedList,
+  location: z.string().optional(),
+  seniority: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(50).default(20),
+});
+
 export const UserSettingsSchema = z.object({
   match_threshold: z.number().min(0).max(100).default(50),
   preferred_locations: z.array(z.string()).default([]),
@@ -201,7 +223,13 @@ export const UserSettingsSchema = z.object({
   resume_template: z.string().default('default'),
   ai_provider_override: z.string().optional(),
   auto_send_email: z.boolean().default(false),
+  notify_on_new_jobs: z.boolean().default(true),
+  // Phase 3 — /discover filter bar (decided 2026-08-30).
+  category_tags: z.array(z.string()).default([]),
+  work_mode: z.array(z.string()).default([]),
 });
+
+export const UpdateUserSettingsSchema = UserSettingsSchema.partial();
 
 // ── Inferred Types ──────────────────────────────────────────────────────────
 
@@ -210,6 +238,8 @@ export type CreateJobDto = z.infer<typeof CreateJobSchema>;
 export type UpdateCareerProfileDto = z.infer<typeof UpdateCareerProfileSchema>;
 export type IngestBodyDto = z.infer<typeof IngestBodySchema>;
 export type UserSettingsDto = z.infer<typeof UserSettingsSchema>;
+export type UpdateUserSettingsDto = z.infer<typeof UpdateUserSettingsSchema>;
 export type UpdateResumeSelectionDto = z.infer<typeof UpdateResumeSelectionSchema>;
 export type UpdateEmailDraftDto = z.infer<typeof UpdateEmailDraftSchema>;
 export type UpdateGapReportDto = z.infer<typeof UpdateGapReportSchema>;
+export type DiscoverFeedFiltersDto = z.infer<typeof DiscoverFeedFiltersSchema>;

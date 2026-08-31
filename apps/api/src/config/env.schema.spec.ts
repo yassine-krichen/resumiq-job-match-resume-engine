@@ -2,6 +2,7 @@ import { validateEnv } from './env.schema';
 
 const baseEnv = {
   DATABASE_URL: 'postgresql://localhost:5432/db',
+  REDIS_URL: 'rediss://default:password@localhost:6379',
   API_URL: 'http://localhost:3001',
   TRUSTED_ORIGINS: 'http://localhost:3000',
   BETTER_AUTH_SECRET: 'test-secret',
@@ -64,6 +65,19 @@ describe('validateEnv', () => {
       FREELLMAPI_MODEL: 'auto',
     };
     delete process.env.DATABASE_URL;
+
+    expect(() => validateEnv()).toThrow('exit called');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('exits when REDIS_URL is missing', () => {
+    process.env = {
+      ...process.env,
+      ...baseEnv,
+      FREELLMAPI_API_KEY: 'key',
+      FREELLMAPI_MODEL: 'auto',
+    };
+    delete process.env.REDIS_URL;
 
     expect(() => validateEnv()).toThrow('exit called');
     expect(exitSpy).toHaveBeenCalledWith(1);
