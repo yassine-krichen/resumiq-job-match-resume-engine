@@ -7,5 +7,8 @@ export {
   critiqueAndRevise,
   generateGapReport,
   generateEmail,
+  generateInterviewIntakeQuestions,
+  generateTechnicalInterviewPrep,
+  generateBehavioralInterviewPrep,
 } from './agents';
 export { render } from './renderer';

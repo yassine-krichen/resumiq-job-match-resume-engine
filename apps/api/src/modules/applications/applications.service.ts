@@ -4,13 +4,27 @@ import {
   analyzeJob,
   checkCompatibility,
   critiqueAndRevise,
+  generateBehavioralInterviewPrep,
   generateEmail,
+  generateInterviewIntakeQuestions,
+  generateTechnicalInterviewPrep,
   selectAndDraft,
 } from '@resumiq/ai-bridge';
-import type { AISelection, GapReport, JobDNA } from '@resumiq/ai-bridge';
-import { UpdateResumeSelectionSchema } from '@resumiq/schemas';
+import type {
+  AISelection,
+  GapReport,
+  InterviewIntakeQuestions,
+  JobDNA,
+} from '@resumiq/ai-bridge';
+import {
+  InterviewIntakeQuestionsSchema,
+  InterviewPrepReportSchema,
+  UpdateResumeSelectionSchema,
+} from '@resumiq/schemas';
 import type {
   CreateJobDto,
+  InterviewPrepIntakeAnswersDto,
+  InterviewPrepReportDto,
   ListApplicationsFiltersDto,
   UpdateEmailDraftDto,
   UpdateGapReportDto,
@@ -44,6 +58,60 @@ interface ResumeSelectionDraftResult {
 /** `draftForJob` returns one of these two shapes depending on whether the
  * compatibility score clears `DEFAULT_MATCH_THRESHOLD`. */
 type DraftForJobResult = GapReportDraftResult | ResumeSelectionDraftResult;
+
+/** Persisted shape of `Application.interviewPrep`. `intake.weak_topics` is the
+ * deterministic (zero-LLM-cost) checklist derived from the job's
+ * `mandatory_technical_skills`; `intake.questions` is the LLM-generated
+ * dynamic question set; `intake.answers` is set once the user submits the
+ * structured intake form. `report` stays null until both synthesis agents
+ * have run — see `generateInterviewPrepReport`. */
+export interface InterviewPrepIntakeState {
+  weak_topics: string[];
+  questions: InterviewIntakeQuestions;
+  answers?: InterviewPrepIntakeAnswersDto;
+}
+
+export interface InterviewPrepState {
+  intake: InterviewPrepIntakeState;
+  report: InterviewPrepReportDto | null;
+}
+
+/**
+ * Normalizes `Job.companyInfo`'s two on-disk shapes into plain text for LLM
+ * prompts: the manual-paste shape (`{ raw: string }`, written by
+ * `analyzeAndDraft`) and the scraper-enrichment shape (`{ profile:
+ * CompanyProfile | null, contact: HunterContact | null }`, written by
+ * jobs.service.ts's Hunter.io/PDL enrichment). Contact info is deliberately
+ * excluded — a recruiting contact's name/email isn't useful prompt context.
+ * Returns '' for null/unrecognized shapes — company info is always optional
+ * prompt context, never worth throwing over.
+ */
+export function formatCompanyInfoForPrompt(companyInfo: unknown): string {
+  if (!companyInfo || typeof companyInfo !== 'object') return '';
+
+  const raw = (companyInfo as { raw?: unknown }).raw;
+  if (typeof raw === 'string') return raw;
+
+  const profile = (companyInfo as { profile?: unknown }).profile;
+  if (profile && typeof profile === 'object') {
+    const p = profile as {
+      industry?: string;
+      size?: string;
+      founded?: number;
+      summary?: string;
+      tags?: string[];
+    };
+    const lines: string[] = [];
+    if (p.summary) lines.push(p.summary);
+    if (p.industry) lines.push(`Industry: ${p.industry}`);
+    if (p.size) lines.push(`Size: ${p.size}`);
+    if (p.founded) lines.push(`Founded: ${p.founded}`);
+    if (p.tags?.length) lines.push(`Tags: ${p.tags.join(', ')}`);
+    if (lines.length) return lines.join('\n');
+  }
+
+  return '';
+}
 
 /** Thin, explicit-select application shape shared by `listApplications` and
  * `getDashboardSummary`'s `recentActivity` — deliberately excludes the
@@ -493,7 +561,7 @@ export class ApplicationsService {
 
     onProgress("Drafting cold email in company's tone & values...");
     const jobDNA = application.job.parsedJd as unknown as JobDNA;
-    const companyInfo = (application.job.companyInfo as { raw?: string } | null)?.raw ?? '';
+    const companyInfo = formatCompanyInfoForPrompt(application.job.companyInfo);
     const emailDraft = await generateEmail(jobDNA, companyInfo, selection);
 
     await this.prisma.application.update({
@@ -524,6 +592,157 @@ export class ApplicationsService {
       where: { id: applicationId },
       data: { status: 'ready' },
     });
+  }
+
+  /**
+   * Runs the interview-prep intake leg: deterministically derives the
+   * weak-topics checklist from the job's `mandatory_technical_skills` (no
+   * LLM call — the checklist is just that list, deduped, for the user to
+   * self-flag against), then makes ONE lightweight LLM call to generate 2-4
+   * JD/company-grounded dynamic questions. Clears any stale prior report on
+   * regeneration — same "clear sibling state atomically in one write"
+   * convention as `draftForJob`'s branch-flip nulling.
+   */
+  async generateInterviewPrepIntake(
+    userId: string,
+    applicationId: string,
+  ): Promise<InterviewPrepState> {
+    const application = await this.findOwnedWithJob(userId, applicationId);
+    if (!application.resumeSelection) {
+      throw new BadRequestException(
+        'Resume selection required before preparing for interview — finalize the application first',
+      );
+    }
+
+    const jobDNA = application.job.parsedJd as unknown as JobDNA;
+    const selection = application.resumeSelection as unknown as AISelection;
+    const companyInfoText = formatCompanyInfoForPrompt(application.job.companyInfo);
+
+    const weakTopics = Array.from(new Set(jobDNA.mandatory_technical_skills));
+    const rawQuestions = await generateInterviewIntakeQuestions(jobDNA, companyInfoText, selection);
+
+    // The LLM's JSON output is parsed with no runtime shape guarantees —
+    // validate it before persisting, same defensive pattern as
+    // generateInterviewPrepReport's InterviewPrepReportSchema.safeParse() gate.
+    const parsedQuestions = InterviewIntakeQuestionsSchema.safeParse(rawQuestions);
+    if (!parsedQuestions.success) {
+      throw new BadRequestException(
+        'AI generated invalid interview intake questions — please retry',
+      );
+    }
+    const questions = parsedQuestions.data;
+
+    const state: InterviewPrepState = {
+      intake: { weak_topics: weakTopics, questions },
+      report: null, // clear any stale report from a prior generate — same write
+    };
+
+    await this.prisma.application.update({
+      where: { id: applicationId },
+      data: { interviewPrep: state as unknown as Json },
+    });
+
+    return state;
+  }
+
+  /**
+   * PATCH-style update of the intake form answers — mirrors `updateGapReport`'s
+   * shape (ownership check, single validated write), but merges into the
+   * existing `intake` object (weak_topics/questions) rather than overwriting
+   * the whole JSON column, since those fields were already persisted by
+   * `generateInterviewPrepIntake` and must survive this write. Nulls any
+   * previously-generated `report` — a report is synthesized from a specific
+   * answer set, so editing the answers invalidates it, and the user must
+   * explicitly regenerate.
+   */
+  async updateInterviewPrepIntakeAnswers(
+    userId: string,
+    applicationId: string,
+    answers: InterviewPrepIntakeAnswersDto,
+  ): Promise<InterviewPrepState> {
+    const application = await this.findOwned(userId, applicationId);
+    const existing = application.interviewPrep as unknown as InterviewPrepState | null;
+    if (!existing?.intake) {
+      throw new BadRequestException(
+        'Generate the interview prep intake questions before submitting answers',
+      );
+    }
+
+    const state: InterviewPrepState = {
+      intake: { ...existing.intake, answers },
+      report: null, // edited answers invalidate any previously-generated report
+    };
+
+    await this.prisma.application.update({
+      where: { id: applicationId },
+      data: { interviewPrep: state as unknown as Json },
+    });
+
+    return state;
+  }
+
+  /**
+   * Runs the interview-prep report synthesis leg: two focused LLM calls,
+   * SEQUENTIALLY (technical, then behavioral), each preceded by a real
+   * progress checkpoint — matching this codebase's "each SSE progress event =
+   * one real await boundary" convention. The merged result is validated via
+   * `InterviewPrepReportSchema.safeParse()` before persisting, same defensive
+   * pattern as `draftForJob`'s `UpdateResumeSelectionSchema.safeParse()` gate.
+   */
+  async generateInterviewPrepReport(
+    userId: string,
+    applicationId: string,
+    onProgress: (step: string) => void,
+  ): Promise<InterviewPrepReportDto> {
+    const application = await this.findOwnedWithJob(userId, applicationId);
+    if (!application.resumeSelection) {
+      throw new BadRequestException(
+        'Resume selection required before preparing for interview — finalize the application first',
+      );
+    }
+    const state = application.interviewPrep as unknown as InterviewPrepState | null;
+    if (!state?.intake?.answers) {
+      throw new BadRequestException('Answer the interview prep intake questions first');
+    }
+
+    const db = await this.profileService.getProfile(userId);
+    if (!db) throw new BadRequestException('Career profile not found');
+
+    const jobDNA = application.job.parsedJd as unknown as JobDNA;
+    const selection = application.resumeSelection as unknown as AISelection;
+    const companyInfoText = formatCompanyInfoForPrompt(application.job.companyInfo);
+    const answers = state.intake.answers;
+
+    onProgress('Analyzing likely technical topics...');
+    const technical = await generateTechnicalInterviewPrep(jobDNA, db, selection, answers);
+
+    onProgress('Analyzing likely behavioral questions...');
+    const behavioral = await generateBehavioralInterviewPrep(
+      jobDNA,
+      companyInfoText,
+      db,
+      selection,
+      answers,
+    );
+
+    // The LLM's JSON output is parsed with no runtime shape guarantees —
+    // validate the merged synthesis result before persisting, same gate
+    // draftForJob applies to the resume-selection critique output.
+    const parsed = InterviewPrepReportSchema.safeParse({ ...technical, ...behavioral });
+    if (!parsed.success) {
+      throw new BadRequestException(
+        'AI generated an invalid interview prep report — please retry',
+      );
+    }
+    const report = parsed.data;
+
+    const newState: InterviewPrepState = { intake: state.intake, report };
+    await this.prisma.application.update({
+      where: { id: applicationId },
+      data: { interviewPrep: newState as unknown as Json },
+    });
+
+    return report;
   }
 
   async getById(userId: string, applicationId: string) {

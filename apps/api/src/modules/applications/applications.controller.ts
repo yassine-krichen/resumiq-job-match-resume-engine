@@ -19,11 +19,13 @@ import { LocalStorageService } from '../../common/storage/local-storage.service'
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import {
   CreateJobSchema,
+  InterviewPrepIntakeAnswersSchema,
   ListApplicationsFiltersSchema,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
   UpdateResumeSelectionSchema,
   type CreateJobDto,
+  type InterviewPrepIntakeAnswersDto,
   type ListApplicationsFiltersDto,
   type UpdateEmailDraftDto,
   type UpdateGapReportDto,
@@ -208,6 +210,67 @@ export class ApplicationsController {
     try {
       const result = await this.applicationsService.regenerate(req.user.id, id, (step) =>
         send('progress', { step }),
+      );
+      send('done', result);
+      res.end();
+    } catch (err) {
+      send('error', { message: (err as Error).message });
+      res.end();
+    }
+  }
+
+  /**
+   * POST /api/applications/:id/interview-prep/intake
+   * Deterministically derives the weak-topics checklist, then makes one
+   * lightweight LLM call for 2-4 JD/company-grounded dynamic questions.
+   * Same throttle as `analyze/stream` — one real LLM call per request.
+   */
+  @Post(':id/interview-prep/intake')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async generateInterviewPrepIntake(
+    @Req() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.applicationsService.generateInterviewPrepIntake(req.user.id, id);
+  }
+
+  @Patch(':id/interview-prep/intake')
+  async updateInterviewPrepIntakeAnswers(
+    @Req() req: { user: { id: string } },
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(InterviewPrepIntakeAnswersSchema))
+    body: InterviewPrepIntakeAnswersDto,
+  ) {
+    return this.applicationsService.updateInterviewPrepIntakeAnswers(req.user.id, id, body);
+  }
+
+  /**
+   * POST /api/applications/:id/interview-prep/generate/stream
+   * SSE: runs the two synthesis agents (technical, then behavioral)
+   * sequentially, same progress/done/error framing as `finalize/stream`.
+   */
+  @Post(':id/interview-prep/generate/stream')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async generateInterviewPrepReportStream(
+    @Req() req: { user: { id: string } },
+    @Res() res: Response,
+    @Param('id') id: string,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      const result = await this.applicationsService.generateInterviewPrepReport(
+        req.user.id,
+        id,
+        (step) => send('progress', { step }),
       );
       send('done', result);
       res.end();

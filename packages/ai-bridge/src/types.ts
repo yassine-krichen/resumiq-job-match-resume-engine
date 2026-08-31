@@ -193,3 +193,48 @@ export interface EmailDraft {
   subject: string;
   body: string;
 }
+
+// ── Phase 2b: Interview Prep ────────────────────────────────────────────────
+
+/** Answers collected via the structured intake form — mirrors
+ * `InterviewPrepIntakeAnswersSchema` in @resumiq/schemas (kept as a plain
+ * interface here, same MasterDB/MasterDBSchema duplication convention used
+ * elsewhere in this package). */
+export interface InterviewPrepIntakeAnswers {
+  interview_format: 'panel' | 'one_on_one' | 'unknown';
+  interviewers?: string;
+  concerns?: string;
+  weak_topics_selected: string[];
+  dynamic_question_answers: Array<{ question: string; answer: string }>;
+}
+
+/** Output of `generateInterviewIntakeQuestions` — 2-4 JD/company-grounded
+ * dynamic questions shown to the user before the synthesis pass. */
+export type InterviewIntakeQuestions = Array<{
+  question: string;
+  reasoning: string;
+}>;
+
+export interface TechnicalInterviewPrep {
+  technical_topics: Array<{
+    topic: string;
+    probability: 'high' | 'medium' | 'low';
+    reasoning: string;
+  }>;
+  gaps_to_address: Array<{
+    gap: string;
+    suggested_framing: string;
+  }>;
+}
+
+export interface BehavioralInterviewPrep {
+  behavioral_questions: Array<{
+    question: string;
+    company_signal: string;
+    suggested_angle: string;
+  }>;
+  talking_points: Array<{
+    point: string;
+    matched_to: string;
+  }>;
+}

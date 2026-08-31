@@ -153,6 +153,7 @@ model Application {
   renderedWith    String? // 'latex' | 'typst'
   resumePdfPath   String?
   emailDraft      Json? // { subject, body }
+  interviewPrep   Json? // { intake: { weak_topics, questions, answers? }, report: InterviewPrepReport | null }
 
   @@index([userId])
   @@map("applications")

@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ApplicationsService } from './applications.service';
+import { ApplicationsService, formatCompanyInfoForPrompt } from './applications.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProfileService } from '../profile/profile.service';
 import { ResumeService } from '../resume/resume.service';
@@ -9,11 +9,14 @@ import {
   analyzeJob,
   checkCompatibility,
   critiqueAndRevise,
+  generateBehavioralInterviewPrep,
   generateEmail,
+  generateInterviewIntakeQuestions,
+  generateTechnicalInterviewPrep,
   selectAndDraft,
 } from '@resumiq/ai-bridge';
 import type { AISelection, JobDNA, MasterDB } from '@resumiq/ai-bridge';
-import type { CreateJobDto } from '@resumiq/schemas';
+import type { CreateJobDto, InterviewPrepIntakeAnswersDto } from '@resumiq/schemas';
 import { buildManualJobDedupeKey } from '../../common/jobs/dedupe-key';
 
 jest.mock('@resumiq/ai-bridge', () => ({
@@ -22,6 +25,9 @@ jest.mock('@resumiq/ai-bridge', () => ({
   selectAndDraft: jest.fn(),
   critiqueAndRevise: jest.fn(),
   generateEmail: jest.fn(),
+  generateInterviewIntakeQuestions: jest.fn(),
+  generateTechnicalInterviewPrep: jest.fn(),
+  generateBehavioralInterviewPrep: jest.fn(),
 }));
 
 const analyzeJobMock = analyzeJob as jest.Mock;
@@ -29,6 +35,9 @@ const checkCompatibilityMock = checkCompatibility as jest.Mock;
 const selectAndDraftMock = selectAndDraft as jest.Mock;
 const critiqueAndReviseMock = critiqueAndRevise as jest.Mock;
 const generateEmailMock = generateEmail as jest.Mock;
+const generateInterviewIntakeQuestionsMock = generateInterviewIntakeQuestions as jest.Mock;
+const generateTechnicalInterviewPrepMock = generateTechnicalInterviewPrep as jest.Mock;
+const generateBehavioralInterviewPrepMock = generateBehavioralInterviewPrep as jest.Mock;
 
 const OTHER_USER = 'user-attacker';
 const OWNER = 'user-owner';
@@ -1009,6 +1018,339 @@ describe('ApplicationsService', () => {
       await service.finalizeAndDraftEmail(OWNER, APP_ID, onProgress);
 
       expect(generateEmailMock).toHaveBeenCalledWith(jobDNAFixture(), '', selectionFixture());
+    });
+  });
+
+  describe('formatCompanyInfoForPrompt', () => {
+    it('returns empty string for null companyInfo', () => {
+      expect(formatCompanyInfoForPrompt(null)).toBe('');
+    });
+
+    it('returns empty string for a non-object companyInfo', () => {
+      expect(formatCompanyInfoForPrompt('garbage')).toBe('');
+    });
+
+    it('reads the manual-paste { raw } shape', () => {
+      expect(formatCompanyInfoForPrompt({ raw: 'We build fintech infra' })).toBe(
+        'We build fintech infra',
+      );
+    });
+
+    it('reads the scraper-enrichment { profile, contact } shape, formatting profile fields into text', () => {
+      const text = formatCompanyInfoForPrompt({
+        profile: { summary: 'Fintech infra company', industry: 'Finance', size: '51-200', tags: ['payments'] },
+        contact: { email: 'hiring@acme.com', confidence: 90 },
+      });
+
+      expect(text).toContain('Fintech infra company');
+      expect(text).toContain('Industry: Finance');
+      expect(text).toContain('Size: 51-200');
+      expect(text).toContain('Tags: payments');
+      // Contact info is deliberately excluded — not useful prompt context.
+      expect(text).not.toContain('hiring@acme.com');
+    });
+
+    it('returns empty string when the scraper-enrichment shape has both profile and contact null', () => {
+      expect(formatCompanyInfoForPrompt({ profile: null, contact: null })).toBe('');
+    });
+
+    it('returns empty string for an unrecognized object shape', () => {
+      expect(formatCompanyInfoForPrompt({ somethingElse: true })).toBe('');
+    });
+  });
+
+  describe('generateInterviewPrepIntake', () => {
+    it('throws NotFoundException and never calls the LLM when the application belongs to a different user', async () => {
+      prisma.application.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.generateInterviewPrepIntake(OTHER_USER, APP_ID),
+      ).rejects.toThrow(NotFoundException);
+      expect(generateInterviewIntakeQuestionsMock).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when the application has no resumeSelection yet', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        resumeSelection: null,
+        job: { parsedJd: jobDNAFixture(), companyInfo: null },
+      });
+
+      await expect(service.generateInterviewPrepIntake(OWNER, APP_ID)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(generateInterviewIntakeQuestionsMock).not.toHaveBeenCalled();
+    });
+
+    it('deterministically derives weak_topics from mandatory_technical_skills, deduped, with zero LLM calls for that part', async () => {
+      const jobDNA = {
+        ...jobDNAFixture(),
+        mandatory_technical_skills: ['TypeScript', 'Postgres', 'TypeScript'],
+      };
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        resumeSelection: selectionFixture(),
+        job: { parsedJd: jobDNA, companyInfo: null },
+      });
+      const questions = [
+        { question: 'q1', reasoning: 'r1' },
+        { question: 'q2', reasoning: 'r2' },
+      ];
+      generateInterviewIntakeQuestionsMock.mockResolvedValue(questions);
+      prisma.application.update.mockResolvedValue({ id: APP_ID });
+
+      const result = await service.generateInterviewPrepIntake(OWNER, APP_ID);
+
+      // Only ONE LLM call total (the dynamic questions) — weak_topics derivation
+      // is pure TS, no generateJSON call involved.
+      expect(generateInterviewIntakeQuestionsMock).toHaveBeenCalledTimes(1);
+      expect(result.intake.weak_topics).toEqual(['TypeScript', 'Postgres']);
+      expect(result.intake.questions).toEqual(questions);
+    });
+
+    it('clears any stale prior report atomically in the same write that persists the new intake', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        resumeSelection: selectionFixture(),
+        job: { parsedJd: jobDNAFixture(), companyInfo: null },
+      });
+      generateInterviewIntakeQuestionsMock.mockResolvedValue([
+        { question: 'q1', reasoning: 'r1' },
+        { question: 'q2', reasoning: 'r2' },
+      ]);
+      prisma.application.update.mockResolvedValue({ id: APP_ID });
+
+      const result = await service.generateInterviewPrepIntake(OWNER, APP_ID);
+
+      expect(result.report).toBeNull();
+      expect(prisma.application.update).toHaveBeenCalledTimes(1);
+      expect(prisma.application.update).toHaveBeenCalledWith({
+        where: { id: APP_ID },
+        data: { interviewPrep: expect.objectContaining({ report: null }) },
+      });
+    });
+
+    it('throws BadRequestException and never persists when the LLM returns malformed intake questions', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        resumeSelection: selectionFixture(),
+        job: { parsedJd: jobDNAFixture(), companyInfo: null },
+      });
+      // Missing "reasoning" on the one entry — fails InterviewIntakeQuestionsSchema.safeParse.
+      generateInterviewIntakeQuestionsMock.mockResolvedValue([{ question: 'q1' }]);
+
+      await expect(service.generateInterviewPrepIntake(OWNER, APP_ID)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.application.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateInterviewPrepIntakeAnswers', () => {
+    const answers: InterviewPrepIntakeAnswersDto = {
+      interview_format: 'panel',
+      weak_topics_selected: ['TypeScript'],
+      dynamic_question_answers: [{ question: 'q1', answer: 'a1' }],
+    };
+
+    it('throws NotFoundException when the application belongs to a different user', async () => {
+      prisma.application.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.updateInterviewPrepIntakeAnswers(OTHER_USER, APP_ID, answers),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.application.update).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when no intake has been generated yet', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        interviewPrep: null,
+      });
+
+      await expect(
+        service.updateInterviewPrepIntakeAnswers(OWNER, APP_ID, answers),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.application.update).not.toHaveBeenCalled();
+    });
+
+    it('merges answers into the existing intake, preserving weak_topics/questions already persisted', async () => {
+      const existingIntake = {
+        weak_topics: ['TypeScript'],
+        questions: [{ question: 'q1', reasoning: 'r1' }],
+      };
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        interviewPrep: { intake: existingIntake, report: null },
+      });
+      prisma.application.update.mockResolvedValue({ id: APP_ID });
+
+      const result = await service.updateInterviewPrepIntakeAnswers(OWNER, APP_ID, answers);
+
+      expect(result.intake).toEqual({ ...existingIntake, answers });
+      expect(prisma.application.update).toHaveBeenCalledWith({
+        where: { id: APP_ID },
+        data: { interviewPrep: { intake: { ...existingIntake, answers }, report: null } },
+      });
+    });
+
+    it('nulls a previously-generated report, since editing answers invalidates it', async () => {
+      const existingIntake = {
+        weak_topics: ['TypeScript'],
+        questions: [{ question: 'q1', reasoning: 'r1' }],
+      };
+      const staleReport = {
+        technical_topics: [],
+        gaps_to_address: [],
+        behavioral_questions: [],
+        talking_points: [],
+      };
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        interviewPrep: { intake: existingIntake, report: staleReport },
+      });
+      prisma.application.update.mockResolvedValue({ id: APP_ID });
+
+      const result = await service.updateInterviewPrepIntakeAnswers(OWNER, APP_ID, answers);
+
+      expect(result.report).toBeNull();
+      expect(prisma.application.update).toHaveBeenCalledWith({
+        where: { id: APP_ID },
+        data: { interviewPrep: { intake: { ...existingIntake, answers }, report: null } },
+      });
+    });
+  });
+
+  describe('generateInterviewPrepReport', () => {
+    const intakeWithAnswers = {
+      weak_topics: ['TypeScript'],
+      questions: [{ question: 'q1', reasoning: 'r1' }],
+      answers: {
+        interview_format: 'panel' as const,
+        weak_topics_selected: ['TypeScript'],
+        dynamic_question_answers: [{ question: 'q1', answer: 'a1' }],
+      },
+    };
+
+    it('throws NotFoundException when the application belongs to a different user', async () => {
+      prisma.application.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.generateInterviewPrepReport(OTHER_USER, APP_ID, onProgress),
+      ).rejects.toThrow(NotFoundException);
+      expect(generateTechnicalInterviewPrepMock).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when there is no resumeSelection', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        resumeSelection: null,
+        interviewPrep: { intake: intakeWithAnswers, report: null },
+        job: { parsedJd: jobDNAFixture(), companyInfo: null },
+      });
+
+      await expect(
+        service.generateInterviewPrepReport(OWNER, APP_ID, onProgress),
+      ).rejects.toThrow(BadRequestException);
+      expect(generateTechnicalInterviewPrepMock).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when the intake has not been answered yet', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        resumeSelection: selectionFixture(),
+        interviewPrep: {
+          intake: { weak_topics: [], questions: [] }, // no `answers` field
+          report: null,
+        },
+        job: { parsedJd: jobDNAFixture(), companyInfo: null },
+      });
+
+      await expect(
+        service.generateInterviewPrepReport(OWNER, APP_ID, onProgress),
+      ).rejects.toThrow(BadRequestException);
+      expect(generateTechnicalInterviewPrepMock).not.toHaveBeenCalled();
+    });
+
+    it('calls the technical and behavioral synthesis agents sequentially, reporting progress between them, and persists the validated merged report', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        resumeSelection: selectionFixture(),
+        interviewPrep: { intake: intakeWithAnswers, report: null },
+        job: { parsedJd: jobDNAFixture(), companyInfo: { raw: 'Acme info' } },
+      });
+      profileService.getProfile.mockResolvedValue(masterDBFixture());
+      const technical = {
+        technical_topics: [{ topic: 'TypeScript', probability: 'high', reasoning: 'r' }],
+        gaps_to_address: [],
+      };
+      const behavioral = {
+        behavioral_questions: [{ question: 'q', company_signal: 's', suggested_angle: 'a' }],
+        talking_points: [],
+      };
+      generateTechnicalInterviewPrepMock.mockResolvedValue(technical);
+      generateBehavioralInterviewPrepMock.mockResolvedValue(behavioral);
+      prisma.application.update.mockResolvedValue({ id: APP_ID });
+
+      const result = await service.generateInterviewPrepReport(OWNER, APP_ID, onProgress);
+
+      expect(generateTechnicalInterviewPrepMock).toHaveBeenCalledWith(
+        jobDNAFixture(),
+        masterDBFixture(),
+        selectionFixture(),
+        intakeWithAnswers.answers,
+      );
+      expect(generateBehavioralInterviewPrepMock).toHaveBeenCalledWith(
+        jobDNAFixture(),
+        'Acme info',
+        masterDBFixture(),
+        selectionFixture(),
+        intakeWithAnswers.answers,
+      );
+      const technicalOrder = generateTechnicalInterviewPrepMock.mock.invocationCallOrder[0];
+      const behavioralOrder = generateBehavioralInterviewPrepMock.mock.invocationCallOrder[0];
+      expect(technicalOrder).toBeLessThan(behavioralOrder);
+      expect(onProgress).toHaveBeenCalledTimes(2);
+
+      expect(result).toEqual({ ...technical, ...behavioral });
+      expect(prisma.application.update).toHaveBeenCalledWith({
+        where: { id: APP_ID },
+        data: {
+          interviewPrep: {
+            intake: intakeWithAnswers,
+            report: { ...technical, ...behavioral },
+          },
+        },
+      });
+    });
+
+    it('throws BadRequestException and never persists when the merged synthesis output fails schema validation', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        resumeSelection: selectionFixture(),
+        interviewPrep: { intake: intakeWithAnswers, report: null },
+        job: { parsedJd: jobDNAFixture(), companyInfo: null },
+      });
+      profileService.getProfile.mockResolvedValue(masterDBFixture());
+      // Missing required fields — fails InterviewPrepReportSchema.safeParse.
+      generateTechnicalInterviewPrepMock.mockResolvedValue({ technical_topics: 'not-an-array' });
+      generateBehavioralInterviewPrepMock.mockResolvedValue({});
+
+      await expect(
+        service.generateInterviewPrepReport(OWNER, APP_ID, onProgress),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.application.update).not.toHaveBeenCalled();
     });
   });
 });

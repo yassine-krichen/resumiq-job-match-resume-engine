@@ -260,6 +260,60 @@ export const ListApplicationsFiltersSchema = z.object({
   page_size: z.coerce.number().int().min(1).max(50).default(20),
 });
 
+// ── Phase 2b: Interview Prep ─────────────────────────────────────────────────
+
+export const InterviewPrepIntakeAnswersSchema = z.object({
+  interview_format: z.enum(['panel', 'one_on_one', 'unknown']),
+  interviewers: z.string().optional(),
+  concerns: z.string().optional(),
+  weak_topics_selected: z.array(z.string()),
+  dynamic_question_answers: z.array(
+    z.object({ question: z.string(), answer: z.string() }),
+  ),
+});
+
+// Output of `generateInterviewIntakeQuestions` — 2-4 JD/company-grounded
+// dynamic questions, used to `.safeParse()`-validate the LLM output before
+// persisting (same defensive pattern as InterviewPrepReportSchema below).
+export const InterviewIntakeQuestionsSchema = z
+  .array(z.object({ question: z.string().min(1), reasoning: z.string().min(1) }))
+  .min(1)
+  .max(6);
+
+// Merged shape of TechnicalInterviewPrep + BehavioralInterviewPrep — used both
+// to `.safeParse()`-validate the merged synthesis output before persisting
+// (same defensive pattern as UpdateResumeSelectionSchema in draftForJob) and
+// as the API response type. Read-only — no corresponding Update*Schema, since
+// nothing downstream consumes an edited report.
+export const InterviewPrepReportSchema = z.object({
+  technical_topics: z.array(
+    z.object({
+      topic: z.string(),
+      probability: z.enum(['high', 'medium', 'low']),
+      reasoning: z.string(),
+    }),
+  ),
+  gaps_to_address: z.array(
+    z.object({
+      gap: z.string(),
+      suggested_framing: z.string(),
+    }),
+  ),
+  behavioral_questions: z.array(
+    z.object({
+      question: z.string(),
+      company_signal: z.string(),
+      suggested_angle: z.string(),
+    }),
+  ),
+  talking_points: z.array(
+    z.object({
+      point: z.string(),
+      matched_to: z.string(),
+    }),
+  ),
+});
+
 // ── Inferred Types ──────────────────────────────────────────────────────────
 
 export type MasterDB = z.infer<typeof MasterDBSchema>;
@@ -273,3 +327,6 @@ export type UpdateEmailDraftDto = z.infer<typeof UpdateEmailDraftSchema>;
 export type UpdateGapReportDto = z.infer<typeof UpdateGapReportSchema>;
 export type DiscoverFeedFiltersDto = z.infer<typeof DiscoverFeedFiltersSchema>;
 export type ListApplicationsFiltersDto = z.infer<typeof ListApplicationsFiltersSchema>;
+export type InterviewPrepIntakeAnswersDto = z.infer<typeof InterviewPrepIntakeAnswersSchema>;
+export type InterviewIntakeQuestionsDto = z.infer<typeof InterviewIntakeQuestionsSchema>;
+export type InterviewPrepReportDto = z.infer<typeof InterviewPrepReportSchema>;

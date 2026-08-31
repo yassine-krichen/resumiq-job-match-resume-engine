@@ -1,6 +1,10 @@
 import { Response } from 'express';
+import { BadRequestException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
-import { ListApplicationsFiltersSchema } from '@resumiq/schemas';
+import {
+  ListApplicationsFiltersSchema,
+  InterviewPrepIntakeAnswersSchema,
+} from '@resumiq/schemas';
 import { ApplicationsController } from './applications.controller';
 import { ApplicationsService } from './applications.service';
 import { LocalStorageService } from '../../common/storage/local-storage.service';
@@ -73,6 +77,9 @@ describe('ApplicationsController', () => {
     listApplications: jest.Mock;
     getDashboardSummary: jest.Mock;
     regenerate: jest.Mock;
+    generateInterviewPrepIntake: jest.Mock;
+    updateInterviewPrepIntakeAnswers: jest.Mock;
+    generateInterviewPrepReport: jest.Mock;
   };
   let storage: { get: jest.Mock };
   let controller: ApplicationsController;
@@ -93,6 +100,9 @@ describe('ApplicationsController', () => {
       listApplications: jest.fn(),
       getDashboardSummary: jest.fn(),
       regenerate: jest.fn(),
+      generateInterviewPrepIntake: jest.fn(),
+      updateInterviewPrepIntakeAnswers: jest.fn(),
+      generateInterviewPrepReport: jest.fn(),
     };
     storage = { get: jest.fn() };
     controller = new ApplicationsController(
@@ -428,6 +438,232 @@ describe('ApplicationsController', () => {
         'app-1',
         expect.any(Function),
       );
+    });
+  });
+
+  describe('generateInterviewPrepIntake', () => {
+    it('scopes the intake generation to the authenticated session user, never a client-supplied id', async () => {
+      applicationsService.generateInterviewPrepIntake.mockResolvedValue({
+        weak_topics: [],
+        dynamic_questions: [],
+      });
+
+      await controller.generateInterviewPrepIntake(req, 'app-1');
+
+      expect(applicationsService.generateInterviewPrepIntake).toHaveBeenCalledWith('user-1', 'app-1');
+    });
+
+    it('does not leak an attacker-supplied userId — the attacker session still resolves against their own id', async () => {
+      applicationsService.generateInterviewPrepIntake.mockResolvedValue({
+        weak_topics: [],
+        dynamic_questions: [],
+      });
+
+      await controller.generateInterviewPrepIntake(ATTACKER, 'someone-elses-app');
+
+      expect(applicationsService.generateInterviewPrepIntake).toHaveBeenCalledWith(
+        'user-attacker',
+        'someone-elses-app',
+      );
+    });
+
+    it('returns the intake result from the service unchanged', async () => {
+      const intake = { weak_topics: ['System Design'], dynamic_questions: ['Why this role?'] };
+      applicationsService.generateInterviewPrepIntake.mockResolvedValue(intake);
+
+      const response = await controller.generateInterviewPrepIntake(req, 'app-1');
+
+      expect(response).toEqual(intake);
+    });
+  });
+
+  describe('updateInterviewPrepIntakeAnswers', () => {
+    it('passes the session userId, route id, and parsed body through to the service', async () => {
+      applicationsService.updateInterviewPrepIntakeAnswers.mockResolvedValue({ id: 'app-1' });
+      const body = {
+        interview_format: 'panel',
+        weak_topics_selected: ['System Design'],
+        dynamic_question_answers: [{ question: 'Why this role?', answer: 'Because...' }],
+      } as never;
+
+      await controller.updateInterviewPrepIntakeAnswers(req, 'app-1', body);
+
+      expect(applicationsService.updateInterviewPrepIntakeAnswers).toHaveBeenCalledWith(
+        'user-1',
+        'app-1',
+        body,
+      );
+    });
+  });
+
+  describe('InterviewPrepIntakeAnswersSchema (as wired via ZodValidationPipe on PATCH :id/interview-prep/intake)', () => {
+    it('accepts a fully valid intake-answers payload', () => {
+      const pipe = new ZodValidationPipe(InterviewPrepIntakeAnswersSchema);
+
+      const parsed = pipe.transform({
+        interview_format: 'one_on_one',
+        interviewers: 'Jane, eng manager',
+        concerns: 'Limited system-design experience',
+        weak_topics_selected: ['System Design'],
+        dynamic_question_answers: [{ question: 'Why this role?', answer: 'Because...' }],
+      });
+
+      expect(parsed).toMatchObject({ interview_format: 'one_on_one' });
+    });
+
+    it('rejects a payload missing dynamic_question_answers', () => {
+      const pipe = new ZodValidationPipe(InterviewPrepIntakeAnswersSchema);
+
+      expect(() =>
+        pipe.transform({
+          interview_format: 'panel',
+          weak_topics_selected: [],
+        }),
+      ).toThrow();
+    });
+
+    it('rejects an interview_format value outside the panel/one_on_one/unknown enum', () => {
+      const pipe = new ZodValidationPipe(InterviewPrepIntakeAnswersSchema);
+
+      expect(() =>
+        pipe.transform({
+          interview_format: 'group',
+          weak_topics_selected: [],
+          dynamic_question_answers: [],
+        }),
+      ).toThrow();
+    });
+  });
+
+  describe('generateInterviewPrepReportStream (SSE)', () => {
+    it('streams progress events then a done event matching the finalize/stream SSE frame convention', async () => {
+      const res = fakeResponse();
+      applicationsService.generateInterviewPrepReport.mockImplementation(
+        async (userId, id, onProgress) => {
+          onProgress('Preparing technical talking points...');
+          onProgress('Preparing behavioral talking points...');
+          return { technical_topics: [], gaps_to_address: [], behavioral_questions: [], talking_points: [] };
+        },
+      );
+
+      await controller.generateInterviewPrepReportStream(req, res, 'app-1');
+
+      expect(res.headers['Content-Type']).toBe('text/event-stream');
+      expect(res.headers['Cache-Control']).toBe('no-cache');
+      expect(res.headers['Connection']).toBe('keep-alive');
+
+      const frames = parseSSEFrames(res.writes);
+      expect(frames[0].event).toBe('progress');
+      expect(frames[1].event).toBe('progress');
+      expect(frames[2]).toEqual({
+        event: 'done',
+        data: { technical_topics: [], gaps_to_address: [], behavioral_questions: [], talking_points: [] },
+      });
+      expect(res.ended).toBe(true);
+    });
+
+    it('streams an error event (not an uncaught exception) when generating a report for an application owned by someone else', async () => {
+      const res = fakeResponse();
+      applicationsService.generateInterviewPrepReport.mockRejectedValue(
+        new Error('Application not found'),
+      );
+
+      await controller.generateInterviewPrepReportStream(ATTACKER, res, 'someone-elses-app');
+
+      const frames = parseSSEFrames(res.writes);
+      expect(frames).toEqual([{ event: 'error', data: { message: 'Application not found' } }]);
+      expect(res.ended).toBe(true);
+    });
+
+    it('streams a clean error event (not an uncaught exception) when the intake answers precondition has not been met', async () => {
+      const res = fakeResponse();
+      applicationsService.generateInterviewPrepReport.mockRejectedValue(
+        new BadRequestException('Answer the interview prep intake questions first'),
+      );
+
+      await controller.generateInterviewPrepReportStream(req, res, 'app-1');
+
+      const frames = parseSSEFrames(res.writes);
+      expect(frames).toEqual([
+        { event: 'error', data: { message: 'Answer the interview prep intake questions first' } },
+      ]);
+      expect(res.ended).toBe(true);
+    });
+
+    it('scopes the report generation to the authenticated session user and route id, never a client-supplied userId', async () => {
+      const res = fakeResponse();
+      applicationsService.generateInterviewPrepReport.mockResolvedValue({
+        technical_topics: [],
+        gaps_to_address: [],
+        behavioral_questions: [],
+        talking_points: [],
+      });
+
+      await controller.generateInterviewPrepReportStream(req, res, 'app-1');
+
+      expect(applicationsService.generateInterviewPrepReport).toHaveBeenCalledWith(
+        'user-1',
+        'app-1',
+        expect.any(Function),
+      );
+    });
+  });
+
+  describe('interview-prep throttle limits match the analyze/stream convention', () => {
+    // @Throttle stores its options directly on the method descriptor's
+    // function value via Reflect.defineMetadata(THROTTLER_LIMIT/TTL + name, ...).
+    // Reading it back the same way proves the decorator is actually wired,
+    // not just present in source.
+    const THROTTLER_LIMIT_KEY = 'THROTTLER:LIMITdefault';
+    const THROTTLER_TTL_KEY = 'THROTTLER:TTLdefault';
+
+    it('applies the same limit/ttl to POST :id/interview-prep/intake as analyze/stream', () => {
+      const expectedLimit = Reflect.getMetadata(
+        THROTTLER_LIMIT_KEY,
+        ApplicationsController.prototype.analyzeStream,
+      );
+      const expectedTtl = Reflect.getMetadata(
+        THROTTLER_TTL_KEY,
+        ApplicationsController.prototype.analyzeStream,
+      );
+
+      expect(expectedLimit).toBeDefined();
+      expect(
+        Reflect.getMetadata(
+          THROTTLER_LIMIT_KEY,
+          ApplicationsController.prototype.generateInterviewPrepIntake,
+        ),
+      ).toBe(expectedLimit);
+      expect(
+        Reflect.getMetadata(
+          THROTTLER_TTL_KEY,
+          ApplicationsController.prototype.generateInterviewPrepIntake,
+        ),
+      ).toBe(expectedTtl);
+    });
+
+    it('applies the same limit/ttl to POST :id/interview-prep/generate/stream as analyze/stream', () => {
+      const expectedLimit = Reflect.getMetadata(
+        THROTTLER_LIMIT_KEY,
+        ApplicationsController.prototype.analyzeStream,
+      );
+      const expectedTtl = Reflect.getMetadata(
+        THROTTLER_TTL_KEY,
+        ApplicationsController.prototype.analyzeStream,
+      );
+
+      expect(
+        Reflect.getMetadata(
+          THROTTLER_LIMIT_KEY,
+          ApplicationsController.prototype.generateInterviewPrepReportStream,
+        ),
+      ).toBe(expectedLimit);
+      expect(
+        Reflect.getMetadata(
+          THROTTLER_TTL_KEY,
+          ApplicationsController.prototype.generateInterviewPrepReportStream,
+        ),
+      ).toBe(expectedTtl);
     });
   });
 
