@@ -579,6 +579,7 @@ Timeout:  30s
 - Mobile app
 - Team / multi-user workspace features
 - LinkedIn API (too fragile — user copy-paste is sufficient at launch)
+- **Site-wide dark mode** — deferred 2026-09-05 during first live QA pass. App currently light-mode only; noted as real UI debt ("too much white"), not forgotten, just sequenced after functional correctness.
 
 ---
 
