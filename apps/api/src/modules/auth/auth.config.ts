@@ -26,6 +26,13 @@ function createAuth() {
         clientSecret: process.env.LINKEDIN_CLIENT_SECRET!,
       },
     },
+    emailAndPassword: {
+      enabled: true,
+      // No requireEmailVerification / sendResetPassword: this codebase has no
+      // email-sending infrastructure anywhere (no nodemailer/resend/sendgrid/SES).
+      // Requiring verification or offering password reset would be a dead end.
+      // Revisit once email sending exists.
+    },
     session: {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 24,      // refresh if 1 day old
