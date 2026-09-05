@@ -68,7 +68,16 @@ export default function OnboardingReviewPage() {
                   <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
                     <p className="font-medium">{exp.role} @ {exp.company}</p>
                     <p className="text-sm text-zinc-500">{exp.startDate} – {exp.isCurrent ? 'Present' : exp.endDate}</p>
-                    <p className="mt-1 text-sm text-zinc-600">{exp.technologies_used?.slice(0, 6).join(', ')}</p>
+                    {exp.raw_achievements?.length > 0 && (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">
+                        {exp.raw_achievements.map((achievement, j) => (
+                          <li key={j}>{achievement}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {exp.technologies_used?.length > 0 && (
+                      <p className="mt-2 text-xs text-zinc-500">{exp.technologies_used.slice(0, 6).join(', ')}</p>
+                    )}
                   </div>
                 ))}
               </Section>
@@ -80,7 +89,16 @@ export default function OnboardingReviewPage() {
                   <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
                     <p className="font-medium">{proj.name}</p>
                     <p className="text-sm text-zinc-500">{proj.startDate} – {proj.endDate}</p>
-                    <p className="mt-1 text-sm text-zinc-600">{proj.technologies_used?.slice(0, 6).join(', ')}</p>
+                    {proj.raw_achievements?.length > 0 && (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">
+                        {proj.raw_achievements.map((achievement, j) => (
+                          <li key={j}>{achievement}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {proj.technologies_used?.length > 0 && (
+                      <p className="mt-2 text-xs text-zinc-500">{proj.technologies_used.slice(0, 6).join(', ')}</p>
+                    )}
                   </div>
                 ))}
               </Section>
@@ -111,6 +129,28 @@ export default function OnboardingReviewPage() {
                     </p>
                   )}
                 </div>
+              </Section>
+            )}
+
+            {profile.certifications?.length > 0 && (
+              <Section title="Certifications" count={profile.certifications.length}>
+                {profile.certifications.map((cert, i) => (
+                  <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
+                    <p className="font-medium">{cert.name}</p>
+                    <p className="text-sm text-zinc-500">{cert.issuer}{cert.date ? ` – ${cert.date}` : ''}</p>
+                  </div>
+                ))}
+              </Section>
+            )}
+
+            {profile.awards_and_honors?.length > 0 && (
+              <Section title="Awards" count={profile.awards_and_honors.length}>
+                {profile.awards_and_honors.map((award, i) => (
+                  <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
+                    <p className="font-medium">{award.title}</p>
+                    <p className="text-sm text-zinc-500">{award.issuer}{award.date ? ` – ${award.date}` : ''}</p>
+                  </div>
+                ))}
               </Section>
             )}
           </div>
