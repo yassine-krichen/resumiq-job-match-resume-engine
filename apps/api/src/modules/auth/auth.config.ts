@@ -42,6 +42,26 @@ function createAuth() {
       },
     },
     trustedOrigins: process.env.TRUSTED_ORIGINS!.split(','),
+    // Frontend (Vercel) and API (Render) are different domains, not
+    // subdomains of a shared parent — a genuinely cross-site setup. Without
+    // this, better-auth's default SameSite=Lax cookie is set by the sign-in/
+    // sign-up response but never sent back on the subsequent fetch (only on
+    // top-level navigations), so the client looks logged-out immediately
+    // after a successful sign-in.
+    //
+    // Gated to production only: `secure: true` cookies are dropped by the
+    // browser unless the response actually came over HTTPS, and the
+    // documented local dev workflow (`turbo dev`) runs the API on plain
+    // http://localhost:3001 — applying this unconditionally would silently
+    // break local sign-in instead of fixing cross-site prod sign-in.
+    ...(process.env.NODE_ENV === 'production' && {
+      advanced: {
+        defaultCookieAttributes: {
+          sameSite: 'none' as const,
+          secure: true,
+        },
+      },
+    }),
     // /api/auth/* is mounted directly on the raw express instance in
     // main.ts, bypassing Nest's pipeline entirely — ThrottlerGuard cannot
     // reach it. better-auth's own rate limiter covers this gap instead.
