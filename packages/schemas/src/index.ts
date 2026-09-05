@@ -30,7 +30,10 @@ export const ExperienceEntrySchema = z.object({
 export const ProjectEntrySchema = z.object({
   name: z.string().min(1),
   context: z.string(),
-  links: z.array(z.object({ type: z.string(), url: z.string().url() })),
+  // LLM extraction rarely has a well-formed URL for every link it mentions
+  // (e.g. "hosted on a private repo") — relax to a plain string rather than
+  // failing validation on an otherwise-good entry.
+  links: z.array(z.object({ type: z.string(), url: z.string() })),
   startDate: z.string(),
   endDate: z.string(),
   technologies_used: z.array(z.string()),
@@ -65,6 +68,24 @@ export const SkillsSchema = z.object({
   soft_skills: z.array(z.string()),
 });
 
+export const CertificationSchema = z.object({
+  name: z.string(),
+  issuer: z.string(),
+  date: z.string(),
+  expiration_date: z.string(),
+  credential_id: z.string(),
+  link: z.string(),
+  description: z.string(),
+});
+
+export const AwardSchema = z.object({
+  title: z.string(),
+  issuer: z.string(),
+  date: z.string(),
+  description: z.string(),
+  related_skills: z.array(z.string()).optional(),
+});
+
 export const MasterDBSchema = z.object({
   personal_info: PersonalInfoSchema,
   summaries: z.array(z.object({ target_role: z.string(), content: z.string() })),
@@ -72,26 +93,8 @@ export const MasterDBSchema = z.object({
   education: z.array(EducationEntrySchema),
   projects: z.array(ProjectEntrySchema),
   skills: SkillsSchema,
-  certifications: z.array(
-    z.object({
-      name: z.string(),
-      issuer: z.string(),
-      date: z.string(),
-      expiration_date: z.string(),
-      credential_id: z.string(),
-      link: z.string(),
-      description: z.string(),
-    }),
-  ),
-  awards_and_honors: z.array(
-    z.object({
-      title: z.string(),
-      issuer: z.string(),
-      date: z.string(),
-      description: z.string(),
-      related_skills: z.array(z.string()).optional(),
-    }),
-  ),
+  certifications: z.array(CertificationSchema),
+  awards_and_honors: z.array(AwardSchema),
   publications_and_speaking: z.array(
     z.object({
       title: z.string(),
@@ -198,6 +201,22 @@ export const UpdateGapReportSchema = z.object({
 });
 
 export const IngestBodySchema = z.object({ raw_text: z.string().min(1) });
+
+// Onboarding "paste raw text" ingestion may surface multiple distinct career
+// facts (a job, a cert, a project) in one paste — the LLM returns an array of
+// typed entries rather than a single best-guess type.
+export const IngestEntrySchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('experience'), entry: ExperienceEntrySchema }),
+  z.object({ type: z.literal('project'), entry: ProjectEntrySchema }),
+  z.object({ type: z.literal('education'), entry: EducationEntrySchema }),
+  z.object({ type: z.literal('certification'), entry: CertificationSchema }),
+  z.object({ type: z.literal('award'), entry: AwardSchema }),
+  z.object({ type: z.literal('skills'), entry: SkillsSchema.partial() }),
+]);
+
+export const IngestResultSchema = z.object({
+  entries: z.array(IngestEntrySchema).min(1),
+});
 
 // ── Phase 3: Job Discovery (Swipe Feed) ─────────────────────────────────────
 
@@ -320,6 +339,8 @@ export type MasterDB = z.infer<typeof MasterDBSchema>;
 export type CreateJobDto = z.infer<typeof CreateJobSchema>;
 export type UpdateCareerProfileDto = z.infer<typeof UpdateCareerProfileSchema>;
 export type IngestBodyDto = z.infer<typeof IngestBodySchema>;
+export type IngestEntryDto = z.infer<typeof IngestEntrySchema>;
+export type IngestResultDto = z.infer<typeof IngestResultSchema>;
 export type UserSettingsDto = z.infer<typeof UserSettingsSchema>;
 export type UpdateUserSettingsDto = z.infer<typeof UpdateUserSettingsSchema>;
 export type UpdateResumeSelectionDto = z.infer<typeof UpdateResumeSelectionSchema>;

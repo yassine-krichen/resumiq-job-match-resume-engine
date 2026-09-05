@@ -46,6 +46,38 @@ export class ProfileService {
   ): Promise<MasterDB> {
     const existing = await this.getProfile(userId);
     const base: MasterDB = existing ?? this.emptyMasterDB(userId);
+    const merged = this.mergeSectionIntoProfile(base, section, entry);
+    return this.upsertProfile(userId, merged);
+  }
+
+  /**
+   * Merges multiple section entries into a single in-memory profile snapshot,
+   * then persists with exactly one write. Used by onboarding's multi-entry
+   * ingest so that a batch of extracted entries lands atomically — either all
+   * of them merge, or (on failure before this call resolves) none of them do.
+   * This avoids the partial-commit-then-duplicate-on-retry issue that calling
+   * `mergeSection` once per entry (each an independent read-then-write) would
+   * cause.
+   */
+  async mergeSections(
+    userId: string,
+    entries: Array<{ section: keyof MasterDB; entry: unknown }>,
+  ): Promise<MasterDB> {
+    const existing = await this.getProfile(userId);
+    let profile: MasterDB = existing ?? this.emptyMasterDB(userId);
+    for (const { section, entry } of entries) {
+      profile = this.mergeSectionIntoProfile(profile, section, entry);
+    }
+    return this.upsertProfile(userId, profile);
+  }
+
+  /** Pure merge of a single section entry into an in-memory profile — no DB access. */
+  private mergeSectionIntoProfile(
+    profile: MasterDB,
+    section: keyof MasterDB,
+    entry: unknown,
+  ): MasterDB {
+    const base: MasterDB = { ...profile };
 
     const sectionValue = base[section];
     if (Array.isArray(sectionValue)) {
@@ -56,7 +88,7 @@ export class ProfileService {
       (base[section] as unknown) = entry;
     }
 
-    return this.upsertProfile(userId, base);
+    return base;
   }
 
   private mergeMasterDB(base: MasterDB, patch: Partial<MasterDB>): MasterDB {

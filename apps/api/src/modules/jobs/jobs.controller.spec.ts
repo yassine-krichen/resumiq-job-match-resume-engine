@@ -1,4 +1,5 @@
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import type { Queue } from 'bullmq';
 import { DiscoverFeedFiltersSchema, UpdateUserSettingsSchema } from '@resumiq/schemas';
 import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
@@ -26,6 +27,7 @@ describe('JobsController', () => {
     getUserSettings: jest.Mock;
     updateUserSettings: jest.Mock;
   };
+  let jobScraperQueue: { add: jest.Mock };
   let controller: JobsController;
   const OWNER = { user: { id: 'user-1' } };
   const ATTACKER = { user: { id: 'user-attacker' } };
@@ -39,7 +41,20 @@ describe('JobsController', () => {
       getUserSettings: jest.fn(),
       updateUserSettings: jest.fn(),
     };
-    controller = new JobsController(jobsService as unknown as JobsService);
+    jobScraperQueue = { add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
+    controller = new JobsController(
+      jobsService as unknown as JobsService,
+      jobScraperQueue as unknown as Queue,
+    );
+  });
+
+  describe('scanNow', () => {
+    it('enqueues a scan job on the job-scraper queue and returns its id', async () => {
+      const result = await controller.scanNow();
+
+      expect(jobScraperQueue.add).toHaveBeenCalledWith('scan', {});
+      expect(result).toEqual({ queued: true, jobId: 'job-1' });
+    });
   });
 
   it('is guarded by AuthGuard on every route (class-level @UseGuards)', () => {

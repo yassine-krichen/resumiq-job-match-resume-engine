@@ -14,7 +14,16 @@ import { OnboardingService } from './onboarding.service';
 import { ProfileService } from '../profile/profile.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { MasterDB } from '@resumiq/ai-bridge';
-import { IngestBodySchema, type IngestBodyDto } from '@resumiq/schemas';
+import { IngestBodySchema, type IngestBodyDto, type IngestEntryDto } from '@resumiq/schemas';
+
+const SECTION_BY_TYPE: Record<IngestEntryDto['type'], keyof MasterDB> = {
+  experience: 'experience',
+  project: 'projects',
+  education: 'education',
+  certification: 'certifications',
+  award: 'awards_and_honors',
+  skills: 'skills',
+};
 
 @Controller('onboarding')
 @UseGuards(AuthGuard)
@@ -59,20 +68,19 @@ export class OnboardingController {
 
       send('progress', { step: 'Merging into profile...' });
 
-      const section = result.type === 'project' ? 'projects'
-        : result.type === 'experience' ? 'experience'
-        : result.type === 'education' ? 'education'
-        : result.type === 'certification' ? 'certifications'
-        : result.type === 'award' ? 'awards_and_honors'
-        : 'skills';
-
-      const updatedProfile = await this.profileService.mergeSection(
+      // mergeSections reads the profile once, applies every extracted entry
+      // to an in-memory copy, and writes once — so the whole batch merges
+      // atomically. Either all entries land, or (on failure) none do; no
+      // partial-commit that a client retry could then duplicate.
+      const updatedProfile = await this.profileService.mergeSections(
         req.user.id,
-        section as keyof MasterDB,
-        result.entry,
+        result.entries.map((entry) => ({
+          section: SECTION_BY_TYPE[entry.type],
+          entry: entry.entry,
+        })),
       );
 
-      send('done', { profile: updatedProfile, parsed: result });
+      send('done', { profile: updatedProfile, parsed: result.entries });
       res.end();
     } catch (err) {
       send('error', { message: (err as Error).message });

@@ -1,5 +1,6 @@
 import {
   CreateJobSchema,
+  IngestResultSchema,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
   UpdateResumeSelectionSchema,
@@ -148,5 +149,65 @@ describe('UpdateGapReportSchema', () => {
 
   it('rejects a match_score outside the 0-100 range', () => {
     expect(() => UpdateGapReportSchema.parse({ ...validGapReport, match_score: -5 })).toThrow();
+  });
+});
+
+describe('IngestResultSchema', () => {
+  const validMultiEntryPayload = {
+    entries: [
+      {
+        type: 'experience',
+        entry: {
+          company: 'Acme Corp',
+          company_industry: 'Software',
+          role: 'Backend Engineer',
+          location: 'Remote',
+          location_type: 'Remote',
+          startDate: 'Jan 2023',
+          endDate: 'Present',
+          isCurrent: true,
+          core_competencies: ['Backend'],
+          technologies_used: ['Node.js'],
+          raw_achievements: ['Built the payments service.'],
+          quantifiable_metrics: [],
+        },
+      },
+      {
+        type: 'certification',
+        entry: {
+          name: 'AWS Certified Developer',
+          issuer: 'AWS',
+          date: '2023',
+          expiration_date: '',
+          credential_id: '',
+          link: '',
+          description: 'AWS Developer Associate.',
+        },
+      },
+    ],
+  };
+
+  it('accepts a valid multi-entry payload (experience + certification)', () => {
+    expect(() => IngestResultSchema.parse(validMultiEntryPayload)).not.toThrow();
+  });
+
+  it('rejects an entry with a discriminant not in the allowed type union', () => {
+    expect(() =>
+      IngestResultSchema.parse({
+        entries: [{ type: 'not_a_real_type', entry: {} }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an entry whose sub-entry is missing required fields for its type', () => {
+    expect(() =>
+      IngestResultSchema.parse({
+        entries: [{ type: 'experience', entry: { company: 'Acme Corp' } }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an empty entries array', () => {
+    expect(() => IngestResultSchema.parse({ entries: [] })).toThrow();
   });
 });

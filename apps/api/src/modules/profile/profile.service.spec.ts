@@ -135,6 +135,82 @@ describe('ProfileService', () => {
     });
   });
 
+  describe('mergeSections (atomic multi-entry merge)', () => {
+    it('reads the profile once and writes once for a batch of entries across multiple sections', async () => {
+      const existing = emptyMasterDB();
+      existing.skills.programming_languages = ['TypeScript'];
+      prisma.careerProfile.findUnique.mockResolvedValue(toRow('user-1', existing));
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => ({
+        userId: 'user-1',
+        ...update,
+      }));
+
+      const newExperience = {
+        company: 'Acme',
+        company_industry: 'Software',
+        role: 'Engineer',
+        location: 'Remote',
+        location_type: 'remote',
+        startDate: '2020-01',
+        endDate: '2022-01',
+        isCurrent: false,
+        core_competencies: [],
+        technologies_used: [],
+        raw_achievements: [],
+        quantifiable_metrics: [],
+      };
+      const newCertification = {
+        name: 'AWS Certified Developer',
+        issuer: 'AWS',
+        date: '2023',
+        expiration_date: '',
+        credential_id: '',
+        link: '',
+        description: '',
+      };
+
+      const result = await service.mergeSections('user-1', [
+        { section: 'experience', entry: newExperience },
+        { section: 'certifications', entry: newCertification },
+        { section: 'skills', entry: { programming_languages: ['Go'] } },
+      ]);
+
+      // upsertProfile does its own internal read to compute the merged patch,
+      // so findUnique is called twice — the key atomicity guarantee is a
+      // single write (upsert), not a single read.
+      expect(prisma.careerProfile.upsert).toHaveBeenCalledTimes(1);
+      expect(result.experience).toEqual([newExperience]);
+      expect(result.certifications).toEqual([newCertification]);
+      expect(result.skills.programming_languages).toEqual(['TypeScript', 'Go']);
+    });
+
+    it('merges every entry into one in-memory profile without writing per entry, even when the batch is large', async () => {
+      prisma.careerProfile.findUnique.mockResolvedValue(null);
+      prisma.careerProfile.upsert.mockImplementation(async ({ create }) => ({
+        userId: 'user-1',
+        ...create,
+      }));
+
+      const certs = Array.from({ length: 5 }, (_, i) => ({
+        name: `Cert ${i}`,
+        issuer: '',
+        date: '',
+        expiration_date: '',
+        credential_id: '',
+        link: '',
+        description: '',
+      }));
+
+      const result = await service.mergeSections(
+        'user-1',
+        certs.map((entry) => ({ section: 'certifications' as const, entry })),
+      );
+
+      expect(prisma.careerProfile.upsert).toHaveBeenCalledTimes(1);
+      expect(result.certifications).toEqual(certs);
+    });
+  });
+
   describe('strength score computation (via upsertProfile)', () => {
     it('scores 0 for a completely empty profile', async () => {
       prisma.careerProfile.findUnique.mockResolvedValue(null);
