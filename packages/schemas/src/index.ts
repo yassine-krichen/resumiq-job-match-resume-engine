@@ -72,17 +72,21 @@ export const CertificationSchema = z.object({
   name: z.string(),
   issuer: z.string(),
   date: z.string(),
-  expiration_date: z.string(),
-  credential_id: z.string(),
-  link: z.string(),
-  description: z.string(),
+  // These are frequently absent from casual raw-text extraction (the user
+  // rarely states an expiration date, credential ID, or verification link)
+  // — default to '' rather than require the LLM to fabricate or omit them,
+  // which would otherwise fail validation and silently drop the whole entry.
+  expiration_date: z.string().default(''),
+  credential_id: z.string().default(''),
+  link: z.string().default(''),
+  description: z.string().default(''),
 });
 
 export const AwardSchema = z.object({
   title: z.string(),
   issuer: z.string(),
   date: z.string(),
-  description: z.string(),
+  description: z.string().default(''),
   related_skills: z.array(z.string()).optional(),
 });
 
