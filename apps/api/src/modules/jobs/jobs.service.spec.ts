@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { analyzeJob, checkCompatibility } from '@resumiq/ai-bridge';
+import { checkCompatibility } from '@resumiq/ai-bridge';
 import type { JobDNA, MasterDB } from '@resumiq/ai-bridge';
 import { scanTrackedCompanies } from '@resumiq/job-scanner';
 import type { ScrapedJobInput } from '@resumiq/job-scanner';
@@ -8,9 +8,9 @@ import type { DiscoverFeedFiltersDto } from '@resumiq/schemas';
 import { JobsService } from './jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProfileService } from '../profile/profile.service';
-import { buildJobDedupeKey } from '../../common/jobs/dedupe-key';
 import { HunterClient } from './enrichment/hunter.client';
 import { PeopleDataLabsClient } from './enrichment/people-data-labs.client';
+import { ingestScrapedJobs } from './ingest-scraped-jobs';
 
 jest.mock('@resumiq/ai-bridge', () => ({
   analyzeJob: jest.fn(),
@@ -21,9 +21,13 @@ jest.mock('@resumiq/job-scanner', () => ({
   scanTrackedCompanies: jest.fn(),
 }));
 
-const analyzeJobMock = analyzeJob as jest.Mock;
+jest.mock('./ingest-scraped-jobs', () => ({
+  ingestScrapedJobs: jest.fn(),
+}));
+
 const checkCompatibilityMock = checkCompatibility as jest.Mock;
 const scanTrackedCompaniesMock = scanTrackedCompanies as jest.Mock;
+const ingestScrapedJobsMock = ingestScrapedJobs as jest.Mock;
 
 const USER_ID = 'user-1';
 
@@ -77,17 +81,6 @@ function discoverFiltersFixture(overrides: Partial<DiscoverFeedFiltersDto> = {})
   };
 }
 
-/** Creates a promise + external resolve/reject, for asserting concurrency behavior. */
-function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void; reject: (e: unknown) => void } {
-  let resolve!: (v: T) => void;
-  let reject!: (e: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 describe('JobsService', () => {
   let prisma: {
     job: {
@@ -136,208 +129,24 @@ describe('JobsService', () => {
   });
 
   describe('ingestFromScanner', () => {
-    it('skips a scraped job whose dedupeKey already exists in the DB, never creating a duplicate', async () => {
-      const scraped = scrapedJobFixture();
-      scanTrackedCompaniesMock.mockResolvedValue([scraped]);
-      prisma.job.findUnique.mockResolvedValue({ id: 'existing-job' });
+    // The dedupe/create/analyze/enrichment matrix now lives in
+    // ingest-scraped-jobs.spec.ts, against ingestScrapedJobs() directly —
+    // this method is just a thin scan-then-delegate wrapper, so only the
+    // delegation itself is asserted here.
+    it('scans via scanTrackedCompanies and delegates to ingestScrapedJobs with the service deps', async () => {
+      const scraped = [scrapedJobFixture()];
+      scanTrackedCompaniesMock.mockResolvedValue(scraped);
+      ingestScrapedJobsMock.mockResolvedValue({ scanned: 1, created: 1 });
 
       const result = await service.ingestFromScanner();
 
-      const expectedKey = buildJobDedupeKey(scraped.company, scraped.title, scraped.location);
-      expect(prisma.job.findUnique).toHaveBeenCalledWith({
-        where: { dedupeKey: expectedKey },
-        select: { id: true },
-      });
-      expect(prisma.job.create).not.toHaveBeenCalled();
-      expect(analyzeJobMock).not.toHaveBeenCalled();
-      expect(result).toEqual({ scanned: 1, created: 0 });
-    });
-
-    it('creates a new Job row for genuinely new scraped input and flags remote from the location text', async () => {
-      const scraped = scrapedJobFixture({ location: 'Remote - Worldwide' });
-      scanTrackedCompaniesMock.mockResolvedValue([scraped]);
-      prisma.job.findUnique.mockResolvedValue(null);
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
-      analyzeJobMock.mockResolvedValue(jobDNAFixture());
-      hunterClient.findContact.mockResolvedValue(null);
-      pdlClient.findCompanyProfile.mockResolvedValue(null);
-
-      const result = await service.ingestFromScanner();
-
-      expect(prisma.job.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          source: 'scraper',
-          sourceUrl: scraped.url,
-          title: scraped.title,
-          companyName: scraped.company,
-          rawJd: scraped.description,
-          location: scraped.location,
-          remote: true,
-        }),
+      expect(ingestScrapedJobsMock).toHaveBeenCalledWith(scraped, {
+        prisma,
+        hunterClient,
+        pdlClient,
+        logger: expect.anything(),
       });
       expect(result).toEqual({ scanned: 1, created: 1 });
-    });
-
-    it('does not flag a non-remote location as remote', async () => {
-      scanTrackedCompaniesMock.mockResolvedValue([scrapedJobFixture({ location: 'Berlin, Germany' })]);
-      prisma.job.findUnique.mockResolvedValue(null);
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
-      analyzeJobMock.mockResolvedValue(jobDNAFixture());
-      hunterClient.findContact.mockResolvedValue(null);
-      pdlClient.findCompanyProfile.mockResolvedValue(null);
-
-      await service.ingestFromScanner();
-
-      expect(prisma.job.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ remote: false }),
-      });
-    });
-
-    it('analyzes each new job JD and persists the resulting parsedJd', async () => {
-      const scraped = scrapedJobFixture();
-      scanTrackedCompaniesMock.mockResolvedValue([scraped]);
-      prisma.job.findUnique.mockResolvedValue(null);
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
-      const dna = jobDNAFixture();
-      analyzeJobMock.mockResolvedValue(dna);
-      hunterClient.findContact.mockResolvedValue(null);
-      pdlClient.findCompanyProfile.mockResolvedValue(null);
-
-      await service.ingestFromScanner();
-
-      expect(analyzeJobMock).toHaveBeenCalledWith(scraped.description, '');
-      expect(prisma.job.update).toHaveBeenCalledWith({
-        where: { id: 'job-1' },
-        data: { parsedJd: dna },
-      });
-    });
-
-    it('skips analysis (parsedJd stays null) for a scraped job with no description', async () => {
-      scanTrackedCompaniesMock.mockResolvedValue([scrapedJobFixture({ description: undefined })]);
-      prisma.job.findUnique.mockResolvedValue(null);
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
-      hunterClient.findContact.mockResolvedValue(null);
-      pdlClient.findCompanyProfile.mockResolvedValue(null);
-
-      await service.ingestFromScanner();
-
-      expect(analyzeJobMock).not.toHaveBeenCalled();
-      expect(prisma.job.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ parsedJd: expect.anything() }) }),
-      );
-    });
-
-    it('continues ingesting remaining jobs when analyzeJob throws for one of them', async () => {
-      const failing = scrapedJobFixture({ company: 'Failing Co', url: 'https://example.com/1' });
-      const succeeding = scrapedJobFixture({ company: 'Succeeding Co', url: 'https://example.com/2' });
-      scanTrackedCompaniesMock.mockResolvedValue([failing, succeeding]);
-      prisma.job.findUnique.mockResolvedValue(null);
-      prisma.job.create.mockResolvedValueOnce({ id: 'job-fail' }).mockResolvedValueOnce({ id: 'job-ok' });
-      analyzeJobMock.mockRejectedValueOnce(new Error('LLM timeout')).mockResolvedValueOnce(jobDNAFixture());
-      hunterClient.findContact.mockResolvedValue(null);
-      pdlClient.findCompanyProfile.mockResolvedValue(null);
-
-      const result = await service.ingestFromScanner();
-
-      // Both jobs were still created — the analyze failure is swallowed, not propagated.
-      expect(result).toEqual({ scanned: 2, created: 2 });
-      expect(prisma.job.update).toHaveBeenCalledTimes(1);
-      expect(prisma.job.update).toHaveBeenCalledWith({ where: { id: 'job-ok' }, data: { parsedJd: jobDNAFixture() } });
-    });
-
-    it('runs analyzeJob calls with bounded concurrency (never more than ANALYZE_CONCURRENCY in flight)', async () => {
-      const scrapedJobs = Array.from({ length: 6 }, (_, i) =>
-        scrapedJobFixture({ company: `Co ${i}`, url: `https://example.com/${i}` }),
-      );
-      scanTrackedCompaniesMock.mockResolvedValue(scrapedJobs);
-      prisma.job.findUnique.mockResolvedValue(null);
-      let createCount = 0;
-      prisma.job.create.mockImplementation(async () => ({ id: `job-${createCount++}` }));
-      hunterClient.findContact.mockResolvedValue(null);
-      pdlClient.findCompanyProfile.mockResolvedValue(null);
-
-      let inFlight = 0;
-      let maxInFlight = 0;
-      const gates = scrapedJobs.map(() => deferred<void>());
-      let callIndex = 0;
-      analyzeJobMock.mockImplementation(async () => {
-        const gate = gates[callIndex++];
-        inFlight++;
-        maxInFlight = Math.max(maxInFlight, inFlight);
-        await gate.promise;
-        inFlight--;
-        return jobDNAFixture();
-      });
-
-      const ingestPromise = service.ingestFromScanner();
-
-      // Poll (rather than counting fixed ticks) until the 3 concurrent workers
-      // have each picked up a job and are blocked on their gate — avoids
-      // coupling the test to how many microtask ticks the dedup/create loop takes.
-      for (let i = 0; i < 200 && callIndex < 3; i++) {
-        await Promise.resolve();
-      }
-
-      expect(callIndex).toBe(3); // exactly 3 in flight — the 4th worker slot never opened
-      expect(inFlight).toBe(3);
-      expect(maxInFlight).toBe(3);
-
-      gates.forEach((g) => g.resolve());
-      await ingestPromise;
-
-      expect(maxInFlight).toBe(3);
-    });
-
-    it('does not block ingestion when both enrichment providers throw — job is still created with companyInfo left untouched', async () => {
-      const scraped = scrapedJobFixture();
-      scanTrackedCompaniesMock.mockResolvedValue([scraped]);
-      prisma.job.findUnique.mockResolvedValue(null);
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
-      analyzeJobMock.mockResolvedValue(jobDNAFixture());
-      hunterClient.findContact.mockRejectedValue(new Error('Hunter.io down'));
-      pdlClient.findCompanyProfile.mockRejectedValue(new Error('PDL down'));
-
-      const result = await expect(service.ingestFromScanner()).resolves.toEqual({ scanned: 1, created: 1 });
-
-      // Only the analyzeJob update happened — no companyInfo update was attempted or persisted.
-      expect(prisma.job.update).toHaveBeenCalledTimes(1);
-      expect(prisma.job.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ companyInfo: expect.anything() }) }),
-      );
-    });
-
-    it('persists companyInfo when enrichment succeeds for either provider', async () => {
-      const scraped = scrapedJobFixture();
-      scanTrackedCompaniesMock.mockResolvedValue([scraped]);
-      prisma.job.findUnique.mockResolvedValue(null);
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
-      analyzeJobMock.mockResolvedValue(jobDNAFixture());
-      const contact = { email: 'hire@acme.com', confidence: 90 };
-      hunterClient.findContact.mockResolvedValue(contact);
-      pdlClient.findCompanyProfile.mockResolvedValue(null);
-
-      await service.ingestFromScanner();
-
-      expect(prisma.job.update).toHaveBeenCalledWith({
-        where: { id: 'job-1' },
-        data: { companyInfo: { profile: null, contact } },
-      });
-    });
-
-    it('never persists companyInfo when both enrichment providers return null', async () => {
-      const scraped = scrapedJobFixture();
-      scanTrackedCompaniesMock.mockResolvedValue([scraped]);
-      prisma.job.findUnique.mockResolvedValue(null);
-      prisma.job.create.mockResolvedValue({ id: 'job-1' });
-      analyzeJobMock.mockResolvedValue(jobDNAFixture());
-      hunterClient.findContact.mockResolvedValue(null);
-      pdlClient.findCompanyProfile.mockResolvedValue(null);
-
-      await service.ingestFromScanner();
-
-      expect(prisma.job.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ companyInfo: expect.anything() }) }),
-      );
     });
   });
 

@@ -2,25 +2,19 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Job, Prisma } from '@prisma/client';
-import { analyzeJob, checkCompatibility } from '@resumiq/ai-bridge';
+import { checkCompatibility } from '@resumiq/ai-bridge';
 import type { JobDNA } from '@resumiq/ai-bridge';
 import { scanTrackedCompanies } from '@resumiq/job-scanner';
-import type { ScrapedJobInput } from '@resumiq/job-scanner';
 import { UpdateUserSettingsSchema, UserSettingsSchema } from '@resumiq/schemas';
 import type { DiscoverFeedFiltersDto, UpdateUserSettingsDto, UserSettingsDto } from '@resumiq/schemas';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProfileService } from '../profile/profile.service';
-import { buildJobDedupeKey } from '../../common/jobs/dedupe-key';
 import { RESUME_GEN_QUEUE } from '../queue/queue.module';
 import { HunterClient } from './enrichment/hunter.client';
 import { PeopleDataLabsClient } from './enrichment/people-data-labs.client';
+import { ingestScrapedJobs } from './ingest-scraped-jobs';
 
 type Json = Prisma.InputJsonValue;
-
-/** Batch size for analyzeJob() calls during ingestion — not fully sequential
- * (too slow for ~90-source scans) nor fully parallel (would hammer the LLM
- * provider and any per-provider rate limits all at once). */
-const ANALYZE_CONCURRENCY = 3;
 
 /** How many newest un-fresh jobs get a match-preview computed per refresh
  * call — keeps a single refresh bounded regardless of how large `jobs` gets. */
@@ -55,59 +49,12 @@ export class JobsService {
    */
   async ingestFromScanner(): Promise<{ scanned: number; created: number }> {
     const scraped = await scanTrackedCompanies();
-
-    const newJobs: Array<{ id: string; input: ScrapedJobInput }> = [];
-    for (const input of scraped) {
-      const dedupeKey = buildJobDedupeKey(input.company, input.title, input.location);
-      const existing = await this.prisma.job.findUnique({ where: { dedupeKey }, select: { id: true } });
-      if (existing) continue;
-
-      const job = await this.prisma.job.create({
-        data: {
-          dedupeKey,
-          source: 'scraper',
-          sourceUrl: input.url,
-          title: input.title,
-          companyName: input.company,
-          rawJd: input.description ?? '',
-          location: input.location,
-          remote: /remote/i.test(input.location ?? ''),
-        },
-      });
-      newJobs.push({ id: job.id, input });
-    }
-
-    await this.runWithConcurrencyLimit(newJobs, ANALYZE_CONCURRENCY, async ({ id, input }) => {
-      if (!input.description) return; // nothing to analyze — parsedJd stays null
-      try {
-        const jobDNA = await analyzeJob(input.description, '');
-        await this.prisma.job.update({ where: { id }, data: { parsedJd: jobDNA as unknown as Json } });
-      } catch (err) {
-        this.logger.warn(`analyzeJob failed for job ${id} (${input.company}): ${errorMessage(err)}`);
-      }
+    return ingestScrapedJobs(scraped, {
+      prisma: this.prisma,
+      hunterClient: this.hunterClient,
+      pdlClient: this.pdlClient,
+      logger: this.logger,
     });
-
-    // Enrichment is additive — a failure here must never fail ingestion, and
-    // never blocks on a slow/unset provider (each client already no-ops
-    // gracefully when its API key is unset).
-    for (const { id, input } of newJobs) {
-      try {
-        const [companyProfile, contact] = await Promise.all([
-          this.pdlClient.findCompanyProfile(input.company),
-          this.hunterClient.findContact(input.company),
-        ]);
-        if (companyProfile || contact) {
-          await this.prisma.job.update({
-            where: { id },
-            data: { companyInfo: { profile: companyProfile, contact } as unknown as Json },
-          });
-        }
-      } catch (err) {
-        this.logger.warn(`enrichment failed for job ${id} (${input.company}): ${errorMessage(err)}`);
-      }
-    }
-
-    return { scanned: scraped.length, created: newJobs.length };
   }
 
   /**
@@ -252,22 +199,6 @@ export class JobsService {
       data: { settings: merged as unknown as Json },
     });
     return merged;
-  }
-
-  /** Runs `fn` over `items` with at most `limit` in flight at once. */
-  private async runWithConcurrencyLimit<T>(
-    items: T[],
-    limit: number,
-    fn: (item: T) => Promise<void>,
-  ): Promise<void> {
-    let cursor = 0;
-    const worker = async (): Promise<void> => {
-      while (cursor < items.length) {
-        const item = items[cursor++];
-        await fn(item);
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
   }
 }
 

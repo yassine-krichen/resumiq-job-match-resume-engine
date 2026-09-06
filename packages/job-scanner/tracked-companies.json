@@ -20,25 +20,21 @@
   {
     "name": "RemoteOK",
     "provider": "remoteok",
-    "enabled": false,
-    "_disabled_reason": "Provider returns no description field (confirmed by reading vendor/career-ops/providers/remoteok.mjs) — analyzeJob() silently skips jobs with no description, so parsedJd never gets set, so they can never get a match-preview score, so they never reach /discover. Re-enable once a per-job detail-fetch fallback (JSON-LD/Playwright, per ROADMAP_v2.md's Generic-Site Fallback Strategy) is wired up for description-less providers."
+    "enabled": true
   },
   {
     "name": "Himalayas",
     "provider": "himalayas",
-    "enabled": false,
-    "_disabled_reason": "Same as RemoteOK — no description field in this provider's output. See remoteok entry above."
+    "enabled": true
   },
   {
     "name": "Remotive",
     "provider": "remotive",
-    "enabled": false,
-    "_disabled_reason": "Same as RemoteOK — no description field in this provider's output. See remoteok entry above."
+    "enabled": true
   },
   {
     "name": "We Work Remotely",
     "provider": "weworkremotely",
-    "enabled": false,
-    "_disabled_reason": "Same as RemoteOK — no description field in this provider's output. See remoteok entry above."
+    "enabled": true
   }
 ]

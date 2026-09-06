@@ -17,6 +17,10 @@
     },
     "test": {
       "outputs": []
+    },
+    "scan:jobs": {
+      "cache": false,
+      "dependsOn": ["^build"]
     }
   }
 }

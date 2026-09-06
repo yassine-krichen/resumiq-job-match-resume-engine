@@ -87,3 +87,8 @@ tasks:
     desc: Run the monorepo's test suite(s) via turbo
     cmds:
       - npx turbo run test
+
+  scan-jobs:
+    desc: Run a one-off job scan + ingest against the DB (needs DATABASE_URL from apps/api/.env only — no Redis/queue/worker required)
+    cmds:
+      - npx turbo run scan:jobs --filter=./apps/api

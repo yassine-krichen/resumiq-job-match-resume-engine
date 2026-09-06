@@ -13,7 +13,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "scan:jobs": "ts-node --transpile-only scripts/scan-and-ingest.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

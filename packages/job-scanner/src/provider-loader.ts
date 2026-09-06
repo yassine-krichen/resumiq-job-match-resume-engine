@@ -65,3 +65,15 @@ export async function makeProviderHttpContext(): Promise<CareerOpsHttpContext> {
   };
   return httpModule.makeHttpCtx();
 }
+
+/**
+ * Loads career-ops's shared HTML → plain-text stripper (used to normalize
+ * description-less providers' detail-page JSON-LD, see detail-fetch.ts) —
+ * same dynamic-import bridge as the other loaders in this file, so callers
+ * don't grow their own copy of the entity-decoding/tag-stripping logic.
+ */
+export async function loadHtmlToText(): Promise<(content: unknown) => string> {
+  const moduleUrl = pathToFileURL(path.join(PROVIDERS_DIR, '_html-to-text.mjs')).href;
+  const mod = (await dynamicImport(moduleUrl)) as { htmlToText: (content: unknown) => string };
+  return mod.htmlToText;
+}
