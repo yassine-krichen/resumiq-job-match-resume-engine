@@ -103,4 +103,85 @@ describe('OnboardingReviewPage', () => {
     await waitFor(() => expect(screen.getByText('Review your profile')).toBeInTheDocument());
     expect(screen.queryByText('Certifications')).not.toBeInTheDocument();
   });
+
+  it('renders raw_achievements bullets as the primary content for a project entry, not the technologies_used dump', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      buildProfile({
+        projects: [
+          {
+            name: 'QueueViz',
+            context: 'Side project',
+            links: [],
+            startDate: 'Jan 2024',
+            endDate: 'Present',
+            technologies_used: ['Next.js', 'WebSockets'],
+            raw_achievements: ['Built an open-source real-time BullMQ dashboard with 400+ GitHub stars.'],
+            quantifiable_metrics: [],
+          },
+        ],
+      }),
+    );
+
+    render(<OnboardingReviewPage />);
+
+    const achievement = await screen.findByText(
+      'Built an open-source real-time BullMQ dashboard with 400+ GitHub stars.',
+    );
+    expect(achievement.tagName).toBe('LI');
+
+    const technologies = screen.getByText('Next.js, WebSockets');
+    expect(technologies.tagName).not.toBe('LI');
+  });
+
+  it('renders an Awards section when profile.awards_and_honors is non-empty', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      buildProfile({
+        awards_and_honors: [
+          { title: 'Employee of the Year', issuer: 'Acme Corp', date: '2023', description: '' },
+        ],
+      }),
+    );
+
+    render(<OnboardingReviewPage />);
+
+    expect(await screen.findByText('Awards')).toBeInTheDocument();
+    expect(screen.getByText('Employee of the Year')).toBeInTheDocument();
+  });
+
+  it('does not render an Awards section when profile.awards_and_honors is empty', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(buildProfile({ awards_and_honors: [] }));
+
+    render(<OnboardingReviewPage />);
+
+    await waitFor(() => expect(screen.getByText('Review your profile')).toBeInTheDocument());
+    expect(screen.queryByText('Awards')).not.toBeInTheDocument();
+  });
+
+  it('renders only the technologies_used tag line, with no bullet list, when raw_achievements is empty', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      buildProfile({
+        experience: [
+          {
+            company: 'Acme Corp',
+            company_industry: 'Software',
+            role: 'Backend Engineer',
+            location: 'Remote',
+            location_type: 'Remote',
+            startDate: 'Jan 2023',
+            endDate: 'Present',
+            isCurrent: true,
+            core_competencies: [],
+            technologies_used: ['Python'],
+            raw_achievements: [],
+            quantifiable_metrics: [],
+          },
+        ],
+      }),
+    );
+
+    render(<OnboardingReviewPage />);
+
+    await screen.findByText('Python');
+    expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
+  });
 });
