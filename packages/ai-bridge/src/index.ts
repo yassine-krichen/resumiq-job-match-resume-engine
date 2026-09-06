@@ -10,5 +10,6 @@ export {
   generateInterviewIntakeQuestions,
   generateTechnicalInterviewPrep,
   generateBehavioralInterviewPrep,
+  parseJobIntake,
 } from './agents';
 export { render } from './renderer';

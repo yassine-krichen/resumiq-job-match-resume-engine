@@ -13,6 +13,7 @@ import {
   generateEmail,
   generateInterviewIntakeQuestions,
   generateTechnicalInterviewPrep,
+  parseJobIntake,
   selectAndDraft,
 } from '@resumiq/ai-bridge';
 import type { AISelection, JobDNA, MasterDB } from '@resumiq/ai-bridge';
@@ -28,6 +29,7 @@ jest.mock('@resumiq/ai-bridge', () => ({
   generateInterviewIntakeQuestions: jest.fn(),
   generateTechnicalInterviewPrep: jest.fn(),
   generateBehavioralInterviewPrep: jest.fn(),
+  parseJobIntake: jest.fn(),
 }));
 
 const analyzeJobMock = analyzeJob as jest.Mock;
@@ -38,6 +40,7 @@ const generateEmailMock = generateEmail as jest.Mock;
 const generateInterviewIntakeQuestionsMock = generateInterviewIntakeQuestions as jest.Mock;
 const generateTechnicalInterviewPrepMock = generateTechnicalInterviewPrep as jest.Mock;
 const generateBehavioralInterviewPrepMock = generateBehavioralInterviewPrep as jest.Mock;
+const parseJobIntakeMock = parseJobIntake as jest.Mock;
 
 const OTHER_USER = 'user-attacker';
 const OWNER = 'user-owner';
@@ -136,6 +139,41 @@ describe('ApplicationsService', () => {
       storage as unknown as LocalStorageService,
     );
     onProgress = jest.fn();
+  });
+
+  describe('extractJobIntake', () => {
+    it('returns the parsed JobIntakeResult unchanged when the LLM output passes schema validation', async () => {
+      const intake = {
+        title: 'Backend Engineer',
+        company_name: 'Acme Corp',
+        location: 'Remote (US)',
+        remote: true,
+        salary_range: '$140k - $170k',
+        company_info_summary: 'A fintech infra company that values ownership.',
+      };
+      parseJobIntakeMock.mockResolvedValue(intake);
+
+      const result = await service.extractJobIntake('some pasted job posting text');
+
+      expect(parseJobIntakeMock).toHaveBeenCalledWith('some pasted job posting text');
+      expect(result).toEqual(intake);
+    });
+
+    it('throws BadRequestException and never persists when the LLM returns malformed intake data', async () => {
+      // remote as a string instead of boolean|null fails JobIntakeResultSchema.safeParse.
+      parseJobIntakeMock.mockResolvedValue({
+        title: null,
+        company_name: null,
+        location: null,
+        remote: 'yes',
+        salary_range: null,
+        company_info_summary: null,
+      });
+
+      await expect(service.extractJobIntake('some pasted job posting text')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
   });
 
   describe('analyzeAndDraft', () => {

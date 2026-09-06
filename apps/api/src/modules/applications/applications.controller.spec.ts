@@ -65,6 +65,7 @@ function parseSSEFrames(writes: string[]): Array<{ event: string; data: unknown 
 
 describe('ApplicationsController', () => {
   let applicationsService: {
+    extractJobIntake: jest.Mock;
     analyzeAndDraft: jest.Mock;
     updateResumeSelection: jest.Mock;
     updateGapReport: jest.Mock;
@@ -88,6 +89,7 @@ describe('ApplicationsController', () => {
 
   beforeEach(() => {
     applicationsService = {
+      extractJobIntake: jest.fn(),
       analyzeAndDraft: jest.fn(),
       updateResumeSelection: jest.fn(),
       updateGapReport: jest.fn(),
@@ -114,6 +116,26 @@ describe('ApplicationsController', () => {
   it('is guarded by AuthGuard on every route (class-level @UseGuards)', () => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, ApplicationsController);
     expect(guards).toContain(AuthGuard);
+  });
+
+  describe('extractIntake', () => {
+    it('delegates to applicationsService.extractJobIntake with the raw_text body and returns its result', async () => {
+      const result = {
+        title: 'Backend Engineer',
+        company_name: 'Acme Corp',
+        location: null,
+        remote: null,
+        salary_range: null,
+        company_info_summary: null,
+      };
+      applicationsService.extractJobIntake.mockResolvedValue(result);
+      const body = { raw_text: 'x'.repeat(60) } as never;
+
+      const response = await controller.extractIntake(body);
+
+      expect(applicationsService.extractJobIntake).toHaveBeenCalledWith('x'.repeat(60));
+      expect(response).toEqual(result);
+    });
   });
 
   describe('analyzeStream (SSE)', () => {

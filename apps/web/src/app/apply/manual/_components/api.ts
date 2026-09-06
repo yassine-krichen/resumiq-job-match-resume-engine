@@ -5,12 +5,20 @@ import type {
   EmailDraft,
   GapReport,
   InterviewPrepState,
+  JobIntakeResult,
   RenderPreviewResult,
   ResumeSelection,
 } from './types';
 
 export function getApplication(applicationId: string): Promise<ApplicationRecord> {
   return apiFetch<ApplicationRecord>(`/applications/${applicationId}`);
+}
+
+export function extractJobIntake(rawText: string): Promise<JobIntakeResult> {
+  return apiFetch<JobIntakeResult>('/applications/extract-intake', {
+    method: 'POST',
+    body: JSON.stringify({ raw_text: rawText }),
+  });
 }
 
 export function saveResumeSelection(

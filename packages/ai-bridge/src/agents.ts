@@ -8,6 +8,7 @@ import type {
   InterviewIntakeQuestions,
   InterviewPrepIntakeAnswers,
   JobDNA,
+  JobIntake,
   MasterDB,
   TechnicalInterviewPrep,
 } from './types';
@@ -117,6 +118,41 @@ Return JSON matching this exact schema (no extra fields):
   "company_culture_and_values": ["string"],
   "primary_responsibilities_summary": "string — 2 sentences max",
   "tone_recommendation": "string — e.g. impact-driven and metric-focused"
+}`;
+}
+
+// ── Job Intake Extractor ─────────────────────────────────────────────────────
+// Named `parseJobIntake`, not `extractJobIntake` — that name is reserved for
+// the NestJS service method that calls it, per this codebase's
+// `analyzeJob`(ai-bridge)/`analyzeAndDraft`(service) naming split.
+
+const JOB_INTAKE_SYSTEM = `\
+You are a meticulous data-entry assistant extracting job-posting metadata from a raw paste.
+
+Rules:
+- Return null (never fabricate or guess) for any field not clearly and explicitly stated in the text.
+- If the pasted text contains multiple distinct job postings, extract metadata for only the first/most prominent one.
+- company_info_summary: a 2-4 sentence distillation of company values/culture/mission signal if present in the paste, else null.
+  This is separate from a full job-description skill analysis — it only captures qualitative company signal from the raw paste.
+
+Return ONLY valid JSON matching the exact schema given. No markdown wrapping. No explanation outside the JSON.`;
+
+function jobIntakeUser(pastedText: string): string {
+  return `\
+Extract job-posting metadata from this pasted text.
+
+<pasted_text>
+${pastedText}
+</pasted_text>
+
+Return JSON matching this exact schema (no extra fields):
+{
+  "title": "string or null",
+  "company_name": "string or null",
+  "location": "string or null",
+  "remote": "boolean or null",
+  "salary_range": "string or null",
+  "company_info_summary": "string or null — 2-4 sentences of company values/culture/mission signal, else null"
 }`;
 }
 
@@ -555,6 +591,10 @@ export async function checkCompatibility(
 
 export async function analyzeJob(jd: string, companyInfo: string): Promise<JobDNA> {
   return generateJSON<JobDNA>(AGENT1_SYSTEM, agent1User(jd, companyInfo));
+}
+
+export async function parseJobIntake(pastedText: string): Promise<JobIntake> {
+  return generateJSON<JobIntake>(JOB_INTAKE_SYSTEM, jobIntakeUser(pastedText));
 }
 
 export async function selectAndDraft(

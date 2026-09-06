@@ -1,6 +1,8 @@
 import {
   CreateJobSchema,
+  ExtractJobIntakeSchema,
   IngestResultSchema,
+  JobIntakeResultSchema,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
   UpdateResumeSelectionSchema,
@@ -49,6 +51,62 @@ describe('CreateJobSchema', () => {
 
     expect(result.title).toBe('Backend Engineer');
     expect(result.remote).toBe(true);
+  });
+});
+
+describe('ExtractJobIntakeSchema', () => {
+  it('rejects a raw_text shorter than 50 characters', () => {
+    expect(() => ExtractJobIntakeSchema.parse({ raw_text: 'too short' })).toThrow();
+  });
+
+  it('accepts a raw_text of at least 50 characters', () => {
+    const raw_text = 'A backend engineering role. '.repeat(3);
+
+    const result = ExtractJobIntakeSchema.parse({ raw_text });
+
+    expect(result.raw_text).toBe(raw_text);
+  });
+});
+
+describe('JobIntakeResultSchema', () => {
+  it('accepts an all-null object', () => {
+    const result = JobIntakeResultSchema.parse({
+      title: null,
+      company_name: null,
+      location: null,
+      remote: null,
+      salary_range: null,
+      company_info_summary: null,
+    });
+
+    expect(result.title).toBeNull();
+  });
+
+  it('accepts a fully populated object', () => {
+    const result = JobIntakeResultSchema.parse({
+      title: 'Backend Engineer',
+      company_name: 'Acme Corp',
+      location: 'Remote (US)',
+      remote: true,
+      salary_range: '$140k - $170k',
+      company_info_summary: 'A fintech infra company that values ownership.',
+    });
+
+    expect(result.company_name).toBe('Acme Corp');
+    expect(result.remote).toBe(true);
+  });
+
+  it('rejects a remote value that is a string instead of boolean or null', () => {
+    expect(() =>
+      JobIntakeResultSchema.parse({
+        title: null,
+        company_name: null,
+        location: null,
+        remote: 'yes',
+        salary_range: null,
+        company_info_summary: null,
+      }),
+    ).toThrow();
   });
 });
 

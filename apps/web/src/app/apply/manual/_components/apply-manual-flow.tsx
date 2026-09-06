@@ -8,10 +8,11 @@ import { useFinalizeApplication } from '@/hooks/use-finalize-application';
 import { getApplication } from './api';
 import { EmailReviewGate } from './email-review-gate';
 import { GapReportView } from './gap-report-view';
-import { JobDescriptionForm } from './job-description-form';
+import { JobIntakeReviewForm } from './job-intake-review-form';
+import { JobPasteForm } from './job-paste-form';
 import { MatchScoreDisplay } from './match-score-display';
 import { ResumeReviewEditor } from './resume-review-editor';
-import type { AnalyzeDoneEvent, ApplicationRecord, JobFormValues } from './types';
+import type { AnalyzeDoneEvent, ApplicationRecord, JobFormValues, JobIntakeResult } from './types';
 
 type Step = 'gap' | 'review' | 'email' | 'ready';
 
@@ -31,6 +32,13 @@ export function ApplyManualFlow(): React.JSX.Element {
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeProgress, setAnalyzeProgress] = useState('');
   const [analyzeError, setAnalyzeError] = useState('');
+
+  // Holds the paste step's result once extraction (or manual fallback) has
+  // run — null result means the user opted to skip extraction and fill in
+  // the review form from scratch.
+  const [intake, setIntake] = useState<{ rawText: string; result: JobIntakeResult | null } | null>(
+    null,
+  );
 
   const {
     finalizing,
@@ -83,8 +91,20 @@ export function ApplyManualFlow(): React.JSX.Element {
   }
 
   if (!applicationId) {
+    if (!intake) {
+      return (
+        <JobPasteForm
+          onExtracted={(rawText, result) => setIntake({ rawText, result })}
+          onManualFallback={(rawText) => setIntake({ rawText, result: null })}
+        />
+      );
+    }
+
     return (
-      <JobDescriptionForm
+      <JobIntakeReviewForm
+        initial={intake.result}
+        rawText={intake.rawText}
+        onBack={() => setIntake(null)}
         onSubmit={handleAnalyzeSubmit}
         loading={analyzing}
         progress={analyzeProgress}

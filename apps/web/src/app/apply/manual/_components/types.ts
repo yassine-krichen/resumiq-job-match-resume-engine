@@ -6,6 +6,7 @@ import type {
   InterviewIntakeQuestionsDto,
   InterviewPrepIntakeAnswersDto,
   InterviewPrepReportDto,
+  JobIntakeResultDto,
 } from '@resumiq/schemas';
 
 // Response/request shapes reuse the same Zod-inferred types the backend
@@ -16,6 +17,8 @@ export type ResumeSelection = UpdateResumeSelectionDto;
 export type GapReport = UpdateGapReportDto;
 export type EmailDraft = UpdateEmailDraftDto;
 export type JobFormValues = CreateJobDto;
+/** Response of POST /api/applications/extract-intake. */
+export type JobIntakeResult = JobIntakeResultDto;
 
 // `SectionTypeSchema` isn't exported from @resumiq/schemas — derive the
 // element type from the field that uses it instead of redeclaring the enum.

@@ -5,39 +5,47 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import type { JobFormValues } from './types';
+import type { JobFormValues, JobIntakeResult } from './types';
 
-const MIN_JD_LENGTH = 50;
-
-interface JobDescriptionFormProps {
+interface JobIntakeReviewFormProps {
+  /** Extracted metadata to pre-fill from, or null when arriving via the
+   * manual-fallback path — every field then starts blank. */
+  initial: JobIntakeResult | null;
+  /** The original untouched paste — shown read-only for reference and sent
+   * as `raw_jd` on submit, unedited. */
+  rawText: string;
+  onBack: () => void;
   onSubmit: (dto: JobFormValues) => void;
   loading: boolean;
   progress: string;
   error: string;
 }
 
-export function JobDescriptionForm({
+export function JobIntakeReviewForm({
+  initial,
+  rawText,
+  onBack,
   onSubmit,
   loading,
   progress,
   error,
-}: JobDescriptionFormProps): React.JSX.Element {
-  const [title, setTitle] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [location, setLocation] = useState('');
-  const [remote, setRemote] = useState(false);
-  const [salaryRange, setSalaryRange] = useState('');
+}: JobIntakeReviewFormProps): React.JSX.Element {
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [companyName, setCompanyName] = useState(initial?.company_name ?? '');
+  const [location, setLocation] = useState(initial?.location ?? '');
+  const [remote, setRemote] = useState(initial?.remote ?? false);
+  const [salaryRange, setSalaryRange] = useState(initial?.salary_range ?? '');
   const [sourceUrl, setSourceUrl] = useState('');
-  const [companyInfo, setCompanyInfo] = useState('');
-  const [rawJd, setRawJd] = useState('');
+  const [companyInfo, setCompanyInfo] = useState(initial?.company_info_summary ?? '');
 
-  const canSubmit = companyName.trim().length > 0 && rawJd.trim().length >= MIN_JD_LENGTH;
+  const canSubmit = companyName.trim().length > 0;
+  const looksUnlikeAJobPosting = initial !== null && !initial.title && !initial.company_name;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit || loading) return;
     onSubmit({
-      raw_jd: rawJd,
+      raw_jd: rawText,
       company_info: companyInfo.trim() || undefined,
       pages: 2,
       source_url: sourceUrl.trim() || undefined,
@@ -52,12 +60,19 @@ export function JobDescriptionForm({
   return (
     <div className="w-full max-w-2xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">Analyze a job description</h1>
+        <h1 className="text-2xl font-bold">Review job details</h1>
         <p className="mt-1 text-zinc-500">
-          Paste the job description. We&apos;ll score your fit against your career profile and
-          either draft a tailored resume or a gap report.
+          Check the extracted details below, fill in anything missing, then confirm to score your
+          fit and draft your resume.
         </p>
       </div>
+
+      {looksUnlikeAJobPosting && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          This doesn&apos;t look like a job posting — double check the pasted text. You can still
+          fill in the fields manually and submit.
+        </div>
+      )}
 
       <form
         onSubmit={handleSubmit}
@@ -147,18 +162,14 @@ export function JobDescriptionForm({
           />
         </div>
 
-        <div>
-          <Label htmlFor="raw-jd">Job description</Label>
-          <Textarea
-            id="raw-jd"
-            value={rawJd}
-            onChange={(e) => setRawJd(e.target.value)}
-            placeholder="Paste the full job description here..."
-            rows={14}
-            className="mt-1 font-mono text-sm"
-            disabled={loading}
-          />
-        </div>
+        <details className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-zinc-700">
+            View original pasted text
+          </summary>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs text-zinc-500">
+            {rawText}
+          </pre>
+        </details>
 
         {loading && (
           <div className="flex items-center gap-2 text-sm text-zinc-500">
@@ -169,7 +180,10 @@ export function JobDescriptionForm({
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <div className="flex justify-end">
+        <div className="flex justify-between">
+          <Button type="button" variant="outline" onClick={onBack} disabled={loading}>
+            Back
+          </Button>
           <Button type="submit" disabled={!canSubmit || loading}>
             Analyze job
           </Button>

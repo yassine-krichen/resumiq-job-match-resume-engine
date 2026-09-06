@@ -19,12 +19,14 @@ import { LocalStorageService } from '../../common/storage/local-storage.service'
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import {
   CreateJobSchema,
+  ExtractJobIntakeSchema,
   InterviewPrepIntakeAnswersSchema,
   ListApplicationsFiltersSchema,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
   UpdateResumeSelectionSchema,
   type CreateJobDto,
+  type ExtractJobIntakeDto,
   type InterviewPrepIntakeAnswersDto,
   type ListApplicationsFiltersDto,
   type UpdateEmailDraftDto,
@@ -72,6 +74,21 @@ export class ApplicationsController {
       send('error', { message: (err as Error).message });
       res.end();
     }
+  }
+
+  /**
+   * POST /api/applications/extract-intake
+   * Stateless best-effort extraction of job-posting metadata from a raw
+   * paste, used to pre-fill the manual job-intake review form before
+   * `analyze/stream` runs. Same throttle as `analyze/stream` — one real
+   * LLM call per request.
+   */
+  @Post('extract-intake')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async extractIntake(
+    @Body(new ZodValidationPipe(ExtractJobIntakeSchema)) body: ExtractJobIntakeDto,
+  ) {
+    return this.applicationsService.extractJobIntake(body.raw_text);
   }
 
   @Patch(':id/resume-selection')

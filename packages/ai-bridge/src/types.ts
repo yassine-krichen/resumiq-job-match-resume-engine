@@ -108,6 +108,22 @@ export interface MasterDB {
   interests: string[];
 }
 
+/** Output of `parseJobIntake` — best-effort metadata extraction from a raw
+ * paste, used to pre-fill the manual job-intake review form. Distinct from
+ * `JobDNA`: this just captures form-fillable fields (and a qualitative
+ * company-signal summary) from the paste, not the skill/ATS analysis
+ * `analyzeJob` performs downstream. Every field is nullable — the LLM is
+ * instructed to return null rather than guess when a field isn't explicitly
+ * stated in the text. */
+export interface JobIntake {
+  title: string | null;
+  company_name: string | null;
+  location: string | null;
+  remote: boolean | null;
+  salary_range: string | null;
+  company_info_summary: string | null;
+}
+
 export interface JobDNA {
   job_title: string;
   seniority: string;

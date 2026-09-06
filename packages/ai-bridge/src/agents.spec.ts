@@ -1,6 +1,13 @@
-import { checkCompatibility, generateEmail } from './agents';
+import { checkCompatibility, generateEmail, parseJobIntake } from './agents';
 import { generateJSON } from './llm';
-import type { AISelection, CompatibilityResult, EmailDraft, JobDNA, MasterDB } from './types';
+import type {
+  AISelection,
+  CompatibilityResult,
+  EmailDraft,
+  JobDNA,
+  JobIntake,
+  MasterDB,
+} from './types';
 
 jest.mock('./llm', () => ({
   generateJSON: jest.fn(),
@@ -151,5 +158,51 @@ describe('generateEmail', () => {
     const [system, user] = generateJSONMock.mock.calls[0];
     expect(typeof system).toBe('string');
     expect(typeof user).toBe('string');
+  });
+});
+
+describe('parseJobIntake', () => {
+  beforeEach(() => {
+    generateJSONMock.mockReset();
+  });
+
+  it('returns the JobIntake shape from the LLM response', async () => {
+    const intake: JobIntake = {
+      title: 'Backend Engineer',
+      company_name: 'Acme Corp',
+      location: 'Remote (US)',
+      remote: true,
+      salary_range: '$140k-$170k',
+      company_info_summary: 'A fintech infra company that values ownership.',
+    };
+    generateJSONMock.mockResolvedValue(intake);
+
+    const result = await parseJobIntake('Backend Engineer at Acme Corp...');
+
+    expect(result).toEqual(intake);
+  });
+
+  it('calls generateJSON exactly once with string system and user prompts', async () => {
+    generateJSONMock.mockResolvedValue({
+      title: null,
+      company_name: null,
+      location: null,
+      remote: null,
+      salary_range: null,
+      company_info_summary: null,
+    });
+
+    await parseJobIntake('some pasted text');
+
+    expect(generateJSONMock).toHaveBeenCalledTimes(1);
+    const [system, user] = generateJSONMock.mock.calls[0];
+    expect(typeof system).toBe('string');
+    expect(typeof user).toBe('string');
+  });
+
+  it('propagates rejection from generateJSON without swallowing it', async () => {
+    generateJSONMock.mockRejectedValue(new Error('LLM unreachable'));
+
+    await expect(parseJobIntake('some pasted text')).rejects.toThrow('LLM unreachable');
   });
 });

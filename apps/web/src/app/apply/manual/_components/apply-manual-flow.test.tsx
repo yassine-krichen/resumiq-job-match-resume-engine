@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApplyManualFlow } from './apply-manual-flow';
-import { getApplication } from './api';
+import { getApplication, extractJobIntake } from './api';
 import { apiSSE } from '@/lib/api';
 import {
   buildApplication,
@@ -16,6 +16,7 @@ import type { ApplicationRecord } from './types';
 // tests exercise ApplyManualFlow's step-derivation without hitting the network.
 vi.mock('./api', () => ({
   getApplication: vi.fn(),
+  extractJobIntake: vi.fn(),
 }));
 
 // `apiSSE` is imported directly by ApplyManualFlow (used for the analyze/finalize
@@ -63,15 +64,17 @@ function renderFlow() {
 describe('ApplyManualFlow', () => {
   beforeEach(() => {
     vi.mocked(getApplication).mockReset();
+    vi.mocked(extractJobIntake).mockReset();
     vi.mocked(apiSSE).mockReset();
     pushMock.mockReset();
     searchParams = new URLSearchParams();
   });
 
-  it('renders the job description intake form when no applicationId is in the URL', () => {
+  it('renders the paste form when no applicationId is in the URL', () => {
     renderFlow();
 
     expect(screen.getByText('Analyze a job description')).toBeInTheDocument();
+    expect(screen.getByLabelText(/job posting/i)).toBeInTheDocument();
     expect(getApplication).not.toHaveBeenCalled();
   });
 
@@ -206,7 +209,15 @@ describe('ApplyManualFlow', () => {
     expect(screen.queryByText('Analyze a job description')).not.toBeInTheDocument();
   });
 
-  it('navigates to the application URL with the new applicationId once the analyze SSE stream completes', async () => {
+  it('navigates to the application URL with the new applicationId once the paste is extracted, reviewed, and the analyze SSE stream completes', async () => {
+    vi.mocked(extractJobIntake).mockResolvedValue({
+      title: 'Backend Engineer',
+      company_name: 'Acme Corp',
+      location: 'Remote (US)',
+      remote: true,
+      salary_range: null,
+      company_info_summary: null,
+    });
     vi.mocked(apiSSE).mockImplementation((_path, _body, options) => {
       options.onDone({ applicationId: 'new-app-id', matchScore: 80, reasons: [] });
       return () => {};
@@ -214,12 +225,14 @@ describe('ApplyManualFlow', () => {
 
     renderFlow();
 
-    fireEvent.change(screen.getByLabelText(/company name/i), {
-      target: { value: 'Acme Corp' },
-    });
-    fireEvent.change(screen.getByLabelText(/job description/i), {
+    fireEvent.change(screen.getByLabelText(/job posting/i), {
       target: { value: 'x'.repeat(60) },
     });
+    fireEvent.click(screen.getByRole('button', { name: /analyze job/i }));
+
+    await waitFor(() => expect(screen.getByText('Review job details')).toBeInTheDocument());
+    expect(screen.getByLabelText(/company name/i)).toHaveValue('Acme Corp');
+
     fireEvent.click(screen.getByRole('button', { name: /analyze job/i }));
 
     expect(pushMock).toHaveBeenCalledWith('/apply/manual?applicationId=new-app-id');

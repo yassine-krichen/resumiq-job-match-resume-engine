@@ -8,6 +8,7 @@ import {
   generateEmail,
   generateInterviewIntakeQuestions,
   generateTechnicalInterviewPrep,
+  parseJobIntake,
   selectAndDraft,
 } from '@resumiq/ai-bridge';
 import type {
@@ -19,12 +20,14 @@ import type {
 import {
   InterviewIntakeQuestionsSchema,
   InterviewPrepReportSchema,
+  JobIntakeResultSchema,
   UpdateResumeSelectionSchema,
 } from '@resumiq/schemas';
 import type {
   CreateJobDto,
   InterviewPrepIntakeAnswersDto,
   InterviewPrepReportDto,
+  JobIntakeResultDto,
   ListApplicationsFiltersDto,
   UpdateEmailDraftDto,
   UpdateGapReportDto,
@@ -159,6 +162,20 @@ export class ApplicationsService {
     private readonly resumeService: ResumeService,
     private readonly storage: LocalStorageService,
   ) {}
+
+  /**
+   * Stateless best-effort extraction of job-posting metadata from a raw
+   * paste — used to pre-fill the manual job-intake review form before
+   * `analyzeAndDraft` runs. No profile lookup, no DB writes.
+   */
+  async extractJobIntake(rawText: string): Promise<JobIntakeResultDto> {
+    const raw = await parseJobIntake(rawText);
+    const parsed = JobIntakeResultSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new BadRequestException('Could not parse the pasted text — please try again.');
+    }
+    return parsed.data;
+  }
 
   /**
    * Runs the analyze leg: creates the Job row, analyzes the JD, scores

@@ -138,6 +138,21 @@ export const CreateJobSchema = z.object({
 
 export const UpdateCareerProfileSchema = MasterDBSchema.partial();
 
+// ── Manual Job Intake — paste-and-parse extraction ──────────────────────────
+
+export const ExtractJobIntakeSchema = z.object({
+  raw_text: z.string().min(50, 'Paste more of the job posting'),
+});
+
+export const JobIntakeResultSchema = z.object({
+  title: z.string().nullable(),
+  company_name: z.string().nullable(),
+  location: z.string().nullable(),
+  remote: z.boolean().nullable(),
+  salary_range: z.string().nullable(),
+  company_info_summary: z.string().nullable(),
+});
+
 // ── Phase 2: Applications — resume selection / email draft edits ───────────
 
 const SectionTypeSchema = z.enum([
@@ -342,6 +357,8 @@ export const InterviewPrepReportSchema = z.object({
 export type MasterDB = z.infer<typeof MasterDBSchema>;
 export type CreateJobDto = z.infer<typeof CreateJobSchema>;
 export type UpdateCareerProfileDto = z.infer<typeof UpdateCareerProfileSchema>;
+export type ExtractJobIntakeDto = z.infer<typeof ExtractJobIntakeSchema>;
+export type JobIntakeResultDto = z.infer<typeof JobIntakeResultSchema>;
 export type IngestBodyDto = z.infer<typeof IngestBodySchema>;
 export type IngestEntryDto = z.infer<typeof IngestEntrySchema>;
 export type IngestResultDto = z.infer<typeof IngestResultSchema>;
