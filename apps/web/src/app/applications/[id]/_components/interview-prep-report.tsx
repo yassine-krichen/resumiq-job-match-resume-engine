@@ -21,7 +21,7 @@ interface InterviewPrepReportProps {
 function probabilityBadgeClass(probability: 'high' | 'medium' | 'low'): string {
   if (probability === 'high') return 'bg-red-100 text-red-700';
   if (probability === 'medium') return 'bg-amber-100 text-amber-700';
-  return 'bg-zinc-100 text-zinc-600';
+  return 'bg-muted text-muted-foreground';
 }
 
 function reportToPlainText(report: InterviewPrepReportDto): string {
@@ -78,7 +78,7 @@ export function InterviewPrepReport({ report }: InterviewPrepReportProps): React
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between print:hidden">
-        <h2 className="text-lg font-semibold text-zinc-900">Interview prep report</h2>
+        <h2 className="text-lg font-semibold text-foreground">Interview prep report</h2>
         <div className="flex items-center gap-2">
           {copyError && <p className="text-sm text-red-600">{copyError}</p>}
           <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
@@ -92,10 +92,10 @@ export function InterviewPrepReport({ report }: InterviewPrepReportProps): React
         </div>
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h3 className="mb-3 text-base font-semibold">Likely technical topics</h3>
         {report.technical_topics.length === 0 ? (
-          <p className="text-sm text-zinc-500">No topics identified.</p>
+          <p className="text-sm text-muted-foreground">No topics identified.</p>
         ) : (
           <Accordion>
             {report.technical_topics.map((t, i) => (
@@ -111,7 +111,7 @@ export function InterviewPrepReport({ report }: InterviewPrepReportProps): React
                   </span>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <p className="text-zinc-600">{t.reasoning}</p>
+                  <p className="text-muted-foreground">{t.reasoning}</p>
                 </AccordionContent>
               </AccordionItem>
             ))}
@@ -119,38 +119,38 @@ export function InterviewPrepReport({ report }: InterviewPrepReportProps): React
         )}
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h3 className="mb-3 text-base font-semibold">Gaps to address</h3>
         {report.gaps_to_address.length === 0 ? (
-          <p className="text-sm text-zinc-500">No gaps identified.</p>
+          <p className="text-sm text-muted-foreground">No gaps identified.</p>
         ) : (
           <ul className="space-y-3">
             {report.gaps_to_address.map((g, i) => (
               <li key={i}>
-                <p className="text-sm font-medium text-zinc-900">{g.gap}</p>
-                <p className="mt-0.5 text-sm text-zinc-600">{g.suggested_framing}</p>
+                <p className="text-sm font-medium text-foreground">{g.gap}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{g.suggested_framing}</p>
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h3 className="mb-3 text-base font-semibold">Behavioral questions</h3>
         {report.behavioral_questions.length === 0 ? (
-          <p className="text-sm text-zinc-500">No behavioral questions identified.</p>
+          <p className="text-sm text-muted-foreground">No behavioral questions identified.</p>
         ) : (
           <Accordion>
             {report.behavioral_questions.map((q, i) => (
               <AccordionItem key={`${q.question}-${i}`} value={`behavioral-${i}`}>
                 <AccordionTrigger>{q.question}</AccordionTrigger>
                 <AccordionContent>
-                  <p className="text-zinc-600">
-                    <span className="font-medium text-zinc-800">Company signal: </span>
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">Company signal: </span>
                     {q.company_signal}
                   </p>
-                  <p className="text-zinc-600">
-                    <span className="font-medium text-zinc-800">Suggested angle: </span>
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">Suggested angle: </span>
                     {q.suggested_angle}
                   </p>
                 </AccordionContent>
@@ -160,16 +160,16 @@ export function InterviewPrepReport({ report }: InterviewPrepReportProps): React
         )}
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h3 className="mb-3 text-base font-semibold">Talking points</h3>
         {report.talking_points.length === 0 ? (
-          <p className="text-sm text-zinc-500">No talking points identified.</p>
+          <p className="text-sm text-muted-foreground">No talking points identified.</p>
         ) : (
           <ul className="space-y-3">
             {report.talking_points.map((p, i) => (
               <li key={i}>
-                <p className="text-sm font-medium text-zinc-900">{p.point}</p>
-                <p className="mt-0.5 text-sm text-zinc-600">Matched to: {p.matched_to}</p>
+                <p className="text-sm font-medium text-foreground">{p.point}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">Matched to: {p.matched_to}</p>
               </li>
             ))}
           </ul>

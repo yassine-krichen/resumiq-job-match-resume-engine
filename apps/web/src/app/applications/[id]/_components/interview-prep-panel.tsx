@@ -53,9 +53,9 @@ export function InterviewPrepPanel({
   switch (derived.step) {
     case 'trigger':
       return (
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-zinc-900">Interview prep</h2>
-          <p className="mt-1 text-sm text-zinc-500">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-foreground">Interview prep</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Generate a self-rating checklist and a few grounded questions to think through before
             your interview.
           </p>
@@ -88,9 +88,9 @@ export function InterviewPrepPanel({
 
     case 'awaiting-report':
       return (
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-zinc-900">Interview prep</h2>
-          <p className="mt-1 text-sm text-zinc-500">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-foreground">Interview prep</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Your answers are saved. Generate the report whenever you&apos;re ready.
           </p>
           {generateError && <p className="mt-2 text-sm text-red-600">{generateError}</p>}

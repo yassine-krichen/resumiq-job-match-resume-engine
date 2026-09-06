@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import type { MasterDB } from '@resumiq/schemas';
 import { AddAchievementModal, type NewAchievement } from './_components/add-achievement-modal';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 // Presence/count-based strength — not a backend score, just a rough visual
 // nudge toward "this section could use more entries." Target counts are
@@ -72,7 +73,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-zinc-500">Loading...</p>
+        <p className="text-muted-foreground">Loading...</p>
       </div>
     );
   }
@@ -94,19 +95,22 @@ export default function ProfilePage() {
   const awards = profile?.awards_and_honors ?? [];
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white px-6 py-4">
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border bg-card px-6 py-4">
         <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <button onClick={() => router.back()} className="text-sm text-zinc-500 hover:text-zinc-900">
+          <button onClick={() => router.back()} className="text-sm text-muted-foreground hover:text-foreground">
             ← Back
           </button>
           <h1 className="text-base font-semibold">Career Profile</h1>
-          <button
-            onClick={() => router.push('/onboarding')}
-            className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
-          >
-            + Add entry
-          </button>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <button
+              onClick={() => router.push('/onboarding')}
+              className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              + Add entry
+            </button>
+          </div>
         </div>
       </header>
 
@@ -119,15 +123,15 @@ export default function ProfilePage() {
             { label: 'Degrees', value: eduCount },
             { label: 'Skills', value: skillCount },
           ].map(({ label, value }) => (
-            <div key={label} className="rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm">
+            <div key={label} className="rounded-xl border border-border bg-card p-5 text-center shadow-sm">
               <p className="text-3xl font-bold">{value}</p>
-              <p className="mt-1 text-sm text-zinc-500">{label}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{label}</p>
             </div>
           ))}
         </div>
 
         {/* Section strength */}
-        <div className="mb-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <div className="mb-8 rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-4 text-base font-semibold">Profile strength</h2>
           <div className="space-y-3">
             <StrengthBar label="Experience" count={expCount} target={STRENGTH_TARGETS.experience} />
@@ -146,20 +150,20 @@ export default function ProfilePage() {
         {expCount > 0 && (
           <ProfileSection title="Experience">
             {profile!.experience.map((exp, i) => (
-              <div key={i} className="rounded-lg border border-zinc-100 p-4">
+              <div key={i} className="rounded-lg border border-border p-4">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="font-medium">{exp.role}</p>
-                    <p className="text-sm text-zinc-600">{exp.company} · {exp.location}</p>
+                    <p className="text-sm text-muted-foreground">{exp.company} · {exp.location}</p>
                   </div>
-                  <p className="shrink-0 text-sm text-zinc-400">
+                  <p className="shrink-0 text-sm text-muted-foreground">
                     {exp.startDate} – {exp.isCurrent ? 'Present' : exp.endDate}
                   </p>
                 </div>
                 {exp.technologies_used?.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {exp.technologies_used.slice(0, 8).map((t) => (
-                      <span key={t} className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
+                      <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                         {t}
                       </span>
                     ))}
@@ -174,13 +178,13 @@ export default function ProfilePage() {
         {projCount > 0 && (
           <ProfileSection title="Projects">
             {profile!.projects.map((proj, i) => (
-              <div key={i} className="rounded-lg border border-zinc-100 p-4">
+              <div key={i} className="rounded-lg border border-border p-4">
                 <p className="font-medium">{proj.name}</p>
-                <p className="text-sm text-zinc-500">{proj.context}</p>
+                <p className="text-sm text-muted-foreground">{proj.context}</p>
                 {proj.technologies_used?.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {proj.technologies_used.slice(0, 8).map((t) => (
-                      <span key={t} className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
+                      <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                         {t}
                       </span>
                     ))}
@@ -195,17 +199,17 @@ export default function ProfilePage() {
         {eduCount > 0 && (
           <ProfileSection title="Education">
             {profile!.education.map((edu, i) => (
-              <div key={i} className="rounded-lg border border-zinc-100 p-4">
+              <div key={i} className="rounded-lg border border-border p-4">
                 <p className="font-medium">{edu.degree_type} in {edu.major}</p>
-                <p className="text-sm text-zinc-600">{edu.institution}</p>
-                <p className="text-sm text-zinc-400">{edu.startDate} – {edu.endDate}</p>
+                <p className="text-sm text-muted-foreground">{edu.institution}</p>
+                <p className="text-sm text-muted-foreground">{edu.startDate} – {edu.endDate}</p>
               </div>
             ))}
           </ProfileSection>
         )}
 
         {/* Awards & achievements */}
-        <div className="mb-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <div className="mb-6 rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-semibold">Awards & achievements</h2>
             <AddAchievementModal onAdd={handleAddAchievement} submitting={savingAchievement} />
@@ -214,24 +218,24 @@ export default function ProfilePage() {
             <p className="mb-3 text-sm text-red-600">{achievementError}</p>
           )}
           {awards.length === 0 ? (
-            <p className="text-sm text-zinc-400">No achievements added yet.</p>
+            <p className="text-sm text-muted-foreground">No achievements added yet.</p>
           ) : (
             <div className="space-y-3">
               {awards.map((award, i) => (
-                <div key={i} className="rounded-lg border border-zinc-100 p-4">
+                <div key={i} className="rounded-lg border border-border p-4">
                   <div className="flex items-start justify-between">
                     <p className="font-medium">{award.title}</p>
-                    {award.date && <p className="shrink-0 text-sm text-zinc-400">{award.date}</p>}
+                    {award.date && <p className="shrink-0 text-sm text-muted-foreground">{award.date}</p>}
                   </div>
                   {award.description && (
-                    <p className="mt-1 text-sm text-zinc-500">{award.description}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{award.description}</p>
                   )}
                   {(award.related_skills?.length ?? 0) > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {award.related_skills!.map((skill) => (
                         <span
                           key={skill}
-                          className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600"
+                          className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                         >
                           {skill}
                         </span>
@@ -245,11 +249,11 @@ export default function ProfilePage() {
         </div>
 
         {expCount === 0 && projCount === 0 && eduCount === 0 && (
-          <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-12 text-center">
-            <p className="text-zinc-400">No career data yet.</p>
+          <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
+            <p className="text-muted-foreground">No career data yet.</p>
             <button
               onClick={() => router.push('/onboarding')}
-              className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+              className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               Add your first entry
             </button>
@@ -262,7 +266,7 @@ export default function ProfilePage() {
 
 function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mb-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <div className="mb-6 rounded-xl border border-border bg-card p-6 shadow-sm">
       <h2 className="mb-4 text-base font-semibold">{title}</h2>
       <div className="space-y-3">{children}</div>
     </div>
@@ -282,12 +286,12 @@ function StrengthBar({
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-sm">
-        <span className="text-zinc-700">{label}</span>
-        <span className="text-zinc-400">{count}</span>
+        <span className="text-foreground">{label}</span>
+        <span className="text-muted-foreground">{count}</span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className={`h-full rounded-full ${percent >= 100 ? 'bg-emerald-500' : 'bg-zinc-400'}`}
+          className={`h-full rounded-full ${percent >= 100 ? 'bg-emerald-500' : 'bg-muted-foreground'}`}
           style={{ width: `${percent}%` }}
         />
       </div>

@@ -48,7 +48,7 @@ export function JobPasteForm({
     <div className="w-full max-w-2xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Analyze a job description</h1>
-        <p className="mt-1 text-zinc-500">
+        <p className="mt-1 text-muted-foreground">
           Paste the job posting — optionally with any company profile info glued in. We&apos;ll
           extract the job details, then score your fit against your career profile.
         </p>
@@ -56,7 +56,7 @@ export function JobPasteForm({
 
       <form
         onSubmit={handleSubmit}
-        className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
+        className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm"
       >
         <div>
           <Label htmlFor="raw-paste">Job posting</Label>
@@ -72,8 +72,8 @@ export function JobPasteForm({
         </div>
 
         {mutation.isPending && (
-          <div className="flex items-center gap-2 text-sm text-zinc-500">
-            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-400 border-t-zinc-800" />
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground border-t-foreground" />
             Analyzing...
           </div>
         )}

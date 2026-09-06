@@ -30,15 +30,15 @@ export default function ApplicationsPage(): React.JSX.Element {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-zinc-50 px-4 py-12">
+    <div className="flex min-h-screen flex-col items-center gap-6 bg-background px-4 py-12">
       <div className="w-full max-w-5xl">
         <h1 className="text-2xl font-bold">Applications</h1>
-        <p className="mt-1 text-zinc-500">Every application you&apos;ve drafted, filterable by status, company, date, and match score.</p>
+        <p className="mt-1 text-muted-foreground">Every application you&apos;ve drafted, filterable by status, company, date, and match score.</p>
       </div>
 
       <FiltersBar filters={filters} onChange={handleFiltersChange} />
 
-      {applicationsQuery.isLoading && <p className="text-zinc-500">Loading applications...</p>}
+      {applicationsQuery.isLoading && <p className="text-muted-foreground">Loading applications...</p>}
       {applicationsQuery.isError && (
         <p className="text-red-600">{(applicationsQuery.error as Error).message}</p>
       )}
@@ -51,7 +51,7 @@ export default function ApplicationsPage(): React.JSX.Element {
             <ApplicationsTable items={applicationsQuery.data.items} />
           </div>
 
-          <div className="flex w-full max-w-5xl items-center justify-between text-sm text-zinc-500">
+          <div className="flex w-full max-w-5xl items-center justify-between text-sm text-muted-foreground">
             <span>
               Page {applicationsQuery.data.page} of {totalPages} ({total} total)
               {applicationsQuery.isPlaceholderData && ' · Updating...'}

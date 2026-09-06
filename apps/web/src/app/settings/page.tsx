@@ -66,21 +66,21 @@ export default function SettingsPage(): React.JSX.Element {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-zinc-50 px-4 py-12">
+    <div className="flex min-h-screen flex-col items-center gap-6 bg-background px-4 py-12">
       <div className="w-full max-w-2xl">
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="mt-1 text-zinc-500">
+        <p className="mt-1 text-muted-foreground">
           Controls how jobs are matched and surfaced on your Discover feed.
         </p>
       </div>
 
-      {settingsQuery.isLoading && <p className="text-zinc-500">Loading settings...</p>}
+      {settingsQuery.isLoading && <p className="text-muted-foreground">Loading settings...</p>}
       {settingsQuery.isError && (
         <p className="text-red-600">{(settingsQuery.error as Error).message}</p>
       )}
 
       {settings && (
-        <div className="w-full max-w-2xl space-y-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <div className="w-full max-w-2xl space-y-6 rounded-xl border border-border bg-card p-6 shadow-sm">
           <div>
             <Label htmlFor="match-threshold">Match threshold (0–100)</Label>
             <Input
@@ -92,7 +92,7 @@ export default function SettingsPage(): React.JSX.Element {
               onChange={(e) => setMatchThreshold(e.target.value)}
               className="mt-1"
             />
-            <p className="mt-1 text-xs text-zinc-400">
+            <p className="mt-1 text-xs text-muted-foreground">
               Jobs scoring below this are treated as a gap report instead of a resume draft.
             </p>
           </div>
@@ -125,7 +125,7 @@ export default function SettingsPage(): React.JSX.Element {
               id="seniority"
               value={seniority}
               onChange={(e) => setSeniority(e.target.value)}
-              className="mt-1 h-8 w-full rounded-lg border border-zinc-300 bg-transparent px-2.5 text-sm"
+              className="mt-1 h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
             >
               <option value="">Any</option>
               {SENIORITY_LEVELS.map((level) => (
@@ -151,12 +151,12 @@ export default function SettingsPage(): React.JSX.Element {
             <Label>Work mode</Label>
             <div className="mt-1 flex flex-wrap gap-3 pt-1.5">
               {WORK_MODES.map((mode) => (
-                <label key={mode} className="flex items-center gap-1.5 text-sm text-zinc-700">
+                <label key={mode} className="flex items-center gap-1.5 text-sm text-foreground">
                   <input
                     type="checkbox"
                     checked={workMode.includes(mode)}
                     onChange={() => toggleWorkMode(mode)}
-                    className="h-4 w-4 rounded border-zinc-300"
+                    className="h-4 w-4 rounded border-input"
                   />
                   {mode}
                 </label>
@@ -167,7 +167,7 @@ export default function SettingsPage(): React.JSX.Element {
           <div className="flex items-center justify-between">
             <div>
               <Label htmlFor="auto-send-email">Auto-send email</Label>
-              <p className="text-xs text-zinc-400">Not yet wired to actually send anything.</p>
+              <p className="text-xs text-muted-foreground">Not yet wired to actually send anything.</p>
             </div>
             <Switch
               id="auto-send-email"
@@ -191,12 +191,12 @@ export default function SettingsPage(): React.JSX.Element {
               id="resume-template"
               disabled
               value={settings.resume_template}
-              className="mt-1 h-8 w-full rounded-lg border border-zinc-300 bg-zinc-100 px-2.5 text-sm text-zinc-400"
+              className="mt-1 h-8 w-full rounded-lg border border-input bg-muted px-2.5 text-sm text-muted-foreground"
               onChange={() => {}}
             >
               <option value={settings.resume_template}>{settings.resume_template}</option>
             </select>
-            <p className="mt-1 text-xs text-zinc-400">Coming soon — currently hardcoded.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Coming soon — currently hardcoded.</p>
           </div>
 
           <div>
@@ -208,7 +208,7 @@ export default function SettingsPage(): React.JSX.Element {
               placeholder="Not configurable yet"
               className="mt-1"
             />
-            <p className="mt-1 text-xs text-zinc-400">
+            <p className="mt-1 text-xs text-muted-foreground">
               Coming soon — the LLM layer doesn&apos;t support a per-user override yet.
             </p>
           </div>

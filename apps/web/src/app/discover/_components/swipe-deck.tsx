@@ -67,8 +67,8 @@ export function SwipeDeck({ items, onDismiss, onSwipeRight }: SwipeDeckProps): R
 
   if (!top) {
     return (
-      <div className="w-full max-w-xl rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center text-zinc-500">
-        <p className="font-medium text-zinc-700">No jobs to review right now.</p>
+      <div className="w-full max-w-xl rounded-xl border border-dashed border-border bg-card p-10 text-center text-muted-foreground">
+        <p className="font-medium text-foreground">No jobs to review right now.</p>
         <p className="mt-1 text-sm">
           Try widening your filters, or check back after the next scan finds new roles.
         </p>
@@ -111,7 +111,7 @@ export function SwipeDeck({ items, onDismiss, onSwipeRight }: SwipeDeckProps): R
           Apply
         </Button>
       </div>
-      <p className="mt-2 text-center text-xs text-zinc-400">Use ← to skip, → to apply</p>
+      <p className="mt-2 text-center text-xs text-muted-foreground">Use ← to skip, → to apply</p>
     </div>
   );
 }

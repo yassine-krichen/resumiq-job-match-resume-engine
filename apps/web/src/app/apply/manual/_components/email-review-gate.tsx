@@ -46,9 +46,9 @@ export function EmailReviewGate({
   const error = saveMutation.error ?? confirmMutation.error;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
       <h2 className="mb-1 text-lg font-semibold">Review cold email</h2>
-      <p className="mb-4 text-sm text-zinc-500">
+      <p className="mb-4 text-sm text-muted-foreground">
         This is not sent automatically — copy it out and send it yourself once you confirm.
       </p>
 

@@ -169,12 +169,12 @@ export function ResumeReviewEditor({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <div className="space-y-4">
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-3 text-base font-semibold">Sections</h2>
           <ul className="space-y-2">
             {enabledOrder.map((section, i) => (
               <li key={section} className="flex items-center justify-between gap-2">
-                <span className="text-sm text-zinc-800">{SECTION_LABELS[section] ?? section}</span>
+                <span className="text-sm text-foreground">{SECTION_LABELS[section] ?? section}</span>
                 <div className="flex items-center gap-1">
                   <Button
                     type="button"
@@ -202,7 +202,7 @@ export function ResumeReviewEditor({
             ))}
             {disabledSections.map((section) => (
               <li key={section} className="flex items-center justify-between gap-2 opacity-50">
-                <span className="text-sm text-zinc-800">{SECTION_LABELS[section] ?? section}</span>
+                <span className="text-sm text-foreground">{SECTION_LABELS[section] ?? section}</span>
                 <Switch checked={false} onCheckedChange={(on) => toggleSection(section, on)} />
               </li>
             ))}
@@ -210,7 +210,7 @@ export function ResumeReviewEditor({
         </div>
 
         {sections.includes('summary') && (
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
             <Label htmlFor="summary">Summary</Label>
             <Textarea
               id="summary"
@@ -223,8 +223,8 @@ export function ResumeReviewEditor({
         )}
 
         {selection.experience.map((exp, expIndex) => (
-          <div key={`${exp.company}-${expIndex}`} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-3 text-sm font-semibold text-zinc-900">
+          <div key={`${exp.company}-${expIndex}`} className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
               {exp.role} @ {exp.company}
             </h3>
             <BulletsEditor
@@ -235,8 +235,8 @@ export function ResumeReviewEditor({
         ))}
 
         {selection.projects.map((proj, projIndex) => (
-          <div key={`${proj.name}-${projIndex}`} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-3 text-sm font-semibold text-zinc-900">{proj.name}</h3>
+          <div key={`${proj.name}-${projIndex}`} className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">{proj.name}</h3>
             <BulletsEditor
               bullets={proj.bullets}
               onChange={(bullets) => updateProjectBullets(projIndex, bullets)}
@@ -245,7 +245,7 @@ export function ResumeReviewEditor({
         ))}
 
         {sections.includes('skills') && (
-          <div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="space-y-3 rounded-xl border border-border bg-card p-6 shadow-sm">
             <h2 className="text-base font-semibold">Skills</h2>
             <SkillCategoryEditor
               label="Languages"
@@ -295,16 +295,16 @@ export function ResumeReviewEditor({
       </div>
 
       <div className="lg:sticky lg:top-6 lg:self-start">
-        <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
           <div className="mb-2 flex items-center justify-between px-1">
-            <p className="text-sm font-medium text-zinc-700">Live preview</p>
-            {previewLoading && <p className="text-xs text-zinc-400">Rendering...</p>}
+            <p className="text-sm font-medium text-foreground">Live preview</p>
+            {previewLoading && <p className="text-xs text-muted-foreground">Rendering...</p>}
           </div>
           {previewError && <p className="px-1 text-sm text-red-600">{previewError}</p>}
           {previewUrl ? (
-            <iframe src={previewUrl} className="h-[80vh] w-full rounded-lg border border-zinc-100" title="Resume preview" />
+            <iframe src={previewUrl} className="h-[80vh] w-full rounded-lg border border-border" title="Resume preview" />
           ) : (
-            <div className="flex h-[80vh] items-center justify-center rounded-lg border border-zinc-100 text-sm text-zinc-400">
+            <div className="flex h-[80vh] items-center justify-center rounded-lg border border-border text-sm text-muted-foreground">
               Preview will appear here
             </div>
           )}

@@ -33,7 +33,7 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps): React.JSX.El
   }
 
   return (
-    <div className="w-full max-w-5xl rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <div className="w-full max-w-5xl rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <div>
           <Label htmlFor="filter-status">Status</Label>
@@ -41,7 +41,7 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps): React.JSX.El
             id="filter-status"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="mt-1 h-8 w-full rounded-lg border border-zinc-300 bg-transparent px-2.5 text-sm"
+            className="mt-1 h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
           >
             <option value="">All</option>
             {STATUSES.map((s) => (

@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { GapReportView } from '../apply/manual/_components/gap-report-view';
 import { STATUS_LABELS } from '../applications/_components/types';
 import { getDashboardSummary } from './_components/api';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function DashboardPage() {
   const { data: session, isPending } = useSession();
@@ -28,7 +29,7 @@ export default function DashboardPage() {
   if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-zinc-500">Loading...</p>
+        <p className="text-muted-foreground">Loading...</p>
       </div>
     );
   }
@@ -38,15 +39,16 @@ export default function DashboardPage() {
   const summary = summaryQuery.data;
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white px-6 py-4">
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border bg-card px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <span className="text-lg font-semibold">Resumiq</span>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-600">{session.user.email}</span>
+            <span className="text-sm text-muted-foreground">{session.user.email}</span>
+            <ThemeToggle />
             <button
               onClick={() => signOut()}
-              className="text-sm text-zinc-500 hover:text-zinc-900"
+              className="text-sm text-muted-foreground hover:text-foreground"
             >
               Sign out
             </button>
@@ -57,10 +59,10 @@ export default function DashboardPage() {
       <main className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-8">
           <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="mt-1 text-zinc-500">Welcome back, {session.user.name}</p>
+          <p className="mt-1 text-muted-foreground">Welcome back, {session.user.name}</p>
         </div>
 
-        {summaryQuery.isLoading && <p className="mb-8 text-zinc-500">Loading dashboard...</p>}
+        {summaryQuery.isLoading && <p className="mb-8 text-muted-foreground">Loading dashboard...</p>}
         {summaryQuery.isError && (
           <p className="mb-8 text-red-600">{(summaryQuery.error as Error).message}</p>
         )}
@@ -115,20 +117,20 @@ export default function DashboardPage() {
 
         {summary && summary.recentActivity.length > 0 && (
           <section className="mb-8">
-            <h2 className="mb-3 text-lg font-semibold text-zinc-900">Recent activity</h2>
-            <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white shadow-sm">
+            <h2 className="mb-3 text-lg font-semibold text-foreground">Recent activity</h2>
+            <div className="divide-y divide-border rounded-xl border border-border bg-card shadow-sm">
               {summary.recentActivity.map((item) => (
                 <Link
                   key={item.id}
                   href={`/applications/${item.id}`}
-                  className="flex items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-zinc-50"
+                  className="flex items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted"
                 >
-                  <span className="font-medium text-zinc-900">
+                  <span className="font-medium text-foreground">
                     {item.job.title} @ {item.job.companyName}
                   </span>
-                  <span className="flex items-center gap-3 text-zinc-500">
+                  <span className="flex items-center gap-3 text-muted-foreground">
                     <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                       {STATUS_LABELS[item.status] ?? item.status}
                     </span>
                   </span>
@@ -140,11 +142,11 @@ export default function DashboardPage() {
 
         {summary && summary.savedGapReports.length > 0 && (
           <section>
-            <h2 className="mb-3 text-lg font-semibold text-zinc-900">Saved gap reports</h2>
+            <h2 className="mb-3 text-lg font-semibold text-foreground">Saved gap reports</h2>
             <div className="space-y-6">
               {summary.savedGapReports.map((item) => (
                 <div key={item.id}>
-                  <p className="mb-2 text-sm font-medium text-zinc-700">
+                  <p className="mb-2 text-sm font-medium text-foreground">
                     <Link href={`/applications/${item.id}`} className="hover:underline">
                       {item.job.title} @ {item.job.companyName}
                     </Link>
@@ -162,9 +164,9 @@ export default function DashboardPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-5 text-center shadow-sm">
       <p className="text-3xl font-bold">{value}</p>
-      <p className="mt-1 text-sm text-zinc-500">{label}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -183,15 +185,15 @@ function DashCard({
   disabled?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
       <h2 className="text-base font-semibold">{title}</h2>
-      <p className="mt-1 text-sm text-zinc-500">{description}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       {disabled ? (
-        <span className="mt-4 inline-block text-sm text-zinc-300">{cta}</span>
+        <span className="mt-4 inline-block text-sm text-muted-foreground/60">{cta}</span>
       ) : (
         <Link
           href={href}
-          className="mt-4 inline-block text-sm font-medium text-zinc-900 underline-offset-2 hover:underline"
+          className="mt-4 inline-block text-sm font-medium text-foreground underline-offset-2 hover:underline"
         >
           {cta} →
         </Link>

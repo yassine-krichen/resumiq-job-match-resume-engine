@@ -58,7 +58,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps): React.JSX.Elem
   }
 
   return (
-    <div className="w-full max-w-3xl rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <div className="w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <div>
           <Label htmlFor="filter-category">Category / field</Label>
@@ -79,7 +79,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps): React.JSX.Elem
             placeholder="e.g. Remote, Berlin"
             className="mt-1"
           />
-          <p className="mt-1 text-xs text-zinc-400">Resets each visit — not saved.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Resets each visit — not saved.</p>
         </div>
         <div>
           <Label htmlFor="filter-seniority">Seniority</Label>
@@ -90,18 +90,18 @@ export function FilterBar({ filters, onChange }: FilterBarProps): React.JSX.Elem
             placeholder="e.g. Senior"
             className="mt-1"
           />
-          <p className="mt-1 text-xs text-zinc-400">Resets each visit — not saved.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Resets each visit — not saved.</p>
         </div>
         <div>
           <Label>Work mode</Label>
           <div className="mt-1 flex flex-wrap gap-3 pt-1.5">
             {WORK_MODES.map((mode) => (
-              <label key={mode} className="flex items-center gap-1.5 text-sm text-zinc-700">
+              <label key={mode} className="flex items-center gap-1.5 text-sm text-foreground">
                 <input
                   type="checkbox"
                   checked={workMode.includes(mode)}
                   onChange={() => toggleWorkMode(mode)}
-                  className="h-4 w-4 rounded border-zinc-300"
+                  className="h-4 w-4 rounded border-input"
                 />
                 {mode}
               </label>

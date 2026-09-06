@@ -69,14 +69,14 @@ export default function ApplicationReviewPage(): React.JSX.Element {
   } = useRegenerateApplication(applicationId ?? null);
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-zinc-50 px-4 py-12">
+    <div className="flex min-h-screen flex-col items-center bg-background px-4 py-12">
       {renderContent()}
     </div>
   );
 
   function renderContent(): React.JSX.Element {
     if (applicationQuery.isLoading) {
-      return <p className="text-zinc-500">Loading application...</p>;
+      return <p className="text-muted-foreground">Loading application...</p>;
     }
 
     if (applicationQuery.isError) {
@@ -84,7 +84,7 @@ export default function ApplicationReviewPage(): React.JSX.Element {
     }
 
     const app = applicationQuery.data;
-    if (!app) return <p className="text-zinc-500">Loading application...</p>;
+    if (!app) return <p className="text-muted-foreground">Loading application...</p>;
 
     const step = deriveStep(app);
     const hasDownloads = (step === 'email' || step === 'ready') && Boolean(app.resumePdfPath);
@@ -92,9 +92,9 @@ export default function ApplicationReviewPage(): React.JSX.Element {
     if (step === 'ready') {
       return (
         <div className="w-full max-w-2xl space-y-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+          <div className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
             <h1 className="text-xl font-semibold">Application ready</h1>
-            <p className="mt-2 text-zinc-500">
+            <p className="mt-2 text-muted-foreground">
               Your tailored resume and cold email draft for {app.job.title} @ {app.job.companyName}{' '}
               are ready. Send the email yourself when you&apos;re ready — this app never sends it
               for you.
@@ -110,7 +110,7 @@ export default function ApplicationReviewPage(): React.JSX.Element {
     return (
       <div className="w-full max-w-5xl space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1 className="text-xl font-semibold text-zinc-900">
+          <h1 className="text-xl font-semibold text-foreground">
             {app.job.title} @ {app.job.companyName}
           </h1>
           {renderRegenerateBar(step)}
@@ -174,7 +174,7 @@ function DownloadButtons({ app }: { app: ApplicationRecord }): React.JSX.Element
         href={`${API_URL}/api/applications/${app.id}/resume.pdf`}
         target="_blank"
         rel="noreferrer"
-        className="text-sm font-medium text-zinc-900 underline underline-offset-4"
+        className="text-sm font-medium text-foreground underline underline-offset-4"
       >
         Download resume PDF
       </a>
@@ -182,7 +182,7 @@ function DownloadButtons({ app }: { app: ApplicationRecord }): React.JSX.Element
         <button
           type="button"
           onClick={() => downloadResumeSource(app)}
-          className="text-sm font-medium text-zinc-900 underline underline-offset-4"
+          className="text-sm font-medium text-foreground underline underline-offset-4"
         >
           Download resume source ({app.renderedWith === 'typst' ? '.typ' : '.tex'})
         </button>

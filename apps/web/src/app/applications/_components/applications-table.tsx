@@ -18,16 +18,16 @@ interface ApplicationsTableProps {
 export function ApplicationsTable({ items }: ApplicationsTableProps): React.JSX.Element {
   if (items.length === 0) {
     return (
-      <div className="w-full max-w-5xl rounded-xl border border-dashed border-zinc-300 bg-white p-12 text-center">
-        <p className="text-zinc-400">No applications match these filters.</p>
+      <div className="w-full max-w-5xl rounded-xl border border-dashed border-border bg-card p-12 text-center">
+        <p className="text-muted-foreground">No applications match these filters.</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-5xl overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+    <div className="w-full max-w-5xl overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <table className="w-full text-left text-sm">
-        <thead className="border-b border-zinc-200 bg-zinc-50 text-xs font-medium text-zinc-500">
+        <thead className="border-b border-border bg-muted text-xs font-medium text-muted-foreground">
           <tr>
             <th className="px-4 py-3">Title</th>
             <th className="px-4 py-3">Company</th>
@@ -36,19 +36,19 @@ export function ApplicationsTable({ items }: ApplicationsTableProps): React.JSX.
             <th className="px-4 py-3">Status</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-100">
+        <tbody className="divide-y divide-border">
           {items.map((item) => (
-            <tr key={item.id} className="hover:bg-zinc-50">
+            <tr key={item.id} className="hover:bg-muted">
               <td className="px-4 py-3">
                 <Link
                   href={`/applications/${item.id}`}
-                  className="font-medium text-zinc-900 underline-offset-2 hover:underline"
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
                 >
                   {item.job.title}
                 </Link>
               </td>
-              <td className="px-4 py-3 text-zinc-600">{item.job.companyName}</td>
-              <td className="px-4 py-3 text-zinc-500">
+              <td className="px-4 py-3 text-muted-foreground">{item.job.companyName}</td>
+              <td className="px-4 py-3 text-muted-foreground">
                 {new Date(item.createdAt).toLocaleDateString()}
               </td>
               <td className="px-4 py-3">
@@ -59,7 +59,7 @@ export function ApplicationsTable({ items }: ApplicationsTableProps): React.JSX.
                 </span>
               </td>
               <td className="px-4 py-3">
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                   {STATUS_LABELS[item.status] ?? item.status}
                 </span>
               </td>

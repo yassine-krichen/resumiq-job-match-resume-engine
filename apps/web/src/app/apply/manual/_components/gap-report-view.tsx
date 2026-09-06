@@ -42,10 +42,10 @@ export function GapReportView({ applicationId, gapReport }: GapReportViewProps):
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h2 className="mb-3 text-base font-semibold">Missing skills</h2>
         {gapReport.missing_skills.length === 0 ? (
-          <p className="text-sm text-zinc-500">No specific gaps identified.</p>
+          <p className="text-sm text-muted-foreground">No specific gaps identified.</p>
         ) : (
           <ul className="space-y-3">
             {gapReport.missing_skills.map((skill, i) => (
@@ -55,25 +55,25 @@ export function GapReportView({ applicationId, gapReport }: GapReportViewProps):
                   checked={skill.completed ?? false}
                   onChange={() => toggleCompleted(i)}
                   disabled={mutation.isPending}
-                  className="mt-1 h-4 w-4 rounded border-zinc-300"
+                  className="mt-1 h-4 w-4 rounded border-input"
                 />
                 <div>
                   <p
-                    className={`text-sm font-medium ${skill.completed ? 'text-zinc-400 line-through' : 'text-zinc-900'}`}
+                    className={`text-sm font-medium ${skill.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}
                   >
                     {skill.skill}
                     <span
                       className={`ml-2 rounded-full px-2 py-0.5 text-xs font-normal ${
                         skill.priority === 'mandatory'
                           ? 'bg-red-100 text-red-700'
-                          : 'bg-zinc-100 text-zinc-600'
+                          : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {skill.priority}
                     </span>
                   </p>
                   {skill.suggested_resources.length > 0 && (
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {skill.suggested_resources.join(', ')}
                     </p>
                   )}
@@ -85,9 +85,9 @@ export function GapReportView({ applicationId, gapReport }: GapReportViewProps):
       </div>
 
       {gapReport.strengths.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-3 text-base font-semibold">Strengths</h2>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-600">
+          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
             {gapReport.strengths.map((s, i) => (
               <li key={i}>{s}</li>
             ))}
@@ -96,9 +96,9 @@ export function GapReportView({ applicationId, gapReport }: GapReportViewProps):
       )}
 
       {gapReport.recommendations.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-3 text-base font-semibold">Recommendations</h2>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-600">
+          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
             {gapReport.recommendations.map((r, i) => (
               <li key={i}>{r}</li>
             ))}

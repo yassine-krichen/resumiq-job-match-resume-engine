@@ -82,9 +82,9 @@ export function InterviewPrepIntakeForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {intake.weak_topics.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-1 text-base font-semibold">Self-rate your weak spots</h2>
-          <p className="mb-3 text-sm text-zinc-500">
+          <p className="mb-3 text-sm text-muted-foreground">
             Check any of this role&apos;s required skills you&apos;re less confident on — the
             report will focus extra prep there.
           </p>
@@ -97,7 +97,7 @@ export function InterviewPrepIntakeForm({
                   checked={weakTopicsSelected.includes(topic)}
                   onChange={(e) => toggleWeakTopic(topic, e.target.checked)}
                   disabled={submitting}
-                  className="h-4 w-4 rounded border-zinc-300"
+                  className="h-4 w-4 rounded border-border"
                 />
                 <Label htmlFor={`weak-topic-${topic}`}>{topic}</Label>
               </li>
@@ -107,12 +107,12 @@ export function InterviewPrepIntakeForm({
       )}
 
       {intake.questions.length > 0 && (
-        <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="text-base font-semibold">Questions to think through</h2>
           {intake.questions.map(({ question, reasoning }) => (
             <div key={question}>
               <Label htmlFor={`question-${question}`}>{question}</Label>
-              <p className="mt-0.5 text-xs text-zinc-500">{reasoning}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{reasoning}</p>
               <Textarea
                 id={`question-${question}`}
                 value={answersByQuestion[question] ?? ''}
@@ -128,7 +128,7 @@ export function InterviewPrepIntakeForm({
         </div>
       )}
 
-      <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
         <h2 className="text-base font-semibold">Interview context</h2>
         <div>
           <Label htmlFor="interview-format">Format</Label>

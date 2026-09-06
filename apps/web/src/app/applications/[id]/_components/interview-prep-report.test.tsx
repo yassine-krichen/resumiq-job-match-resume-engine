@@ -28,7 +28,7 @@ describe('InterviewPrepReport', () => {
   it.each([
     ['high', 'bg-red-100'],
     ['medium', 'bg-amber-100'],
-    ['low', 'bg-zinc-100'],
+    ['low', 'bg-muted'],
   ] as const)('gives a %s-probability topic the %s badge class', (probability, expectedClass) => {
     render(
       <InterviewPrepReport

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { GitHubIcon, LinkedInIcon } from './_components/brand-icons';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 type AuthMode = 'sign-in' | 'sign-up';
 
@@ -53,13 +54,16 @@ export default function LoginPage(): React.JSX.Element {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-zinc-50 px-4">
+    <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 bg-background px-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Welcome to Resumiq</h1>
-        <p className="text-zinc-600">Sign in to start generating tailored resumes</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome to Resumiq</h1>
+        <p className="text-muted-foreground">Sign in to start generating tailored resumes</p>
       </div>
 
-      <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-8 shadow-sm">
         <div className="flex flex-col gap-3">
           <Button type="button" variant="outline" onClick={handleGitHub} className="h-11 gap-2">
             <GitHubIcon className="size-4" />
@@ -72,12 +76,12 @@ export default function LoginPage(): React.JSX.Element {
         </div>
 
         <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-zinc-200" />
-          <span className="text-xs text-zinc-500">or</span>
-          <div className="h-px flex-1 bg-zinc-200" />
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <div className="h-px flex-1 bg-border" />
         </div>
 
-        <div className="mb-4 flex gap-1 rounded-lg bg-zinc-100 p-1 text-sm font-medium">
+        <div className="mb-4 flex gap-1 rounded-lg bg-muted p-1 text-sm font-medium">
           <button
             type="button"
             aria-label="Sign in tab"
@@ -88,7 +92,7 @@ export default function LoginPage(): React.JSX.Element {
               setPassword('');
             }}
             className={`flex-1 rounded-md py-1.5 transition-colors ${
-              mode === 'sign-in' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+              mode === 'sign-in' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
             }`}
           >
             Sign in
@@ -103,7 +107,7 @@ export default function LoginPage(): React.JSX.Element {
               setPassword('');
             }}
             className={`flex-1 rounded-md py-1.5 transition-colors ${
-              mode === 'sign-up' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+              mode === 'sign-up' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
             }`}
           >
             Sign up
@@ -163,7 +167,7 @@ export default function LoginPage(): React.JSX.Element {
         </form>
       </div>
 
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-muted-foreground">
         Tailored resumes and gap reports, generated from your career profile.
       </p>
     </div>

@@ -20,16 +20,16 @@ export function JobCard({ item }: JobCardProps): React.JSX.Element {
   const topSkills = job.parsedJd?.mandatory_technical_skills?.slice(0, MAX_SKILLS_SHOWN) ?? [];
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-sm">
       <div>
-        <h2 className="text-lg font-semibold text-zinc-900">{job.title}</h2>
-        <p className="text-sm text-zinc-500">{job.companyName}</p>
-        <p className="mt-1 text-sm text-zinc-400">
+        <h2 className="text-lg font-semibold text-foreground">{job.title}</h2>
+        <p className="text-sm text-muted-foreground">{job.companyName}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
           {locationSummary(job)}
           {job.salaryRange ? ` · ${job.salaryRange}` : ''}
         </p>
         {job.parsedJd?.seniority && (
-          <p className="mt-1 text-xs font-medium tracking-wide text-zinc-400 uppercase">
+          <p className="mt-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {job.parsedJd.seniority}
           </p>
         )}
@@ -38,7 +38,7 @@ export function JobCard({ item }: JobCardProps): React.JSX.Element {
       {topSkills.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {topSkills.map((skill) => (
-            <span key={skill} className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700">
+            <span key={skill} className="rounded-full bg-muted px-2.5 py-1 text-xs text-foreground">
               {skill}
             </span>
           ))}

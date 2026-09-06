@@ -114,7 +114,7 @@ export function ApplyManualFlow(): React.JSX.Element {
   }
 
   if (applicationQuery.isLoading) {
-    return <p className="text-zinc-500">Loading application...</p>;
+    return <p className="text-muted-foreground">Loading application...</p>;
   }
 
   if (applicationQuery.isError) {
@@ -122,15 +122,15 @@ export function ApplyManualFlow(): React.JSX.Element {
   }
 
   const app = applicationQuery.data;
-  if (!app) return <p className="text-zinc-500">Loading application...</p>;
+  if (!app) return <p className="text-muted-foreground">Loading application...</p>;
 
   const step = deriveStep(app);
 
   if (step === 'ready') {
     return (
-      <div className="w-full max-w-2xl rounded-xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+      <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 text-center shadow-sm">
         <h1 className="text-xl font-semibold">Application ready</h1>
-        <p className="mt-2 text-zinc-500">
+        <p className="mt-2 text-muted-foreground">
           Your tailored resume and cold email draft for {app.job.title} @ {app.job.companyName}{' '}
           are ready. Send the email yourself when you&apos;re ready — this app never sends it for
           you.
@@ -139,7 +139,7 @@ export function ApplyManualFlow(): React.JSX.Element {
           href={`${API_URL}/api/applications/${app.id}/resume.pdf`}
           target="_blank"
           rel="noreferrer"
-          className="mt-4 inline-block text-sm font-medium text-zinc-900 underline underline-offset-4"
+          className="mt-4 inline-block text-sm font-medium text-foreground underline underline-offset-4"
         >
           Download resume PDF
         </a>

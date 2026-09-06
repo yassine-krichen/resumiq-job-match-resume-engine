@@ -102,10 +102,10 @@ export default function DiscoverPage(): React.JSX.Element {
   });
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-zinc-50 px-4 py-12">
+    <div className="flex min-h-screen flex-col items-center gap-6 bg-background px-4 py-12">
       <div className="w-full max-w-3xl">
         <h1 className="text-2xl font-bold">Discover jobs</h1>
-        <p className="mt-1 text-zinc-500">
+        <p className="mt-1 text-muted-foreground">
           Swipe right to draft a resume in the background — swipe left to pass.
         </p>
       </div>
@@ -118,7 +118,7 @@ export default function DiscoverPage(): React.JSX.Element {
         </div>
       )}
 
-      {feedQuery.isLoading && <p className="text-zinc-500">Loading jobs...</p>}
+      {feedQuery.isLoading && <p className="text-muted-foreground">Loading jobs...</p>}
       {feedQuery.isError && <p className="text-red-600">{(feedQuery.error as Error).message}</p>}
 
       {feedQuery.data && (

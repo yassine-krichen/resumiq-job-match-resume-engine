@@ -159,7 +159,7 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(screen.getByText('Profile strength')).toBeInTheDocument());
     const projectsRow = screen.getByText('Projects', { selector: 'span' }).closest('div')!
       .parentElement as HTMLElement;
-    const fill = projectsRow.querySelector('.bg-zinc-400') as HTMLElement;
+    const fill = projectsRow.querySelector('.bg-muted-foreground') as HTMLElement;
     expect(fill).toHaveStyle({ width: '0%' });
   });
 

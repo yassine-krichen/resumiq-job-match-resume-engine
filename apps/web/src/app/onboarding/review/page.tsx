@@ -21,7 +21,7 @@ export default function OnboardingReviewPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-zinc-500">Loading profile...</p>
+        <p className="text-muted-foreground">Loading profile...</p>
       </div>
     );
   }
@@ -35,25 +35,25 @@ export default function OnboardingReviewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 px-4 py-12">
+    <div className="min-h-screen bg-background px-4 py-12">
       <div className="mx-auto max-w-3xl">
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Review your profile</h1>
-            <p className="mt-1 text-zinc-500">
+            <p className="mt-1 text-muted-foreground">
               Confirm the AI parsed your data correctly. You can always edit from your profile.
             </p>
           </div>
           <div className="flex gap-3">
             <button
               onClick={() => router.push('/onboarding')}
-              className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
             >
               Add more
             </button>
             <button
               onClick={() => router.push('/dashboard')}
-              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               Go to dashboard
             </button>
@@ -65,18 +65,18 @@ export default function OnboardingReviewPage() {
             {profile.experience?.length > 0 && (
               <Section title="Experience" count={profile.experience.length}>
                 {profile.experience.map((exp, i) => (
-                  <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
+                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
                     <p className="font-medium">{exp.role} @ {exp.company}</p>
-                    <p className="text-sm text-zinc-500">{exp.startDate} – {exp.isCurrent ? 'Present' : exp.endDate}</p>
+                    <p className="text-sm text-muted-foreground">{exp.startDate} – {exp.isCurrent ? 'Present' : exp.endDate}</p>
                     {exp.raw_achievements?.length > 0 && (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
                         {exp.raw_achievements.map((achievement, j) => (
                           <li key={j}>{achievement}</li>
                         ))}
                       </ul>
                     )}
                     {exp.technologies_used?.length > 0 && (
-                      <p className="mt-2 text-xs text-zinc-500">{exp.technologies_used.slice(0, 6).join(', ')}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">{exp.technologies_used.slice(0, 6).join(', ')}</p>
                     )}
                   </div>
                 ))}
@@ -86,18 +86,18 @@ export default function OnboardingReviewPage() {
             {profile.projects?.length > 0 && (
               <Section title="Projects" count={profile.projects.length}>
                 {profile.projects.map((proj, i) => (
-                  <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
+                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
                     <p className="font-medium">{proj.name}</p>
-                    <p className="text-sm text-zinc-500">{proj.startDate} – {proj.endDate}</p>
+                    <p className="text-sm text-muted-foreground">{proj.startDate} – {proj.endDate}</p>
                     {proj.raw_achievements?.length > 0 && (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
                         {proj.raw_achievements.map((achievement, j) => (
                           <li key={j}>{achievement}</li>
                         ))}
                       </ul>
                     )}
                     {proj.technologies_used?.length > 0 && (
-                      <p className="mt-2 text-xs text-zinc-500">{proj.technologies_used.slice(0, 6).join(', ')}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">{proj.technologies_used.slice(0, 6).join(', ')}</p>
                     )}
                   </div>
                 ))}
@@ -107,9 +107,9 @@ export default function OnboardingReviewPage() {
             {profile.education?.length > 0 && (
               <Section title="Education" count={profile.education.length}>
                 {profile.education.map((edu, i) => (
-                  <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
+                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
                     <p className="font-medium">{edu.degree_type} in {edu.major}</p>
-                    <p className="text-sm text-zinc-500">{edu.institution}</p>
+                    <p className="text-sm text-muted-foreground">{edu.institution}</p>
                   </div>
                 ))}
               </Section>
@@ -117,13 +117,13 @@ export default function OnboardingReviewPage() {
 
             {profile.skills?.programming_languages?.length > 0 && (
               <Section title="Skills" count={1}>
-                <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
-                  <p className="text-sm text-zinc-700">
+                <div className="rounded-lg border border-border bg-muted p-4">
+                  <p className="text-sm text-foreground">
                     <span className="font-medium">Languages: </span>
                     {profile.skills.programming_languages.join(', ')}
                   </p>
                   {profile.skills.frameworks_and_libraries?.length > 0 && (
-                    <p className="mt-1 text-sm text-zinc-700">
+                    <p className="mt-1 text-sm text-foreground">
                       <span className="font-medium">Frameworks: </span>
                       {profile.skills.frameworks_and_libraries.join(', ')}
                     </p>
@@ -135,9 +135,9 @@ export default function OnboardingReviewPage() {
             {profile.certifications?.length > 0 && (
               <Section title="Certifications" count={profile.certifications.length}>
                 {profile.certifications.map((cert, i) => (
-                  <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
+                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
                     <p className="font-medium">{cert.name}</p>
-                    <p className="text-sm text-zinc-500">{cert.issuer}{cert.date ? ` – ${cert.date}` : ''}</p>
+                    <p className="text-sm text-muted-foreground">{cert.issuer}{cert.date ? ` – ${cert.date}` : ''}</p>
                   </div>
                 ))}
               </Section>
@@ -146,9 +146,9 @@ export default function OnboardingReviewPage() {
             {profile.awards_and_honors?.length > 0 && (
               <Section title="Awards" count={profile.awards_and_honors.length}>
                 {profile.awards_and_honors.map((award, i) => (
-                  <div key={i} className="rounded-lg border border-zinc-100 bg-zinc-50 p-4">
+                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
                     <p className="font-medium">{award.title}</p>
-                    <p className="text-sm text-zinc-500">{award.issuer}{award.date ? ` – ${award.date}` : ''}</p>
+                    <p className="text-sm text-muted-foreground">{award.issuer}{award.date ? ` – ${award.date}` : ''}</p>
                   </div>
                 ))}
               </Section>
@@ -170,10 +170,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
       <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
         {title}
-        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-normal text-zinc-500">
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
           {count}
         </span>
       </h2>
