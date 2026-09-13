@@ -5,7 +5,7 @@ import { Job, Prisma } from '@prisma/client';
 import { checkCompatibility } from '@resumiq/ai-bridge';
 import type { JobDNA } from '@resumiq/ai-bridge';
 import { scanTrackedCompanies } from '@resumiq/job-scanner';
-import { UpdateUserSettingsSchema, UserSettingsSchema } from '@resumiq/schemas';
+import { CompatibilityResultSchema, UpdateUserSettingsSchema, UserSettingsSchema } from '@resumiq/schemas';
 import type { DiscoverFeedFiltersDto, UpdateUserSettingsDto, UserSettingsDto } from '@resumiq/schemas';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProfileService } from '../profile/profile.service';
@@ -168,7 +168,12 @@ export class JobsService {
     for (const job of candidates) {
       try {
         const jobDNA = job.parsedJd as unknown as JobDNA;
-        const compat = await checkCompatibility(jobDNA, db);
+        const rawCompat = await checkCompatibility(jobDNA, db);
+        const parsedCompat = CompatibilityResultSchema.safeParse(rawCompat);
+        if (!parsedCompat.success) {
+          throw new Error(`checkCompatibility returned an invalid shape: ${parsedCompat.error.message}`);
+        }
+        const compat = parsedCompat.data;
         await this.prisma.jobMatchPreview.upsert({
           where: { userId_jobId: { userId, jobId: job.id } },
           create: { userId, jobId: job.id, matchScore: compat.score },

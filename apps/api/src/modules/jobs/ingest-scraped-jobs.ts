@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { analyzeJob } from '@resumiq/ai-bridge';
 import type { ScrapedJobInput } from '@resumiq/job-scanner';
+import { JobDNASchema } from '@resumiq/schemas';
 import { buildJobDedupeKey } from '../../common/jobs/dedupe-key';
 import { HunterClient } from './enrichment/hunter.client';
 import { PeopleDataLabsClient } from './enrichment/people-data-labs.client';
@@ -57,8 +58,15 @@ export async function ingestScrapedJobs(
   await runWithConcurrencyLimit(newJobs, ANALYZE_CONCURRENCY, async ({ id, input }) => {
     if (!input.description) return; // nothing to analyze — parsedJd stays null
     try {
-      const jobDNA = await analyzeJob(input.description, '');
-      await prisma.job.update({ where: { id }, data: { parsedJd: jobDNA as unknown as Json } });
+      const rawJobDNA = await analyzeJob(input.description, '');
+      const parsedJobDNA = JobDNASchema.safeParse(rawJobDNA);
+      if (!parsedJobDNA.success) {
+        throw new Error(`analyzeJob returned an invalid shape: ${parsedJobDNA.error.message}`);
+      }
+      await prisma.job.update({
+        where: { id },
+        data: { parsedJd: parsedJobDNA.data as unknown as Json },
+      });
     } catch (err) {
       logger?.warn(`analyzeJob failed for job ${id} (${input.company}): ${errorMessage(err)}`);
     }

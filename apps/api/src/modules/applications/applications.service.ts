@@ -13,14 +13,19 @@ import {
 } from '@resumiq/ai-bridge';
 import type {
   AISelection,
+  CompatibilityResult,
+  EmailDraft,
   GapReport,
   InterviewIntakeQuestions,
   JobDNA,
 } from '@resumiq/ai-bridge';
 import {
+  CompatibilityResultSchema,
   InterviewIntakeQuestionsSchema,
   InterviewPrepReportSchema,
+  JobDNASchema,
   JobIntakeResultSchema,
+  UpdateEmailDraftSchema,
   UpdateResumeSelectionSchema,
 } from '@resumiq/schemas';
 import type {
@@ -195,7 +200,15 @@ export class ApplicationsService {
     }
 
     onProgress('Extracting job details...');
-    const jobDNA: JobDNA = await analyzeJob(dto.raw_jd, dto.company_info ?? '');
+    const rawJobDNA = await analyzeJob(dto.raw_jd, dto.company_info ?? '');
+    const parsedJobDNA = JobDNASchema.safeParse(rawJobDNA);
+    if (!parsedJobDNA.success) {
+      this.logger.warn(`analyzeJob returned an invalid shape: ${parsedJobDNA.error.message}`);
+      throw new BadRequestException(
+        'AI generated an invalid job analysis — please retry the analysis',
+      );
+    }
+    const jobDNA: JobDNA = parsedJobDNA.data;
 
     const title = dto.title ?? jobDNA.job_title;
     const companyName = dto.company_name ?? 'Unknown Company';
@@ -268,7 +281,17 @@ export class ApplicationsService {
     }
 
     onProgress('Comparing against your Career Inventory...');
-    const compat = await checkCompatibility(jobDNA, db);
+    const rawCompat = await checkCompatibility(jobDNA, db);
+    const parsedCompat = CompatibilityResultSchema.safeParse(rawCompat);
+    if (!parsedCompat.success) {
+      this.logger.warn(
+        `checkCompatibility returned an invalid shape: ${parsedCompat.error.message}`,
+      );
+      throw new BadRequestException(
+        'AI generated an invalid compatibility assessment — please retry the analysis',
+      );
+    }
+    const compat: CompatibilityResult = parsedCompat.data;
 
     const threshold = DEFAULT_MATCH_THRESHOLD;
 
@@ -579,7 +602,17 @@ export class ApplicationsService {
     onProgress("Drafting cold email in company's tone & values...");
     const jobDNA = application.job.parsedJd as unknown as JobDNA;
     const companyInfo = formatCompanyInfoForPrompt(application.job.companyInfo);
-    const emailDraft = await generateEmail(jobDNA, companyInfo, selection);
+    const rawEmailDraft = await generateEmail(jobDNA, companyInfo, selection);
+    const parsedEmailDraft = UpdateEmailDraftSchema.safeParse(rawEmailDraft);
+    if (!parsedEmailDraft.success) {
+      this.logger.warn(
+        `generateEmail returned an invalid shape: ${parsedEmailDraft.error.message}`,
+      );
+      throw new BadRequestException(
+        'AI generated an invalid email draft — please retry the analysis',
+      );
+    }
+    const emailDraft: EmailDraft = parsedEmailDraft.data;
 
     await this.prisma.application.update({
       where: { id: applicationId },

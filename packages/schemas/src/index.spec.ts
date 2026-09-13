@@ -1,7 +1,9 @@
 import {
+  CompatibilityResultSchema,
   CreateJobSchema,
   ExtractJobIntakeSchema,
   IngestResultSchema,
+  JobDNASchema,
   JobIntakeResultSchema,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
@@ -207,6 +209,74 @@ describe('UpdateGapReportSchema', () => {
 
   it('rejects a match_score outside the 0-100 range', () => {
     expect(() => UpdateGapReportSchema.parse({ ...validGapReport, match_score: -5 })).toThrow();
+  });
+});
+
+describe('CompatibilityResultSchema', () => {
+  const validCompatibilityResult = {
+    compatible: true,
+    score: 82,
+    blockers: [],
+    warnings: ['No direct Kubernetes experience listed'],
+    suggestions: ['Highlight cloud infra work more prominently'],
+    reasons: ['Strong backend match', '4/5 mandatory skills present'],
+    missing_skills: [
+      { skill: 'Kubernetes', priority: 'nice-to-have', suggested_resources: ['CKA course'] },
+    ],
+    strengths: ['Strong TypeScript background'],
+    recommendations: ['Add a project demonstrating container orchestration'],
+  };
+
+  it('accepts a well-formed full payload', () => {
+    expect(() => CompatibilityResultSchema.parse(validCompatibilityResult)).not.toThrow();
+  });
+
+  it('coerces a bare prose string in "reasons" into a 1-element array', () => {
+    const result = CompatibilityResultSchema.parse({
+      ...validCompatibilityResult,
+      reasons: 'a single prose string',
+    });
+
+    expect(result.reasons).toEqual(['a single prose string']);
+  });
+
+  it('rejects a score that is a string instead of a number', () => {
+    expect(() =>
+      CompatibilityResultSchema.parse({ ...validCompatibilityResult, score: '82' }),
+    ).toThrow();
+  });
+
+  it('rejects a score outside the 0-100 range', () => {
+    expect(() =>
+      CompatibilityResultSchema.parse({ ...validCompatibilityResult, score: 150 }),
+    ).toThrow();
+  });
+});
+
+describe('JobDNASchema', () => {
+  const validJobDNA = {
+    job_title: 'Backend Engineer',
+    seniority: 'Senior',
+    mandatory_technical_skills: ['Node.js', 'PostgreSQL'],
+    mandatory_soft_skills: ['Communication'],
+    nice_to_have_skills: ['Kubernetes'],
+    ats_keywords: ['backend', 'node'],
+    company_culture_and_values: ['Ownership', 'Move fast'],
+    primary_responsibilities_summary: 'Own the payments service end to end.',
+    tone_recommendation: 'Confident and direct',
+  };
+
+  it('accepts a well-formed payload', () => {
+    expect(() => JobDNASchema.parse(validJobDNA)).not.toThrow();
+  });
+
+  it('coerces a bare prose string in "ats_keywords" into a 1-element array', () => {
+    const result = JobDNASchema.parse({
+      ...validJobDNA,
+      ats_keywords: 'backend, node, postgres',
+    });
+
+    expect(result.ats_keywords).toEqual(['backend, node, postgres']);
   });
 });
 

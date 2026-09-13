@@ -153,6 +153,49 @@ export const JobIntakeResultSchema = z.object({
   company_info_summary: z.string().nullable(),
 });
 
+// ── AI Bridge output validation — analyzeJob / checkCompatibility ──────────
+
+// LLM output occasionally collapses a documented string[] field into a bare
+// prose string (observed live in checkCompatibility's `reasons` field — 2 of
+// 3 real calls returned a string, which crashed MatchScoreDisplay's
+// `reasons.map()` in production). Coerce a bare string into a 1-element
+// array rather than failing the whole request over this specific, common
+// shape drift.
+const stringArrayWithStringCoercion = z.preprocess(
+  (val) => (typeof val === 'string' ? [val] : val),
+  z.array(z.string()),
+);
+
+export const CompatibilityResultSchema = z.object({
+  compatible: z.boolean(),
+  score: z.number().min(0).max(100),
+  blockers: stringArrayWithStringCoercion,
+  warnings: stringArrayWithStringCoercion,
+  suggestions: stringArrayWithStringCoercion,
+  reasons: stringArrayWithStringCoercion,
+  missing_skills: z.array(
+    z.object({
+      skill: z.string(),
+      priority: z.enum(['mandatory', 'nice-to-have']),
+      suggested_resources: stringArrayWithStringCoercion,
+    }),
+  ),
+  strengths: stringArrayWithStringCoercion,
+  recommendations: stringArrayWithStringCoercion,
+});
+
+export const JobDNASchema = z.object({
+  job_title: z.string().min(1),
+  seniority: z.string().min(1),
+  mandatory_technical_skills: stringArrayWithStringCoercion,
+  mandatory_soft_skills: stringArrayWithStringCoercion,
+  nice_to_have_skills: stringArrayWithStringCoercion,
+  ats_keywords: stringArrayWithStringCoercion,
+  company_culture_and_values: stringArrayWithStringCoercion,
+  primary_responsibilities_summary: z.string(),
+  tone_recommendation: z.string(),
+});
+
 // ── Phase 2: Applications — resume selection / email draft edits ───────────
 
 const SectionTypeSchema = z.enum([
@@ -372,3 +415,5 @@ export type ListApplicationsFiltersDto = z.infer<typeof ListApplicationsFiltersS
 export type InterviewPrepIntakeAnswersDto = z.infer<typeof InterviewPrepIntakeAnswersSchema>;
 export type InterviewIntakeQuestionsDto = z.infer<typeof InterviewIntakeQuestionsSchema>;
 export type InterviewPrepReportDto = z.infer<typeof InterviewPrepReportSchema>;
+export type CompatibilityResultDto = z.infer<typeof CompatibilityResultSchema>;
+export type JobDNADto = z.infer<typeof JobDNASchema>;

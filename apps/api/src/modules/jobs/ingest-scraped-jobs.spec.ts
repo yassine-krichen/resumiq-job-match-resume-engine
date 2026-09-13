@@ -189,6 +189,29 @@ describe('ingestScrapedJobs', () => {
     );
   });
 
+  it('treats a malformed analyzeJob result the same as a rejection — job skipped, parsedJd stays null, batch continues', async () => {
+    const failing = scrapedJobFixture({ company: 'Malformed Co', url: 'https://example.com/1' });
+    const succeeding = scrapedJobFixture({ company: 'Succeeding Co', url: 'https://example.com/2' });
+    prisma.job.findUnique.mockResolvedValue(null);
+    prisma.job.create.mockResolvedValueOnce({ id: 'job-fail' }).mockResolvedValueOnce({ id: 'job-ok' });
+    // Missing required fields (job_title, seniority, etc.) fails JobDNASchema.safeParse.
+    analyzeJobMock
+      .mockResolvedValueOnce({ job_title: 'Backend Engineer' })
+      .mockResolvedValueOnce(jobDNAFixture());
+    hunterClient.findContact.mockResolvedValue(null);
+    pdlClient.findCompanyProfile.mockResolvedValue(null);
+
+    const result = await ingestScrapedJobs([failing, succeeding], deps());
+
+    // Both jobs were still created — the shape-validation failure is swallowed, not propagated.
+    expect(result).toEqual({ scanned: 2, created: 2 });
+    expect(prisma.job.update).toHaveBeenCalledTimes(1);
+    expect(prisma.job.update).toHaveBeenCalledWith({ where: { id: 'job-ok' }, data: { parsedJd: jobDNAFixture() } });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('analyzeJob failed for job job-fail (Malformed Co): analyzeJob returned an invalid shape'),
+    );
+  });
+
   it('does not throw when analyzeJob rejects and no logger was supplied', async () => {
     prisma.job.findUnique.mockResolvedValue(null);
     prisma.job.create.mockResolvedValue({ id: 'job-1' });

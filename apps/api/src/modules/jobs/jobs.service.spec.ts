@@ -1,7 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { checkCompatibility } from '@resumiq/ai-bridge';
-import type { JobDNA, MasterDB } from '@resumiq/ai-bridge';
+import type { CompatibilityResult, JobDNA, MasterDB } from '@resumiq/ai-bridge';
 import { scanTrackedCompanies } from '@resumiq/job-scanner';
 import type { ScrapedJobInput } from '@resumiq/job-scanner';
 import type { DiscoverFeedFiltersDto } from '@resumiq/schemas';
@@ -59,6 +59,21 @@ function masterDBFixture(): MasterDB {
     publications_and_speaking: [],
     volunteering_and_leadership: [],
     interests: [],
+  };
+}
+
+function compatibilityResultFixture(overrides: Partial<CompatibilityResult> = {}): CompatibilityResult {
+  return {
+    compatible: true,
+    score: 88,
+    blockers: [],
+    warnings: [],
+    suggestions: [],
+    reasons: ['Strong match'],
+    missing_skills: [],
+    strengths: [],
+    recommendations: [],
+    ...overrides,
   };
 }
 
@@ -333,7 +348,7 @@ describe('JobsService', () => {
       profileService.getProfile.mockResolvedValue(masterDBFixture());
       const jobDNA = jobDNAFixture();
       prisma.job.findMany.mockResolvedValue([{ id: 'job-1', parsedJd: jobDNA }]);
-      checkCompatibilityMock.mockResolvedValue({ score: 88 });
+      checkCompatibilityMock.mockResolvedValue(compatibilityResultFixture({ score: 88 }));
 
       const result = await service.refreshMatchPreviews(USER_ID);
 
@@ -354,7 +369,7 @@ describe('JobsService', () => {
       ]);
       checkCompatibilityMock
         .mockRejectedValueOnce(new Error('LLM error'))
-        .mockResolvedValueOnce({ score: 60 });
+        .mockResolvedValueOnce(compatibilityResultFixture({ score: 60 }));
 
       const result = await service.refreshMatchPreviews(USER_ID);
 

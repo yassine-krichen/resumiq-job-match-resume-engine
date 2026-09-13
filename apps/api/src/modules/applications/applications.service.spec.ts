@@ -264,6 +264,55 @@ describe('ApplicationsService', () => {
       });
     });
 
+    it('coerces a bare prose string in checkCompatibility\'s "reasons" field into a 1-element array before persisting', async () => {
+      profileService.getProfile.mockResolvedValue(masterDBFixture());
+      analyzeJobMock.mockResolvedValue(jobDNAFixture());
+      prisma.job.upsert.mockResolvedValue({ id: 'job-1' });
+      checkCompatibilityMock.mockResolvedValue({
+        compatible: false,
+        score: 20,
+        blockers: ['Missing TypeScript'],
+        warnings: [],
+        suggestions: [],
+        reasons: 'a single prose string',
+        missing_skills: [{ skill: 'TypeScript', priority: 'mandatory', suggested_resources: ['course'] }],
+        strengths: [],
+        recommendations: ['Build a TypeScript project'],
+      });
+      prisma.application.create.mockResolvedValue({ id: APP_ID });
+
+      const result = await service.analyzeAndDraft(OWNER, createJobDtoFixture(), onProgress);
+
+      expect(result.reasons).toEqual(['a single prose string']);
+      expect(prisma.application.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ matchReasons: ['a single prose string'] }),
+        }),
+      );
+    });
+
+    it('throws BadRequestException when checkCompatibility returns an invalid score', async () => {
+      profileService.getProfile.mockResolvedValue(masterDBFixture());
+      analyzeJobMock.mockResolvedValue(jobDNAFixture());
+      prisma.job.upsert.mockResolvedValue({ id: 'job-1' });
+      checkCompatibilityMock.mockResolvedValue({
+        compatible: false,
+        score: 'high',
+        blockers: [],
+        warnings: [],
+        suggestions: [],
+        reasons: [],
+        missing_skills: [],
+        strengths: [],
+        recommendations: [],
+      });
+
+      await expect(
+        service.analyzeAndDraft(OWNER, createJobDtoFixture(), onProgress),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.application.create).not.toHaveBeenCalled();
+    });
+
     it('reports progress at each step of the analyze pipeline', async () => {
       profileService.getProfile.mockResolvedValue(masterDBFixture());
       analyzeJobMock.mockResolvedValue(jobDNAFixture());
