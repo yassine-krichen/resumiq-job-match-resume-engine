@@ -185,7 +185,7 @@ export function JobIntakeReviewForm({
             Back
           </Button>
           <Button type="submit" disabled={!canSubmit || loading}>
-            Analyze job
+            Confirm & score
           </Button>
         </div>
       </form>

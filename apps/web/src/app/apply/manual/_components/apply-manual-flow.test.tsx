@@ -233,7 +233,7 @@ describe('ApplyManualFlow', () => {
     await waitFor(() => expect(screen.getByText('Review job details')).toBeInTheDocument());
     expect(screen.getByLabelText(/company name/i)).toHaveValue('Acme Corp');
 
-    fireEvent.click(screen.getByRole('button', { name: /analyze job/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm & score/i }));
 
     expect(pushMock).toHaveBeenCalledWith('/apply/manual?applicationId=new-app-id');
   });

@@ -125,7 +125,10 @@ export const MasterDBSchema = z.object({
 // ── API Request/Response Schemas ────────────────────────────────────────────
 
 export const CreateJobSchema = z.object({
-  raw_jd: z.string().min(50, 'Job description too short'),
+  raw_jd: z
+    .string()
+    .min(50, 'Job description too short')
+    .max(20000, 'Job description is too long — trim it to under 20,000 characters'),
   company_info: z.string().optional(),
   pages: z.union([z.literal(1), z.literal(2)]).default(2),
   source_url: z.string().url().optional(),
@@ -141,7 +144,10 @@ export const UpdateCareerProfileSchema = MasterDBSchema.partial();
 // ── Manual Job Intake — paste-and-parse extraction ──────────────────────────
 
 export const ExtractJobIntakeSchema = z.object({
-  raw_text: z.string().min(50, 'Paste more of the job posting'),
+  raw_text: z
+    .string()
+    .min(50, 'Paste more of the job posting')
+    .max(20000, 'Job description is too long — trim it to under 20,000 characters'),
 });
 
 export const JobIntakeResultSchema = z.object({

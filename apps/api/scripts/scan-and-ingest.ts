@@ -20,6 +20,7 @@ async function scanAndIngest(): Promise<{ scanned: number; created: number }> {
     prisma,
     hunterClient: new HunterClient(),
     pdlClient: new PeopleDataLabsClient(),
+    logger: { warn: (msg: string) => console.warn(msg) },
   });
 }
 

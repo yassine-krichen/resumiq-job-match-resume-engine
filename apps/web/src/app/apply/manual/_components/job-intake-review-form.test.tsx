@@ -58,9 +58,9 @@ describe('JobIntakeReviewForm', () => {
   it('blocks submit when company name is empty, even with a populated initial minus company_name', () => {
     const { onSubmit } = renderForm({ initial: fullIntake({ company_name: null }) });
 
-    expect(screen.getByRole('button', { name: /analyze job/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /confirm & score/i })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /analyze job/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm & score/i }));
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -99,7 +99,7 @@ describe('JobIntakeReviewForm', () => {
     fireEvent.change(screen.getByLabelText(/company name/i), {
       target: { value: '  Acme Corp Edited  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /analyze job/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm & score/i }));
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith(

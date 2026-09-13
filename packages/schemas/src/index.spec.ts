@@ -23,6 +23,12 @@ describe('CreateJobSchema', () => {
     expect(() => CreateJobSchema.parse({ raw_jd: 'too short' })).toThrow();
   });
 
+  it('rejects a raw_jd longer than 20,000 characters', () => {
+    const tooLong = 'a'.repeat(20001);
+
+    expect(() => CreateJobSchema.parse({ raw_jd: tooLong })).toThrow();
+  });
+
   it('accepts pages: 1 for a one-page resume constraint', () => {
     const result = CreateJobSchema.parse({ raw_jd: validRawJd, pages: 1 });
 
@@ -67,6 +73,12 @@ describe('ExtractJobIntakeSchema', () => {
     const result = ExtractJobIntakeSchema.parse({ raw_text });
 
     expect(result.raw_text).toBe(raw_text);
+  });
+
+  it('rejects a raw_text longer than 20,000 characters', () => {
+    const tooLong = 'a'.repeat(20001);
+
+    expect(() => ExtractJobIntakeSchema.parse({ raw_text: tooLong })).toThrow();
   });
 });
 

@@ -35,10 +35,19 @@ export async function ingestScrapedJobs(
   const { prisma, hunterClient, pdlClient, logger } = deps;
 
   const newJobs: Array<{ id: string; input: ScrapedJobInput }> = [];
+  const retryJobs: Array<{ id: string; input: ScrapedJobInput }> = [];
   for (const input of scraped) {
     const dedupeKey = buildJobDedupeKey(input.company, input.title, input.location);
-    const existing = await prisma.job.findUnique({ where: { dedupeKey }, select: { id: true } });
-    if (existing) continue;
+    const existing = await prisma.job.findUnique({
+      where: { dedupeKey },
+      select: { id: true, parsedJd: true },
+    });
+    if (existing) {
+      if (existing.parsedJd === null && input.description) {
+        retryJobs.push({ id: existing.id, input });
+      }
+      continue;
+    }
 
     const job = await prisma.job.create({
       data: {
@@ -55,7 +64,8 @@ export async function ingestScrapedJobs(
     newJobs.push({ id: job.id, input });
   }
 
-  await runWithConcurrencyLimit(newJobs, ANALYZE_CONCURRENCY, async ({ id, input }) => {
+  const jobsToAnalyze = [...newJobs, ...retryJobs];
+  await runWithConcurrencyLimit(jobsToAnalyze, ANALYZE_CONCURRENCY, async ({ id, input }) => {
     if (!input.description) return; // nothing to analyze — parsedJd stays null
     try {
       const rawJobDNA = await analyzeJob(input.description, '');

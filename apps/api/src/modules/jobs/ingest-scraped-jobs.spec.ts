@@ -82,20 +82,48 @@ describe('ingestScrapedJobs', () => {
     };
   }
 
-  it('skips a scraped job whose dedupeKey already exists in the DB, never creating a duplicate', async () => {
+  it('skips a scraped job whose dedupeKey already exists in the DB with a parsedJd, never creating a duplicate', async () => {
     const scraped = scrapedJobFixture();
-    prisma.job.findUnique.mockResolvedValue({ id: 'existing-job' });
+    prisma.job.findUnique.mockResolvedValue({ id: 'existing-job', parsedJd: jobDNAFixture() });
 
     const result = await ingestScrapedJobs([scraped], deps());
 
     const expectedKey = buildJobDedupeKey(scraped.company, scraped.title, scraped.location);
     expect(prisma.job.findUnique).toHaveBeenCalledWith({
       where: { dedupeKey: expectedKey },
-      select: { id: true },
+      select: { id: true, parsedJd: true },
     });
     expect(prisma.job.create).not.toHaveBeenCalled();
     expect(analyzeJobMock).not.toHaveBeenCalled();
+    expect(prisma.job.update).not.toHaveBeenCalled();
     expect(result).toEqual({ scanned: 1, created: 0 });
+  });
+
+  it('retries analysis for an existing job stuck with a null parsedJd, updating it on success', async () => {
+    const scraped = scrapedJobFixture();
+    prisma.job.findUnique.mockResolvedValue({ id: 'existing-job', parsedJd: null });
+    const dna = jobDNAFixture();
+    analyzeJobMock.mockResolvedValue(dna);
+
+    const result = await ingestScrapedJobs([scraped], deps());
+
+    expect(prisma.job.create).not.toHaveBeenCalled();
+    expect(analyzeJobMock).toHaveBeenCalledWith(scraped.description, '');
+    expect(prisma.job.update).toHaveBeenCalledWith({
+      where: { id: 'existing-job' },
+      data: { parsedJd: dna },
+    });
+    // A retry is not a new row — created still reflects genuinely new rows only.
+    expect(result).toEqual({ scanned: 1, created: 0 });
+  });
+
+  it('does not retry an existing job stuck with a null parsedJd when the scraped input has no description', async () => {
+    prisma.job.findUnique.mockResolvedValue({ id: 'existing-job', parsedJd: null });
+
+    await ingestScrapedJobs([scrapedJobFixture({ description: undefined })], deps());
+
+    expect(analyzeJobMock).not.toHaveBeenCalled();
+    expect(prisma.job.update).not.toHaveBeenCalled();
   });
 
   it('creates a new Job row for genuinely new scraped input and flags remote from the location text', async () => {
