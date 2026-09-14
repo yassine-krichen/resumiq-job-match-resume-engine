@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -137,16 +138,15 @@ export function JobIntakeReviewForm({
               disabled={loading}
             />
           </div>
-          <label className="flex items-center gap-2 self-end pb-1.5 text-sm text-foreground">
-            <input
-              type="checkbox"
+          <Label htmlFor="job-remote" className="self-end pb-1.5 font-normal">
+            <Checkbox
+              id="job-remote"
               checked={remote}
-              onChange={(e) => setRemote(e.target.checked)}
+              onCheckedChange={setRemote}
               disabled={loading}
-              className="h-4 w-4 rounded border-input"
             />
             Remote
-          </label>
+          </Label>
         </div>
 
         <div>

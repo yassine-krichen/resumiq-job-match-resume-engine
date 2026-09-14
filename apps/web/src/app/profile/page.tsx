@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import type { MasterDB } from '@resumiq/schemas';
 import { AddAchievementModal, type NewAchievement } from './_components/add-achievement-modal';
+import { PageHeader } from '@/components/page-header';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 // Presence/count-based strength — not a backend score, just a rough visual
@@ -96,13 +97,10 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card px-6 py-4">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <button onClick={() => router.back()} className="text-sm text-muted-foreground hover:text-foreground">
-            ← Back
-          </button>
-          <h1 className="text-base font-semibold">Career Profile</h1>
-          <div className="flex items-center gap-3">
+      <PageHeader
+        title="Career Profile"
+        actions={
+          <>
             <ThemeToggle />
             <button
               onClick={() => router.push('/onboarding')}
@@ -110,9 +108,9 @@ export default function ProfilePage() {
             >
               + Add entry
             </button>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <main className="mx-auto max-w-4xl px-6 py-10">
         {/* Summary stats */}

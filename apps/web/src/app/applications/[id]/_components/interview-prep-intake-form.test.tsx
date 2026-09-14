@@ -58,8 +58,8 @@ describe('InterviewPrepIntakeForm', () => {
       }),
     });
 
-    expect(screen.getByLabelText('Kubernetes')).toBeInTheDocument();
-    expect(screen.getByLabelText('System design')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Kubernetes' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'System design' })).toBeInTheDocument();
     expect(screen.getByLabelText('Why this company?')).toBeInTheDocument();
     expect(screen.getByLabelText('Describe a scaling challenge.')).toBeInTheDocument();
   });
@@ -81,7 +81,7 @@ describe('InterviewPrepIntakeForm', () => {
       intake: buildInterviewPrepIntakeState({ weak_topics: ['Kubernetes', 'System design'] }),
     });
 
-    fireEvent.click(screen.getByLabelText('Kubernetes'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Kubernetes' }));
     fireEvent.click(screen.getByRole('button', { name: /submit & generate report/i }));
 
     await waitFor(() => expect(updateInterviewPrepIntakeAnswers).toHaveBeenCalledTimes(1));
@@ -91,7 +91,7 @@ describe('InterviewPrepIntakeForm', () => {
   it('unchecking a previously checked weak topic removes it from weak_topics_selected', async () => {
     renderForm({ intake: buildInterviewPrepIntakeState({ weak_topics: ['Kubernetes'] }) });
 
-    const checkbox = screen.getByLabelText('Kubernetes');
+    const checkbox = screen.getByRole('checkbox', { name: 'Kubernetes' });
     fireEvent.click(checkbox);
     fireEvent.click(checkbox);
     fireEvent.click(screen.getByRole('button', { name: /submit & generate report/i }));

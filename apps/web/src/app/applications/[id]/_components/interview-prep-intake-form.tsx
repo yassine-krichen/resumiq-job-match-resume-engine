@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { InterviewPrepIntakeAnswersDto } from '@resumiq/schemas';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,6 +16,13 @@ const INTERVIEW_FORMATS: Array<{ value: InterviewPrepIntakeAnswersDto['interview
   { value: 'one_on_one', label: 'One-on-one' },
   { value: 'panel', label: 'Panel' },
 ];
+
+// `aria-labelledby` is a space-separated token list, so an id built straight
+// from free-text topic content (e.g. "System design") would silently break
+// the checkbox's accessible-name association. Slugify it to a single token.
+function slugify(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
 
 interface InterviewPrepIntakeFormProps {
   applicationId: string;
@@ -91,15 +99,13 @@ export function InterviewPrepIntakeForm({
           <ul className="space-y-2">
             {intake.weak_topics.map((topic) => (
               <li key={topic} className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id={`weak-topic-${topic}`}
+                <Checkbox
+                  id={`weak-topic-${slugify(topic)}`}
                   checked={weakTopicsSelected.includes(topic)}
-                  onChange={(e) => toggleWeakTopic(topic, e.target.checked)}
+                  onCheckedChange={(checked) => toggleWeakTopic(topic, checked)}
                   disabled={submitting}
-                  className="h-4 w-4 rounded border-border"
                 />
-                <Label htmlFor={`weak-topic-${topic}`}>{topic}</Label>
+                <Label htmlFor={`weak-topic-${slugify(topic)}`}>{topic}</Label>
               </li>
             ))}
           </ul>

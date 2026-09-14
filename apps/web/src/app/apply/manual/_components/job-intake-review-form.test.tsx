@@ -43,7 +43,7 @@ describe('JobIntakeReviewForm', () => {
     expect(screen.getByLabelText(/company name/i)).toHaveValue('Acme Corp');
     expect(screen.getByLabelText(/location/i)).toHaveValue('Remote (US)');
     expect(screen.getByLabelText(/salary range/i)).toHaveValue('$140k - $170k');
-    expect(screen.getByLabelText(/remote/i)).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /remote/i })).toBeChecked();
     expect(screen.getByLabelText(/company info/i)).toHaveValue('A fintech infra company.');
   });
 
@@ -52,7 +52,7 @@ describe('JobIntakeReviewForm', () => {
 
     expect(screen.getByLabelText(/job title/i)).toHaveValue('');
     expect(screen.getByLabelText(/company name/i)).toHaveValue('');
-    expect(screen.getByLabelText(/remote/i)).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /remote/i })).not.toBeChecked();
   });
 
   it('blocks submit when company name is empty, even with a populated initial minus company_name', () => {

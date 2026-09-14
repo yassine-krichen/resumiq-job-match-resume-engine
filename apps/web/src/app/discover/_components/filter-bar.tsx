@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useUpdateUserSettings } from '@/hooks/use-user-settings';
@@ -96,15 +97,14 @@ export function FilterBar({ filters, onChange }: FilterBarProps): React.JSX.Elem
           <Label>Work mode</Label>
           <div className="mt-1 flex flex-wrap gap-3 pt-1.5">
             {WORK_MODES.map((mode) => (
-              <label key={mode} className="flex items-center gap-1.5 text-sm text-foreground">
-                <input
-                  type="checkbox"
+              <Label key={mode} htmlFor={`filter-work-mode-${mode}`} className="font-normal">
+                <Checkbox
+                  id={`filter-work-mode-${mode}`}
                   checked={workMode.includes(mode)}
-                  onChange={() => toggleWorkMode(mode)}
-                  className="h-4 w-4 rounded border-input"
+                  onCheckedChange={() => toggleWorkMode(mode)}
                 />
                 {mode}
-              </label>
+              </Label>
             ))}
           </div>
         </div>

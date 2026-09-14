@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ClipboardPaste, FileText, Search, Settings, Sparkles, User } from 'lucide-react';
 import { GapReportView } from '../apply/manual/_components/gap-report-view';
 import { STATUS_LABELS } from '../applications/_components/types';
 import { getDashboardSummary } from './_components/api';
@@ -82,36 +83,48 @@ export default function DashboardPage() {
             description="View and manage your experience, projects, and skills."
             href="/profile"
             cta="View profile"
+            icon={User}
+            accentClassName="bg-blue-500/10 text-blue-600 dark:text-blue-400"
           />
           <DashCard
             title="Discover jobs"
             description="Swipe through matched jobs and draft resumes in the background."
             href="/discover"
             cta="Discover jobs"
+            icon={Search}
+            accentClassName="bg-violet-500/10 text-violet-600 dark:text-violet-400"
           />
           <DashCard
             title="Applications"
             description="Browse, filter, and review every application you've drafted."
             href="/applications"
             cta="View applications"
+            icon={FileText}
+            accentClassName="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
           />
           <DashCard
             title="Paste a job"
             description="Paste a job description to generate a tailored resume."
             href="/apply/manual"
             cta="Paste a job"
+            icon={ClipboardPaste}
+            accentClassName="bg-amber-500/10 text-amber-600 dark:text-amber-400"
           />
           <DashCard
             title="Settings"
             description="Tune match threshold, target roles, and notification preferences."
             href="/settings"
             cta="Edit settings"
+            icon={Settings}
+            accentClassName="bg-slate-500/10 text-slate-600 dark:text-slate-400"
           />
           <DashCard
             title="Add Entry"
             description="Paste raw text — AI parses it into your career profile."
             href="/onboarding"
             cta="Add experience"
+            icon={Sparkles}
+            accentClassName="bg-rose-500/10 text-rose-600 dark:text-rose-400"
           />
         </div>
 
@@ -176,16 +189,23 @@ function DashCard({
   description,
   href,
   cta,
+  icon: Icon,
+  accentClassName,
   disabled,
 }: {
   title: string;
   description: string;
   href: string;
   cta: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accentClassName: string;
   disabled?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <div className={`mb-3 flex size-9 items-center justify-center rounded-lg ${accentClassName}`}>
+        <Icon className="size-5" />
+      </div>
       <h2 className="text-base font-semibold">{title}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       {disabled ? (

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUserSettings } from '@/hooks/use-user-settings';
+import { PageHeader } from '@/components/page-header';
 import {
   dismissJob,
   getDiscoverFeed,
@@ -102,39 +103,45 @@ export default function DiscoverPage(): React.JSX.Element {
   });
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-background px-4 py-12">
-      <div className="w-full max-w-3xl">
-        <h1 className="text-2xl font-bold">Discover jobs</h1>
-        <p className="mt-1 text-muted-foreground">
-          Swipe right to draft a resume in the background — swipe left to pass.
-        </p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <PageHeader
+        title="Discover jobs"
+        containerClassName="mx-auto flex max-w-3xl items-center justify-between"
+      />
 
-      <FilterBar filters={filters} onChange={setFilters} />
-
-      {swipeMessage && (
-        <div className="w-full max-w-xl rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {swipeMessage}
+      <div className="flex flex-col items-center gap-6 px-4 py-12">
+        <div className="w-full max-w-3xl">
+          <p className="text-muted-foreground">
+            Swipe right to draft a resume in the background — swipe left to pass.
+          </p>
         </div>
-      )}
 
-      {feedQuery.isLoading && <p className="text-muted-foreground">Loading jobs...</p>}
-      {feedQuery.isError && <p className="text-red-600">{(feedQuery.error as Error).message}</p>}
+        <FilterBar filters={filters} onChange={setFilters} />
 
-      {feedQuery.data && (
-        <SwipeDeck
-          items={feedQuery.data.items}
-          onDismiss={(jobId) => dismissMutation.mutate(jobId)}
-          onSwipeRight={(jobId) => swipeRightMutation.mutate(jobId)}
-        />
-      )}
+        {swipeMessage && (
+          <div className="w-full max-w-xl rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            {swipeMessage}
+          </div>
+        )}
 
-      {dismissMutation.isError && (
-        <p className="text-sm text-red-600">Couldn&apos;t dismiss that job — try again.</p>
-      )}
-      {swipeRightMutation.isError && (
-        <p className="text-sm text-red-600">Couldn&apos;t queue that application — try again.</p>
-      )}
+        {feedQuery.isLoading && <p className="text-muted-foreground">Loading jobs...</p>}
+        {feedQuery.isError && <p className="text-red-600">{(feedQuery.error as Error).message}</p>}
+
+        {feedQuery.data && (
+          <SwipeDeck
+            items={feedQuery.data.items}
+            onDismiss={(jobId) => dismissMutation.mutate(jobId)}
+            onSwipeRight={(jobId) => swipeRightMutation.mutate(jobId)}
+          />
+        )}
+
+        {dismissMutation.isError && (
+          <p className="text-sm text-red-600">Couldn&apos;t dismiss that job — try again.</p>
+        )}
+        {swipeRightMutation.isError && (
+          <p className="text-sm text-red-600">Couldn&apos;t queue that application — try again.</p>
+        )}
+      </div>
     </div>
   );
 }

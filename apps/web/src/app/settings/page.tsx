@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { PageHeader } from '@/components/page-header';
 import { useUpdateUserSettings, useUserSettings } from '@/hooks/use-user-settings';
 
 const WORK_MODES = ['remote', 'hybrid', 'onsite'] as const;
@@ -66,167 +68,172 @@ export default function SettingsPage(): React.JSX.Element {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-background px-4 py-12">
-      <div className="w-full max-w-2xl">
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="mt-1 text-muted-foreground">
-          Controls how jobs are matched and surfaced on your Discover feed.
-        </p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <PageHeader
+        title="Settings"
+        containerClassName="mx-auto flex max-w-2xl items-center justify-between"
+      />
 
-      {settingsQuery.isLoading && <p className="text-muted-foreground">Loading settings...</p>}
-      {settingsQuery.isError && (
-        <p className="text-red-600">{(settingsQuery.error as Error).message}</p>
-      )}
-
-      {settings && (
-        <div className="w-full max-w-2xl space-y-6 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div>
-            <Label htmlFor="match-threshold">Match threshold (0–100)</Label>
-            <Input
-              id="match-threshold"
-              type="number"
-              min={0}
-              max={100}
-              value={matchThreshold}
-              onChange={(e) => setMatchThreshold(e.target.value)}
-              className="mt-1"
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Jobs scoring below this are treated as a gap report instead of a resume draft.
-            </p>
-          </div>
-
-          <div>
-            <Label htmlFor="preferred-locations">Preferred locations</Label>
-            <Input
-              id="preferred-locations"
-              value={preferredLocations}
-              onChange={(e) => setPreferredLocations(e.target.value)}
-              placeholder="e.g. Berlin, Remote"
-              className="mt-1"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="target-roles">Target roles</Label>
-            <Input
-              id="target-roles"
-              value={targetRoles}
-              onChange={(e) => setTargetRoles(e.target.value)}
-              placeholder="e.g. Backend Engineer, Platform Engineer"
-              className="mt-1"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="seniority">Seniority</Label>
-            <select
-              id="seniority"
-              value={seniority}
-              onChange={(e) => setSeniority(e.target.value)}
-              className="mt-1 h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-            >
-              <option value="">Any</option>
-              {SENIORITY_LEVELS.map((level) => (
-                <option key={level} value={level}>
-                  {level}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <Label htmlFor="category-tags">Category / field</Label>
-            <Input
-              id="category-tags"
-              value={categoryTags}
-              onChange={(e) => setCategoryTags(e.target.value)}
-              placeholder="e.g. backend, data"
-              className="mt-1"
-            />
-          </div>
-
-          <div>
-            <Label>Work mode</Label>
-            <div className="mt-1 flex flex-wrap gap-3 pt-1.5">
-              {WORK_MODES.map((mode) => (
-                <label key={mode} className="flex items-center gap-1.5 text-sm text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={workMode.includes(mode)}
-                    onChange={() => toggleWorkMode(mode)}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  {mode}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="auto-send-email">Auto-send email</Label>
-              <p className="text-xs text-muted-foreground">Not yet wired to actually send anything.</p>
-            </div>
-            <Switch
-              id="auto-send-email"
-              checked={autoSendEmail}
-              onCheckedChange={setAutoSendEmail}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="notify-new-jobs">Notify on new jobs</Label>
-            <Switch
-              id="notify-new-jobs"
-              checked={notifyOnNewJobs}
-              onCheckedChange={setNotifyOnNewJobs}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="resume-template">Resume template</Label>
-            <select
-              id="resume-template"
-              disabled
-              value={settings.resume_template}
-              className="mt-1 h-8 w-full rounded-lg border border-input bg-muted px-2.5 text-sm text-muted-foreground"
-              onChange={() => {}}
-            >
-              <option value={settings.resume_template}>{settings.resume_template}</option>
-            </select>
-            <p className="mt-1 text-xs text-muted-foreground">Coming soon — currently hardcoded.</p>
-          </div>
-
-          <div>
-            <Label htmlFor="ai-provider-override">AI provider override</Label>
-            <Input
-              id="ai-provider-override"
-              disabled
-              value={settings.ai_provider_override ?? ''}
-              placeholder="Not configurable yet"
-              className="mt-1"
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Coming soon — the LLM layer doesn&apos;t support a per-user override yet.
-            </p>
-          </div>
-
-          {updateMutation.isError && (
-            <p className="text-sm text-red-600">{(updateMutation.error as Error).message}</p>
-          )}
-          {updateMutation.isSuccess && (
-            <p className="text-sm text-emerald-600">Settings saved.</p>
-          )}
-
-          <div className="flex justify-end">
-            <Button type="button" onClick={handleSave} disabled={updateMutation.isPending}>
-              Save settings
-            </Button>
-          </div>
+      <div className="flex flex-col items-center gap-6 px-4 py-12">
+        <div className="w-full max-w-2xl">
+          <p className="text-muted-foreground">
+            Controls how jobs are matched and surfaced on your Discover feed.
+          </p>
         </div>
-      )}
+
+        {settingsQuery.isLoading && <p className="text-muted-foreground">Loading settings...</p>}
+        {settingsQuery.isError && (
+          <p className="text-red-600">{(settingsQuery.error as Error).message}</p>
+        )}
+
+        {settings && (
+          <div className="w-full max-w-2xl space-y-6 rounded-xl border border-border bg-card p-6 shadow-sm">
+            <div>
+              <Label htmlFor="match-threshold">Match threshold (0–100)</Label>
+              <Input
+                id="match-threshold"
+                type="number"
+                min={0}
+                max={100}
+                value={matchThreshold}
+                onChange={(e) => setMatchThreshold(e.target.value)}
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Jobs scoring below this are treated as a gap report instead of a resume draft.
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="preferred-locations">Preferred locations</Label>
+              <Input
+                id="preferred-locations"
+                value={preferredLocations}
+                onChange={(e) => setPreferredLocations(e.target.value)}
+                placeholder="e.g. Berlin, Remote"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="target-roles">Target roles</Label>
+              <Input
+                id="target-roles"
+                value={targetRoles}
+                onChange={(e) => setTargetRoles(e.target.value)}
+                placeholder="e.g. Backend Engineer, Platform Engineer"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="seniority">Seniority</Label>
+              <select
+                id="seniority"
+                value={seniority}
+                onChange={(e) => setSeniority(e.target.value)}
+                className="mt-1 h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+              >
+                <option value="">Any</option>
+                {SENIORITY_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="category-tags">Category / field</Label>
+              <Input
+                id="category-tags"
+                value={categoryTags}
+                onChange={(e) => setCategoryTags(e.target.value)}
+                placeholder="e.g. backend, data"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label>Work mode</Label>
+              <div className="mt-1 flex flex-wrap gap-3 pt-1.5">
+                {WORK_MODES.map((mode) => (
+                  <Label key={mode} htmlFor={`work-mode-${mode}`} className="font-normal">
+                    <Checkbox
+                      id={`work-mode-${mode}`}
+                      checked={workMode.includes(mode)}
+                      onCheckedChange={() => toggleWorkMode(mode)}
+                    />
+                    {mode}
+                  </Label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="auto-send-email">Auto-send email</Label>
+                <p className="text-xs text-muted-foreground">Not yet wired to actually send anything.</p>
+              </div>
+              <Switch
+                id="auto-send-email"
+                checked={autoSendEmail}
+                onCheckedChange={setAutoSendEmail}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Label htmlFor="notify-new-jobs">Notify on new jobs</Label>
+              <Switch
+                id="notify-new-jobs"
+                checked={notifyOnNewJobs}
+                onCheckedChange={setNotifyOnNewJobs}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="resume-template">Resume template</Label>
+              <select
+                id="resume-template"
+                disabled
+                value={settings.resume_template}
+                className="mt-1 h-8 w-full rounded-lg border border-input bg-muted px-2.5 text-sm text-muted-foreground"
+                onChange={() => {}}
+              >
+                <option value={settings.resume_template}>{settings.resume_template}</option>
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">Coming soon — currently hardcoded.</p>
+            </div>
+
+            <div>
+              <Label htmlFor="ai-provider-override">AI provider override</Label>
+              <Input
+                id="ai-provider-override"
+                disabled
+                value={settings.ai_provider_override ?? ''}
+                placeholder="Not configurable yet"
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Coming soon — the LLM layer doesn&apos;t support a per-user override yet.
+              </p>
+            </div>
+
+            {updateMutation.isError && (
+              <p className="text-sm text-red-600">{(updateMutation.error as Error).message}</p>
+            )}
+            {updateMutation.isSuccess && (
+              <p className="text-sm text-emerald-600">Settings saved.</p>
+            )}
+
+            <div className="flex justify-end">
+              <Button type="button" onClick={handleSave} disabled={updateMutation.isPending}>
+                Save settings
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

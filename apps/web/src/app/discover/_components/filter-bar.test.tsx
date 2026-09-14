@@ -61,8 +61,8 @@ describe('FilterBar', () => {
   it('includes every checked work-mode value in the onChange payload', () => {
     const { onChange } = renderBar();
 
-    fireEvent.click(screen.getByLabelText('remote'));
-    fireEvent.click(screen.getByLabelText('hybrid'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'remote' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'hybrid' }));
     fireEvent.click(screen.getByRole('button', { name: /apply filters/i }));
 
     expect(onChange).toHaveBeenCalledWith(
@@ -73,8 +73,8 @@ describe('FilterBar', () => {
   it('unchecking a previously-checked work mode removes it from the onChange payload', () => {
     const { onChange } = renderBar();
 
-    fireEvent.click(screen.getByLabelText('remote'));
-    fireEvent.click(screen.getByLabelText('remote'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'remote' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'remote' }));
     fireEvent.click(screen.getByRole('button', { name: /apply filters/i }));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ work_mode: [] }));
@@ -104,7 +104,7 @@ describe('FilterBar', () => {
     renderBar();
 
     fireEvent.change(screen.getByLabelText(/category \/ field/i), { target: { value: 'backend' } });
-    fireEvent.click(screen.getByLabelText('remote'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'remote' }));
     fireEvent.change(screen.getByLabelText(/location/i), { target: { value: 'Berlin' } });
     fireEvent.change(screen.getByLabelText(/seniority/i), { target: { value: 'Senior' } });
     fireEvent.click(screen.getByRole('button', { name: /apply filters/i }));
@@ -130,6 +130,6 @@ describe('FilterBar', () => {
     renderBar({ category_tags: ['data', 'ml'], work_mode: ['remote'] });
 
     expect(screen.getByLabelText(/category \/ field/i)).toHaveValue('data, ml');
-    expect(screen.getByLabelText('remote')).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'remote' })).toBeChecked();
   });
 });

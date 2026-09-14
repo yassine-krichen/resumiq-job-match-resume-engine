@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiSSE } from '@/lib/api';
+import { useIngestCareerText } from '@/hooks/use-ingest-career-text';
 
 // Mirrors the server-side cap on IngestBodySchema.raw_text (packages/schemas)
 // — kept in sync manually since the frontend doesn't import backend schemas.
@@ -11,46 +11,21 @@ const RAW_TEXT_MAX_LENGTH = 20000;
 export default function OnboardingPage() {
   const router = useRouter();
   const [rawText, setRawText] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [progress, setProgress] = useState('');
-  const [error, setError] = useState('');
-  const [parseSummary, setParseSummary] = useState<{ parsed: number; dropped: number } | null>(
-    null,
-  );
+  const { loading, progress, error, parseSummary, ingest } = useIngestCareerText();
 
   function handleSubmit() {
     if (!rawText.trim()) return;
-    setStatus('loading');
-    setProgress('Starting...');
-    setParseSummary(null);
-
-    apiSSE(
-      '/onboarding/ingest/stream',
-      { raw_text: rawText },
-      {
-        onProgress: (step) => setProgress(step),
-        onDone: (data) => {
-          const { parsed = [], droppedCount = 0 } = data as {
-            parsed?: unknown[];
-            droppedCount?: number;
-          };
-          setStatus('done');
-          if (droppedCount > 0) {
-            // Surface the partial-failure instead of silently navigating
-            // away — the user needs to know some pasted items didn't make it
-            // into their profile.
-            setParseSummary({ parsed: parsed.length, dropped: droppedCount });
-            return;
-          }
-          router.push('/onboarding/review');
-        },
-        onError: (msg) => {
-          setError(msg);
-          setStatus('error');
-        },
-      },
-    );
+    ingest(rawText);
   }
+
+  // Once the stream reports done with nothing dropped, move straight to
+  // review — the banner below only needs to hold the user back when some
+  // pasted items didn't make it into their profile.
+  useEffect(() => {
+    if (parseSummary && parseSummary.dropped === 0) {
+      router.push('/onboarding/review');
+    }
+  }, [parseSummary, router]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
@@ -72,21 +47,21 @@ export default function OnboardingPage() {
             rows={14}
             maxLength={RAW_TEXT_MAX_LENGTH}
             className="w-full resize-none rounded-lg border border-border p-4 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            disabled={status === 'loading'}
+            disabled={loading}
           />
 
-          {status === 'loading' && (
+          {loading && (
             <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
               <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground border-t-foreground" />
               {progress}
             </div>
           )}
 
-          {status === 'error' && (
+          {error && (
             <p className="mt-3 text-sm text-red-600">{error}</p>
           )}
 
-          {parseSummary && (
+          {parseSummary && parseSummary.dropped > 0 && (
             <div className="mt-3 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700">
               <p>
                 {parseSummary.parsed} item{parseSummary.parsed === 1 ? '' : 's'} parsed,{' '}
@@ -110,7 +85,7 @@ export default function OnboardingPage() {
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!rawText.trim() || status === 'loading'}
+              disabled={!rawText.trim() || loading}
               className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Parse & add to profile

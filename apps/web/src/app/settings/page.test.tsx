@@ -104,9 +104,9 @@ describe('SettingsPage', () => {
     expect(screen.getByLabelText(/target roles/i)).toHaveValue('Backend Engineer, Platform Engineer');
     expect(screen.getByLabelText('Seniority')).toHaveValue('Staff');
     expect(screen.getByLabelText(/category \/ field/i)).toHaveValue('backend, data');
-    expect(screen.getByLabelText('remote')).toBeChecked();
-    expect(screen.getByLabelText('hybrid')).toBeChecked();
-    expect(screen.getByLabelText('onsite')).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'remote' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'hybrid' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'onsite' })).not.toBeChecked();
     expect(screen.getByRole('switch', { name: /auto-send email/i })).toHaveAttribute(
       'data-checked',
       '',
@@ -130,7 +130,7 @@ describe('SettingsPage', () => {
     });
     fireEvent.change(screen.getByLabelText('Seniority'), { target: { value: 'Staff' } });
     fireEvent.change(screen.getByLabelText(/category \/ field/i), { target: { value: 'infra' } });
-    fireEvent.click(screen.getByLabelText('onsite'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'onsite' }));
     fireEvent.click(screen.getByRole('switch', { name: /auto-send email/i }));
     fireEvent.click(screen.getByRole('button', { name: /save settings/i }));
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Checkbox } from '@/components/ui/checkbox';
 import { saveGapReport } from './api';
 import type { GapReport } from './types';
 
@@ -50,12 +51,11 @@ export function GapReportView({ applicationId, gapReport }: GapReportViewProps):
           <ul className="space-y-3">
             {gapReport.missing_skills.map((skill, i) => (
               <li key={`${skill.skill}-${i}`} className="flex items-start gap-3">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={skill.completed ?? false}
-                  onChange={() => toggleCompleted(i)}
+                  onCheckedChange={() => toggleCompleted(i)}
                   disabled={mutation.isPending}
-                  className="mt-1 h-4 w-4 rounded border-input"
+                  className="mt-1"
                 />
                 <div>
                   <p

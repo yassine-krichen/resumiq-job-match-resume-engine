@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/page-header';
 import { getApplications } from './_components/api';
 import { ApplicationsTable } from './_components/applications-table';
 import { FiltersBar } from './_components/filters-bar';
@@ -30,55 +31,61 @@ export default function ApplicationsPage(): React.JSX.Element {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-background px-4 py-12">
-      <div className="w-full max-w-5xl">
-        <h1 className="text-2xl font-bold">Applications</h1>
-        <p className="mt-1 text-muted-foreground">Every application you&apos;ve drafted, filterable by status, company, date, and match score.</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <PageHeader
+        title="Applications"
+        containerClassName="mx-auto flex max-w-5xl items-center justify-between"
+      />
 
-      <FiltersBar filters={filters} onChange={handleFiltersChange} />
+      <div className="flex flex-col items-center gap-6 px-4 py-12">
+        <div className="w-full max-w-5xl">
+          <p className="text-muted-foreground">Every application you&apos;ve drafted, filterable by status, company, date, and match score.</p>
+        </div>
 
-      {applicationsQuery.isLoading && <p className="text-muted-foreground">Loading applications...</p>}
-      {applicationsQuery.isError && (
-        <p className="text-red-600">{(applicationsQuery.error as Error).message}</p>
-      )}
+        <FiltersBar filters={filters} onChange={handleFiltersChange} />
 
-      {applicationsQuery.data && (
-        <>
-          <div
-            className={applicationsQuery.isPlaceholderData ? 'w-full max-w-5xl opacity-50 transition-opacity' : 'w-full max-w-5xl transition-opacity'}
-          >
-            <ApplicationsTable items={applicationsQuery.data.items} />
-          </div>
+        {applicationsQuery.isLoading && <p className="text-muted-foreground">Loading applications...</p>}
+        {applicationsQuery.isError && (
+          <p className="text-red-600">{(applicationsQuery.error as Error).message}</p>
+        )}
 
-          <div className="flex w-full max-w-5xl items-center justify-between text-sm text-muted-foreground">
-            <span>
-              Page {applicationsQuery.data.page} of {totalPages} ({total} total)
-              {applicationsQuery.isPlaceholderData && ' · Updating...'}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </Button>
+        {applicationsQuery.data && (
+          <>
+            <div
+              className={applicationsQuery.isPlaceholderData ? 'w-full max-w-5xl opacity-50 transition-opacity' : 'w-full max-w-5xl transition-opacity'}
+            >
+              <ApplicationsTable items={applicationsQuery.data.items} />
             </div>
-          </div>
-        </>
-      )}
+
+            <div className="flex w-full max-w-5xl items-center justify-between text-sm text-muted-foreground">
+              <span>
+                Page {applicationsQuery.data.page} of {totalPages} ({total} total)
+                {applicationsQuery.isPlaceholderData && ' · Updating...'}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import type { MasterDB } from '@resumiq/schemas';
+import { PageHeader } from '@/components/page-header';
 
 export default function OnboardingReviewPage() {
   const router = useRouter();
@@ -35,30 +36,24 @@ export default function OnboardingReviewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-12">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Review your profile</h1>
-            <p className="mt-1 text-muted-foreground">
-              Confirm the AI parsed your data correctly. You can always edit from your profile.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => router.push('/onboarding')}
-              className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-            >
-              Add more
-            </button>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Go to dashboard
-            </button>
-          </div>
-        </div>
+    <div className="min-h-screen bg-background">
+      <PageHeader
+        title="Review your profile"
+        containerClassName="mx-auto flex max-w-3xl items-center justify-between"
+        actions={
+          <button
+            onClick={() => router.push('/onboarding')}
+            className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+          >
+            Add more
+          </button>
+        }
+      />
+
+      <div className="mx-auto max-w-3xl px-4 py-12">
+        <p className="mb-8 text-muted-foreground">
+          Confirm the AI parsed your data correctly. You can always edit from your profile.
+        </p>
 
         {profile && (
           <div className="space-y-4">

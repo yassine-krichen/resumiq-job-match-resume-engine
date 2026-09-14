@@ -6,6 +6,7 @@ import { API_URL } from '@/lib/api';
 import { useFinalizeApplication } from '@/hooks/use-finalize-application';
 import { useRegenerateApplication } from '@/hooks/use-regenerate-application';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/page-header';
 // Reused directly from /apply/manual — same review UI, whether the
 // application was drafted mid-flow there or in the background via
 // /discover's swipe-right pipeline.
@@ -69,8 +70,9 @@ export default function ApplicationReviewPage(): React.JSX.Element {
   } = useRegenerateApplication(applicationId ?? null);
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-background px-4 py-12">
-      {renderContent()}
+    <div className="min-h-screen bg-background">
+      <PageHeader title="Application review" />
+      <div className="flex flex-col items-center px-4 py-12">{renderContent()}</div>
     </div>
   );
 
