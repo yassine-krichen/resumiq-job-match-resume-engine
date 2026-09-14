@@ -265,13 +265,99 @@ describe('ProfilePage', () => {
     expect(screen.getByLabelText(/title/i)).toHaveValue('New Award');
   });
 
-  it('shows the empty-state call to action when there is no experience, project, or education data at all', async () => {
+  it('shows an empty-state message for experience, projects, and education when their arrays are empty, instead of hiding the sections', async () => {
     vi.mocked(apiFetch).mockResolvedValue(buildProfile());
 
     renderPage();
 
-    await waitFor(() => expect(screen.getByText('No career data yet.')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /add your first entry/i }));
-    expect(pushMock).toHaveBeenCalledWith('/onboarding');
+    await waitFor(() => expect(screen.getByText('No experience added yet.')).toBeInTheDocument());
+    expect(screen.getByText('No projects added yet.')).toBeInTheDocument();
+    expect(screen.getByText('No education added yet.')).toBeInTheDocument();
+    // The section headers themselves are still rendered (not hidden), each
+    // with its own "+ Add X" trigger available even with zero entries.
+    expect(screen.getByRole('button', { name: /^\+ add experience$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^\+ add project$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^\+ add education$/i })).toBeInTheDocument();
+  });
+
+  it('shows the empty-certifications message when certifications is empty', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(buildProfile({ certifications: [] }));
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText('No certifications added yet.')).toBeInTheDocument(),
+    );
+  });
+
+  it('renders existing certifications with their name, issuer, and date, not just a count', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      buildProfile({
+        certifications: [
+          {
+            name: 'AWS Certified Solutions Architect',
+            issuer: 'Amazon Web Services',
+            date: '2022-05',
+            expiration_date: '',
+            credential_id: '',
+            link: '',
+            description: '',
+          },
+        ],
+      }),
+    );
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText('AWS Certified Solutions Architect')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('Amazon Web Services')).toBeInTheDocument();
+    expect(screen.getByText('2022-05')).toBeInTheDocument();
+  });
+
+  it('renders an inline Edit trigger for every experience entry', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(
+      buildProfile({
+        experience: [
+          {
+            company: 'Acme',
+            company_industry: '',
+            role: 'Engineer',
+            location: '',
+            location_type: '',
+            startDate: '2020',
+            endDate: '',
+            isCurrent: true,
+            core_competencies: [],
+            technologies_used: [],
+            raw_achievements: [],
+            quantifiable_metrics: [],
+          },
+          {
+            company: 'Beta Inc',
+            company_industry: '',
+            role: 'Senior Engineer',
+            location: '',
+            location_type: '',
+            startDate: '2018',
+            endDate: '2020',
+            isCurrent: false,
+            core_competencies: [],
+            technologies_used: [],
+            raw_achievements: [],
+            quantifiable_metrics: [],
+          },
+        ],
+      }),
+    );
+
+    renderPage();
+
+    // Company/location render as sibling text nodes within the same <p>
+    // ("Acme · "), so an exact-string matcher never matches — use a regex,
+    // which RTL matches as a substring against the node's text content.
+    await waitFor(() => expect(screen.getByText(/Acme/)).toBeInTheDocument());
+    expect(screen.getAllByRole('button', { name: /^edit$/i })).toHaveLength(2);
   });
 });

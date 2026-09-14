@@ -134,11 +134,115 @@ describe('AddAchievementModal', () => {
   });
 
   it('shows the "Adding..." label and disables submit while a save is in flight', () => {
-    renderModal({ submitting: true });
+    // Opened while not submitting (matching real usage, where the trigger
+    // is only disabled once a save is in flight), then re-rendered with
+    // `submitting: true` to simulate that save starting.
+    const onAdd = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<AddAchievementModal onAdd={onAdd} submitting={false} />);
     openModal();
 
     fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Employee of the Year' } });
+    rerender(<AddAchievementModal onAdd={onAdd} submitting={true} />);
 
     expect(screen.getByRole('button', { name: /adding\.\.\./i })).toBeDisabled();
+  });
+
+  it('rejects a title over 200 characters with a validation message and does not call onAdd', () => {
+    const { onAdd } = renderModal();
+    openModal();
+
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'a'.repeat(201) } });
+    fireEvent.click(screen.getByRole('button', { name: /^add achievement$/i }));
+
+    expect(screen.getByText('Title must be 200 characters or fewer.')).toBeInTheDocument();
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+});
+
+const EXISTING_ACHIEVEMENT: NewAchievement = {
+  title: 'Employee of the Year',
+  issuer: 'Acme Corp',
+  date: '2023-01',
+  description: 'Recognized company-wide.',
+  related_skills: ['Leadership', 'Communication'],
+};
+
+describe('AddAchievementModal edit mode', () => {
+  function renderEditModal(
+    props: Partial<{ submitting: boolean; onDelete: () => Promise<void> }> = {},
+  ) {
+    const onAdd = vi.fn().mockResolvedValue(undefined);
+    const onDelete = props.onDelete ?? vi.fn().mockResolvedValue(undefined);
+    const utils = render(
+      <AddAchievementModal
+        onAdd={onAdd}
+        submitting={props.submitting}
+        entry={EXISTING_ACHIEVEMENT}
+        onDelete={onDelete}
+      />,
+    );
+    return { onAdd, onDelete, ...utils };
+  }
+
+  function openEditModal() {
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+  }
+
+  it('renders pre-filled fields from the entry prop, including issuer which has no input of its own', () => {
+    renderEditModal();
+    openEditModal();
+
+    expect(screen.getByLabelText(/title/i)).toHaveValue('Employee of the Year');
+    expect(screen.getByLabelText(/date/i)).toHaveValue('2023-01');
+    expect(screen.getByLabelText(/description/i)).toHaveValue('Recognized company-wide.');
+    expect(screen.getByLabelText(/related skills/i)).toHaveValue('Leadership, Communication');
+    expect(screen.getByText('Edit achievement')).toBeInTheDocument();
+  });
+
+  it('submits the edited fields while preserving the original (form-less) issuer value', () => {
+    const { onAdd } = renderEditModal();
+    openEditModal();
+
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Employee of the Quarter' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save changes$/i }));
+
+    expect(onAdd).toHaveBeenCalledWith({
+      title: 'Employee of the Quarter',
+      issuer: 'Acme Corp',
+      date: '2023-01',
+      description: 'Recognized company-wide.',
+      related_skills: ['Leadership', 'Communication'],
+    });
+  });
+
+  it('calls onDelete and closes the dialog when the Delete button is clicked', async () => {
+    const { onDelete } = renderEditModal();
+    openEditModal();
+
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+    await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument());
+  });
+
+  it('shows an error and keeps the dialog open when onDelete fails', async () => {
+    const onDelete = vi.fn().mockRejectedValue(new Error('API 500: could not delete achievement'));
+    renderEditModal({ onDelete });
+    openEditModal();
+
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText('API 500: could not delete achievement')).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+  });
+
+  it('does not render a Delete button when onDelete is not provided, even in edit mode', () => {
+    const onAdd = vi.fn().mockResolvedValue(undefined);
+    render(<AddAchievementModal onAdd={onAdd} entry={EXISTING_ACHIEVEMENT} />);
+    openEditModal();
+
+    expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument();
   });
 });
