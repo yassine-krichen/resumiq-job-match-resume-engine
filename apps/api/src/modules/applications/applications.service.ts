@@ -20,6 +20,7 @@ import type {
   JobDNA,
 } from '@resumiq/ai-bridge';
 import {
+  coerceToStringArray,
   CompatibilityResultSchema,
   InterviewIntakeQuestionsSchema,
   InterviewPrepReportSchema,
@@ -823,6 +824,46 @@ export class ApplicationsService {
       include: { job: true },
     });
     if (!application) throw new NotFoundException('Application not found');
-    return application;
+    return normalizeApplicationRow(application);
   }
+}
+
+/**
+ * Normalizes an Application row's LLM-sourced JSON columns on the read path.
+ * `draftForJob` has validated/coerced this shape at write time since commit
+ * 6670055, but rows persisted BEFORE that fix can still hold the pre-fix
+ * shape (e.g. `matchReasons` as a bare string instead of `string[]`) —
+ * without this, `MatchScoreDisplay`'s `reasons.map()` crashes the
+ * application detail page for any user with a legacy row. Read-time
+ * coercion only, per product decision — no DB backfill.
+ */
+function normalizeApplicationRow<T extends { matchReasons: unknown; gapReport: unknown }>(
+  application: T,
+): T {
+  const gapReport = application.gapReport as {
+    missing_skills?: unknown;
+    strengths?: unknown;
+    recommendations?: unknown;
+    [key: string]: unknown;
+  } | null;
+
+  const missingSkills = Array.isArray(gapReport?.missing_skills)
+    ? gapReport.missing_skills.map((item: unknown) => {
+        const skill = item as { suggested_resources?: unknown; [key: string]: unknown };
+        return { ...skill, suggested_resources: coerceToStringArray(skill?.suggested_resources) };
+      })
+    : gapReport?.missing_skills;
+
+  return {
+    ...application,
+    matchReasons: coerceToStringArray(application.matchReasons),
+    gapReport: gapReport
+      ? {
+          ...gapReport,
+          missing_skills: missingSkills,
+          strengths: coerceToStringArray(gapReport.strengths),
+          recommendations: coerceToStringArray(gapReport.recommendations),
+        }
+      : gapReport,
+  };
 }

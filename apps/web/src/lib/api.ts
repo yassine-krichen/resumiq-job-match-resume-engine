@@ -4,6 +4,14 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001
 // streaming calls go through `apiSSE` instead and are deliberately exempt.
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+// `apiSSE` streams have no fixed duration (the AI pipeline can legitimately
+// take a while), so it can't reuse DEFAULT_TIMEOUT_MS as a whole-request
+// cap. Instead it resets an idle timer on every received chunk — a
+// genuinely hung connection (server died mid-stream, network stall) with no
+// bytes at all for this long is treated as a terminal error rather than
+// leaving the caller on "Analyzing..." forever.
+const SSE_IDLE_TIMEOUT_MS = 45_000;
+
 export async function apiFetch<T>(
   path: string,
   options?: RequestInit,
@@ -65,9 +73,20 @@ export function apiSSE(
   },
 ): () => void {
   const controller = new AbortController();
+  let idleTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+
+  const resetIdleTimeout = () => {
+    if (idleTimeoutId) clearTimeout(idleTimeoutId);
+    idleTimeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, SSE_IDLE_TIMEOUT_MS);
+  };
 
   (async () => {
     try {
+      resetIdleTimeout();
       const res = await fetch(`${API_URL}/api${path}`, {
         method: 'POST',
         credentials: 'include',
@@ -88,6 +107,7 @@ export function apiSSE(
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        resetIdleTimeout();
 
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split('\n\n');
@@ -107,11 +127,18 @@ export function apiSSE(
         }
       }
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
+      if (timedOut) {
+        options.onError(`No response from server for ${SSE_IDLE_TIMEOUT_MS / 1000}s — timed out`);
+      } else if ((err as Error).name !== 'AbortError') {
         options.onError((err as Error).message);
       }
+    } finally {
+      if (idleTimeoutId) clearTimeout(idleTimeoutId);
     }
   })();
 
-  return () => controller.abort();
+  return () => {
+    if (idleTimeoutId) clearTimeout(idleTimeoutId);
+    controller.abort();
+  };
 }

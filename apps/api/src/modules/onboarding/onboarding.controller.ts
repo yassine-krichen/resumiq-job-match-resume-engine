@@ -80,7 +80,11 @@ export class OnboardingController {
         })),
       );
 
-      send('done', { profile: updatedProfile, parsed: result.entries });
+      send('done', {
+        profile: updatedProfile,
+        parsed: result.entries,
+        droppedCount: result.droppedCount,
+      });
       res.end();
     } catch (err) {
       send('error', { message: (err as Error).message });

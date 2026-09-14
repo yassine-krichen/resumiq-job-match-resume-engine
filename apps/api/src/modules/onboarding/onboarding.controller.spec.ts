@@ -112,6 +112,27 @@ describe('OnboardingController', () => {
       expect(res.ended).toBe(true);
     });
 
+    it('threads droppedCount from parseCareerText into the "done" event payload when some AI-extracted entries were dropped', async () => {
+      profileService.getProfile.mockResolvedValue(null);
+      onboardingService.parseCareerText.mockResolvedValue({
+        entries: [{ type: 'experience', entry: experienceEntry }],
+        droppedCount: 2,
+      });
+      const finalProfile = { experience: [experienceEntry] };
+      profileService.mergeSections.mockResolvedValue(finalProfile);
+
+      const res = fakeResponse();
+      await controller.ingestStream(REQ, res, { raw_text: 'some text' });
+
+      const frames = parseSSEFrames(res.writes);
+      const doneFrame = frames.find((f) => f.event === 'done');
+      expect(doneFrame?.data).toEqual({
+        profile: finalProfile,
+        parsed: [{ type: 'experience', entry: experienceEntry }],
+        droppedCount: 2,
+      });
+    });
+
     it('sends an "error" event and ends the stream when parsing fails, without merging anything', async () => {
       profileService.getProfile.mockResolvedValue(null);
       onboardingService.parseCareerText.mockRejectedValue(

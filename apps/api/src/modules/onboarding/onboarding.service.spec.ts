@@ -67,6 +67,7 @@ describe('OnboardingService', () => {
         'certification',
         'project',
       ]);
+      expect(result.droppedCount).toBe(0);
     });
 
     it('rejects a response where every entry fails schema validation, with a generic client-facing message', async () => {
@@ -87,7 +88,7 @@ describe('OnboardingService', () => {
       );
     });
 
-    it('keeps valid entries and drops an individual malformed entry, rather than discarding the whole batch', async () => {
+    it('keeps valid entries and drops an individual malformed entry, rather than discarding the whole batch, and reports the drop in droppedCount', async () => {
       const experienceEntry = {
         company: 'Acme Corp',
         company_industry: 'Software',
@@ -114,6 +115,37 @@ describe('OnboardingService', () => {
 
       expect(result.entries).toHaveLength(1);
       expect(result.entries[0]).toEqual({ type: 'experience', entry: experienceEntry });
+      expect(result.droppedCount).toBe(1);
+    });
+
+    it('accumulates droppedCount across multiple malformed entries dropped from the same batch', async () => {
+      const experienceEntry = {
+        company: 'Acme Corp',
+        company_industry: 'Software',
+        role: 'Backend Engineer',
+        location: 'Remote',
+        location_type: 'Remote',
+        startDate: 'Jan 2023',
+        endDate: 'Present',
+        isCurrent: true,
+        core_competencies: [],
+        technologies_used: [],
+        raw_achievements: ['Built a service.'],
+        quantifiable_metrics: [],
+      };
+
+      generateJSONMock.mockResolvedValue({
+        entries: [
+          { type: 'experience', entry: experienceEntry },
+          { type: 'not_a_real_type', entry: {} },
+          { type: 'certification', entry: { name: '' } }, // fails CertificationSchema (empty required name)
+        ],
+      });
+
+      const result = await service.parseCareerText('some raw text', null);
+
+      expect(result.entries).toHaveLength(1);
+      expect(result.droppedCount).toBe(2);
     });
   });
 });

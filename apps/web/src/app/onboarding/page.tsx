@@ -4,25 +4,44 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiSSE } from '@/lib/api';
 
+// Mirrors the server-side cap on IngestBodySchema.raw_text (packages/schemas)
+// — kept in sync manually since the frontend doesn't import backend schemas.
+const RAW_TEXT_MAX_LENGTH = 20000;
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [rawText, setRawText] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
+  const [parseSummary, setParseSummary] = useState<{ parsed: number; dropped: number } | null>(
+    null,
+  );
 
   function handleSubmit() {
     if (!rawText.trim()) return;
     setStatus('loading');
     setProgress('Starting...');
+    setParseSummary(null);
 
     apiSSE(
       '/onboarding/ingest/stream',
       { raw_text: rawText },
       {
         onProgress: (step) => setProgress(step),
-        onDone: () => {
+        onDone: (data) => {
+          const { parsed = [], droppedCount = 0 } = data as {
+            parsed?: unknown[];
+            droppedCount?: number;
+          };
           setStatus('done');
+          if (droppedCount > 0) {
+            // Surface the partial-failure instead of silently navigating
+            // away — the user needs to know some pasted items didn't make it
+            // into their profile.
+            setParseSummary({ parsed: parsed.length, dropped: droppedCount });
+            return;
+          }
           router.push('/onboarding/review');
         },
         onError: (msg) => {
@@ -51,6 +70,7 @@ export default function OnboardingPage() {
             onChange={(e) => setRawText(e.target.value)}
             placeholder={`Example:\n\nSoftware Engineer at Acme Corp (Jan 2023 – Jun 2024)\n- Built a real-time notification system using NestJS and Redis that handled 50k events/day\n- Reduced API response time by 40% through query optimization\nStack: TypeScript, NestJS, PostgreSQL, Redis, Docker`}
             rows={14}
+            maxLength={RAW_TEXT_MAX_LENGTH}
             className="w-full resize-none rounded-lg border border-border p-4 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             disabled={status === 'loading'}
           />
@@ -64,6 +84,21 @@ export default function OnboardingPage() {
 
           {status === 'error' && (
             <p className="mt-3 text-sm text-red-600">{error}</p>
+          )}
+
+          {parseSummary && (
+            <div className="mt-3 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700">
+              <p>
+                {parseSummary.parsed} item{parseSummary.parsed === 1 ? '' : 's'} parsed,{' '}
+                {parseSummary.dropped} couldn&apos;t be extracted.
+              </p>
+              <button
+                onClick={() => router.push('/onboarding/review')}
+                className="mt-2 font-medium underline underline-offset-4"
+              >
+                Continue to review
+              </button>
+            </div>
           )}
 
           <div className="mt-4 flex items-center justify-between">

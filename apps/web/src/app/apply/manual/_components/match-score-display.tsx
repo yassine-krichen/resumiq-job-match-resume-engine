@@ -21,6 +21,10 @@ function scoreBand(score: number): { color: string; ring: string; label: string 
 
 export function MatchScoreDisplay({ score, reasons }: MatchScoreDisplayProps): React.JSX.Element {
   const band = scoreBand(score);
+  // Belt-and-suspenders — the primary fix normalizes this to string[] on the
+  // backend read path (applications.service.ts's findOwnedWithJob), but this
+  // guard keeps a legacy/unexpected shape from crashing the page.
+  const safeReasons = Array.isArray(reasons) ? reasons : [];
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -36,13 +40,13 @@ export function MatchScoreDisplay({ score, reasons }: MatchScoreDisplayProps): R
         </div>
       </div>
 
-      {reasons.length > 0 && (
+      {safeReasons.length > 0 && (
         <Accordion className="mt-4">
           <AccordionItem value="why-this-score">
             <AccordionTrigger>Why this score?</AccordionTrigger>
             <AccordionContent>
               <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-                {reasons.map((reason, i) => (
+                {safeReasons.map((reason, i) => (
                   <li key={i}>{reason}</li>
                 ))}
               </ul>

@@ -13,13 +13,13 @@ export const PersonalInfoSchema = z.object({
 });
 
 export const ExperienceEntrySchema = z.object({
-  company: z.string().min(1),
-  company_industry: z.string(),
-  role: z.string().min(1),
-  location: z.string(),
-  location_type: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
+  company: z.string().min(1).max(200),
+  company_industry: z.string().max(200),
+  role: z.string().min(1).max(200),
+  location: z.string().max(200),
+  location_type: z.string().max(100),
+  startDate: z.string().max(50),
+  endDate: z.string().max(50),
   isCurrent: z.boolean(),
   core_competencies: z.array(z.string()),
   technologies_used: z.array(z.string()),
@@ -28,33 +28,33 @@ export const ExperienceEntrySchema = z.object({
 });
 
 export const ProjectEntrySchema = z.object({
-  name: z.string().min(1),
-  context: z.string(),
+  name: z.string().min(1).max(200),
+  context: z.string().max(2000),
   // LLM extraction rarely has a well-formed URL for every link it mentions
   // (e.g. "hosted on a private repo") — relax to a plain string rather than
   // failing validation on an otherwise-good entry.
   links: z.array(z.object({ type: z.string(), url: z.string() })),
-  startDate: z.string(),
-  endDate: z.string(),
+  startDate: z.string().max(50),
+  endDate: z.string().max(50),
   technologies_used: z.array(z.string()),
   raw_achievements: z.array(z.string()),
   quantifiable_metrics: z.array(z.string()),
 });
 
 export const EducationEntrySchema = z.object({
-  institution: z.string().min(1),
-  degree_type: z.string().min(1),
-  major: z.string().min(1),
-  minor: z.string(),
-  location: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
-  gpa: z.string(),
+  institution: z.string().min(1).max(200),
+  degree_type: z.string().min(1).max(100),
+  major: z.string().min(1).max(200),
+  minor: z.string().max(200),
+  location: z.string().max(200),
+  startDate: z.string().max(50),
+  endDate: z.string().max(50),
+  gpa: z.string().max(20),
   honors: z.array(z.string()),
   relevant_coursework: z.array(z.string()),
-  thesis_or_capstone: z.string(),
+  thesis_or_capstone: z.string().max(500),
   extracurriculars: z.array(z.string()),
-  description: z.string(),
+  description: z.string().max(5000),
 });
 
 export const SkillsSchema = z.object({
@@ -69,24 +69,24 @@ export const SkillsSchema = z.object({
 });
 
 export const CertificationSchema = z.object({
-  name: z.string(),
-  issuer: z.string(),
-  date: z.string(),
+  name: z.string().min(1).max(200),
+  issuer: z.string().min(1).max(200),
+  date: z.string().max(50),
   // These are frequently absent from casual raw-text extraction (the user
   // rarely states an expiration date, credential ID, or verification link)
   // — default to '' rather than require the LLM to fabricate or omit them,
   // which would otherwise fail validation and silently drop the whole entry.
-  expiration_date: z.string().default(''),
-  credential_id: z.string().default(''),
-  link: z.string().default(''),
-  description: z.string().default(''),
+  expiration_date: z.string().max(50).default(''),
+  credential_id: z.string().max(200).default(''),
+  link: z.string().max(2000).default(''),
+  description: z.string().max(5000).default(''),
 });
 
 export const AwardSchema = z.object({
-  title: z.string(),
-  issuer: z.string(),
-  date: z.string(),
-  description: z.string().default(''),
+  title: z.string().min(1).max(200),
+  issuer: z.string().max(200),
+  date: z.string().max(50),
+  description: z.string().max(5000).default(''),
   related_skills: z.array(z.string()).optional(),
 });
 
@@ -167,10 +167,26 @@ export const JobIntakeResultSchema = z.object({
 // `reasons.map()` in production). Coerce a bare string into a 1-element
 // array rather than failing the whole request over this specific, common
 // shape drift.
-const stringArrayWithStringCoercion = z.preprocess(
+//
+// Exported (not module-private) so read paths can re-run the same coercion
+// against legacy rows written before this schema existed — see
+// `applications.service.ts`'s `findOwnedWithJob`, which normalizes
+// `matchReasons` on the way out for rows persisted before this fix landed.
+export const stringArrayWithStringCoercion = z.preprocess(
   (val) => (typeof val === 'string' ? [val] : val),
   z.array(z.string()),
 );
+
+/**
+ * Runs `stringArrayWithStringCoercion` against an arbitrary value and
+ * returns a plain `string[]`, falling back to `[]` if the value is neither a
+ * string nor an array of strings (e.g. `null`/`undefined`/a malformed shape).
+ * Used at read time to normalize legacy DB rows that predate this coercion.
+ */
+export function coerceToStringArray(val: unknown): string[] {
+  const parsed = stringArrayWithStringCoercion.safeParse(val);
+  return parsed.success ? parsed.data : [];
+}
 
 export const CompatibilityResultSchema = z.object({
   compatible: z.boolean(),
@@ -268,7 +284,12 @@ export const UpdateGapReportSchema = z.object({
   recommendations: z.array(z.string()),
 });
 
-export const IngestBodySchema = z.object({ raw_text: z.string().min(1) });
+export const IngestBodySchema = z.object({
+  raw_text: z
+    .string()
+    .min(1)
+    .max(20000, 'Text is too long — trim it to under 20,000 characters'),
+});
 
 // Onboarding "paste raw text" ingestion may surface multiple distinct career
 // facts (a job, a cert, a project) in one paste — the LLM returns an array of
@@ -284,6 +305,10 @@ export const IngestEntrySchema = z.discriminatedUnion('type', [
 
 export const IngestResultSchema = z.object({
   entries: z.array(IngestEntrySchema).min(1),
+  // Count of AI-extracted entries dropped for failing per-entry validation
+  // (see `parseCareerText`'s per-entry `safeParse` loop) — surfaced to the
+  // frontend so a partially-failed paste doesn't silently look fully parsed.
+  droppedCount: z.number().int().min(0).default(0),
 });
 
 // ── Phase 3: Job Discovery (Swipe Feed) ─────────────────────────────────────

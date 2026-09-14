@@ -18,6 +18,10 @@ course") becomes its own certification entry (issuer = course provider) — do n
 an experience or project entry.
 
 Rules:
+- If the input does not contain any genuine career fact (e.g. it's gibberish, markup/code,
+  spam, or unrelated prose with nothing resembling a job, project, certification, education
+  entry, award, or skill), return {"entries": []} rather than inventing an entry or echoing the
+  raw input back as a field value.
 - Extract exactly what is stated. Do NOT infer, embellish, or invent metrics, technologies,
   dates, or outcomes not stated or clearly implied by the source text.
 - For experience/project entries, REWRITE raw_achievements as 2-5 concise, professional
@@ -100,11 +104,13 @@ export class OnboardingService {
     }
 
     const entries: IngestEntryDto[] = [];
+    let droppedCount = 0;
     for (const rawEntry of rawEntries) {
       const parsed = IngestEntrySchema.safeParse(rawEntry);
       if (parsed.success) {
         entries.push(parsed.data);
       } else {
+        droppedCount += 1;
         this.logger.warn(
           `Dropping one AI-extracted entry that failed validation: ${parsed.error.message}`,
         );
@@ -117,6 +123,6 @@ export class OnboardingService {
     }
 
     onProgress?.('Parsed successfully');
-    return { entries };
+    return { entries, droppedCount };
   }
 }

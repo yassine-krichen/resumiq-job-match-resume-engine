@@ -1,10 +1,16 @@
 import {
+  AwardSchema,
+  CertificationSchema,
   CompatibilityResultSchema,
   CreateJobSchema,
+  EducationEntrySchema,
+  ExperienceEntrySchema,
   ExtractJobIntakeSchema,
+  IngestBodySchema,
   IngestResultSchema,
   JobDNASchema,
   JobIntakeResultSchema,
+  ProjectEntrySchema,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
   UpdateResumeSelectionSchema,
@@ -349,5 +355,238 @@ describe('IngestResultSchema', () => {
 
   it('rejects an empty entries array', () => {
     expect(() => IngestResultSchema.parse({ entries: [] })).toThrow();
+  });
+});
+
+describe('IngestBodySchema', () => {
+  it('accepts a valid non-empty raw_text', () => {
+    expect(() => IngestBodySchema.parse({ raw_text: 'Worked at Acme as a backend engineer.' })).not.toThrow();
+  });
+
+  it('rejects an empty raw_text', () => {
+    expect(() => IngestBodySchema.parse({ raw_text: '' })).toThrow();
+  });
+
+  it('accepts a raw_text of exactly 20,000 characters', () => {
+    const boundary = 'a'.repeat(20000);
+
+    expect(() => IngestBodySchema.parse({ raw_text: boundary })).not.toThrow();
+  });
+
+  it('rejects a raw_text longer than 20,000 characters', () => {
+    const tooLong = 'a'.repeat(20001);
+
+    expect(() => IngestBodySchema.parse({ raw_text: tooLong })).toThrow();
+  });
+});
+
+describe('ExperienceEntrySchema', () => {
+  const validEntry = {
+    company: 'Acme Corp',
+    company_industry: 'Software',
+    role: 'Backend Engineer',
+    location: 'Remote',
+    location_type: 'Remote',
+    startDate: 'Jan 2023',
+    endDate: 'Present',
+    isCurrent: true,
+    core_competencies: [],
+    technologies_used: [],
+    raw_achievements: [],
+    quantifiable_metrics: [],
+  };
+
+  it('accepts a fully valid entry', () => {
+    expect(() => ExperienceEntrySchema.parse(validEntry)).not.toThrow();
+  });
+
+  it('rejects an empty company name', () => {
+    expect(() => ExperienceEntrySchema.parse({ ...validEntry, company: '' })).toThrow();
+  });
+
+  it('rejects an empty role', () => {
+    expect(() => ExperienceEntrySchema.parse({ ...validEntry, role: '' })).toThrow();
+  });
+
+  it('accepts a company name at exactly the 200-character boundary', () => {
+    const boundary = 'a'.repeat(200);
+
+    expect(() => ExperienceEntrySchema.parse({ ...validEntry, company: boundary })).not.toThrow();
+  });
+
+  it('rejects a company name longer than 200 characters', () => {
+    const tooLong = 'a'.repeat(201);
+
+    expect(() => ExperienceEntrySchema.parse({ ...validEntry, company: tooLong })).toThrow();
+  });
+});
+
+describe('ProjectEntrySchema', () => {
+  const validEntry = {
+    name: 'Side Project X',
+    context: 'Personal',
+    links: [],
+    startDate: '2022',
+    endDate: '2022',
+    technologies_used: [],
+    raw_achievements: [],
+    quantifiable_metrics: [],
+  };
+
+  it('accepts a fully valid entry', () => {
+    expect(() => ProjectEntrySchema.parse(validEntry)).not.toThrow();
+  });
+
+  it('rejects an empty name', () => {
+    expect(() => ProjectEntrySchema.parse({ ...validEntry, name: '' })).toThrow();
+  });
+
+  it('accepts a name at exactly the 200-character boundary', () => {
+    const boundary = 'a'.repeat(200);
+
+    expect(() => ProjectEntrySchema.parse({ ...validEntry, name: boundary })).not.toThrow();
+  });
+
+  it('rejects a name longer than 200 characters', () => {
+    const tooLong = 'a'.repeat(201);
+
+    expect(() => ProjectEntrySchema.parse({ ...validEntry, name: tooLong })).toThrow();
+  });
+
+  it('rejects a context longer than 2,000 characters', () => {
+    const tooLong = 'a'.repeat(2001);
+
+    expect(() => ProjectEntrySchema.parse({ ...validEntry, context: tooLong })).toThrow();
+  });
+});
+
+describe('EducationEntrySchema', () => {
+  const validEntry = {
+    institution: 'State University',
+    degree_type: 'BSc',
+    major: 'Computer Science',
+    minor: '',
+    location: '',
+    startDate: '2018',
+    endDate: '2022',
+    gpa: '',
+    honors: [],
+    relevant_coursework: [],
+    thesis_or_capstone: '',
+    extracurriculars: [],
+    description: '',
+  };
+
+  it('accepts a fully valid entry', () => {
+    expect(() => EducationEntrySchema.parse(validEntry)).not.toThrow();
+  });
+
+  it('rejects an empty institution', () => {
+    expect(() => EducationEntrySchema.parse({ ...validEntry, institution: '' })).toThrow();
+  });
+
+  it('rejects an empty degree_type', () => {
+    expect(() => EducationEntrySchema.parse({ ...validEntry, degree_type: '' })).toThrow();
+  });
+
+  it('rejects an empty major', () => {
+    expect(() => EducationEntrySchema.parse({ ...validEntry, major: '' })).toThrow();
+  });
+
+  it('accepts an institution name at exactly the 200-character boundary', () => {
+    const boundary = 'a'.repeat(200);
+
+    expect(() => EducationEntrySchema.parse({ ...validEntry, institution: boundary })).not.toThrow();
+  });
+
+  it('rejects an institution name longer than 200 characters', () => {
+    const tooLong = 'a'.repeat(201);
+
+    expect(() => EducationEntrySchema.parse({ ...validEntry, institution: tooLong })).toThrow();
+  });
+
+  it('rejects a description longer than 5,000 characters', () => {
+    const tooLong = 'a'.repeat(5001);
+
+    expect(() => EducationEntrySchema.parse({ ...validEntry, description: tooLong })).toThrow();
+  });
+});
+
+describe('CertificationSchema', () => {
+  const validEntry = {
+    name: 'AWS Certified Developer',
+    issuer: 'AWS',
+    date: '2023',
+  };
+
+  it('accepts a minimal valid entry, defaulting the optional fields to empty strings', () => {
+    const result = CertificationSchema.parse(validEntry);
+
+    expect(result.expiration_date).toBe('');
+    expect(result.credential_id).toBe('');
+    expect(result.link).toBe('');
+    expect(result.description).toBe('');
+  });
+
+  it('rejects an empty name', () => {
+    expect(() => CertificationSchema.parse({ ...validEntry, name: '' })).toThrow();
+  });
+
+  it('rejects an empty issuer', () => {
+    expect(() => CertificationSchema.parse({ ...validEntry, issuer: '' })).toThrow();
+  });
+
+  it('accepts a name at exactly the 200-character boundary', () => {
+    const boundary = 'a'.repeat(200);
+
+    expect(() => CertificationSchema.parse({ ...validEntry, name: boundary })).not.toThrow();
+  });
+
+  it('rejects a name longer than 200 characters', () => {
+    const tooLong = 'a'.repeat(201);
+
+    expect(() => CertificationSchema.parse({ ...validEntry, name: tooLong })).toThrow();
+  });
+
+  it('rejects a link longer than 2,000 characters', () => {
+    const tooLong = 'https://example.com/' + 'a'.repeat(2000);
+
+    expect(() => CertificationSchema.parse({ ...validEntry, link: tooLong })).toThrow();
+  });
+});
+
+describe('AwardSchema', () => {
+  const validEntry = {
+    title: 'Employee of the Year',
+    issuer: 'Acme Corp',
+    date: '2023',
+  };
+
+  it('accepts a minimal valid entry, defaulting description to an empty string', () => {
+    const result = AwardSchema.parse(validEntry);
+
+    expect(result.description).toBe('');
+  });
+
+  it('rejects an empty title', () => {
+    expect(() => AwardSchema.parse({ ...validEntry, title: '' })).toThrow();
+  });
+
+  it('accepts a title at exactly the 200-character boundary', () => {
+    const boundary = 'a'.repeat(200);
+
+    expect(() => AwardSchema.parse({ ...validEntry, title: boundary })).not.toThrow();
+  });
+
+  it('rejects a title longer than 200 characters', () => {
+    const tooLong = 'a'.repeat(201);
+
+    expect(() => AwardSchema.parse({ ...validEntry, title: tooLong })).toThrow();
+  });
+
+  it('rejects a description longer than 5,000 characters', () => {
+    const tooLong = 'a'.repeat(5001);
+
+    expect(() => AwardSchema.parse({ ...validEntry, description: tooLong })).toThrow();
   });
 });

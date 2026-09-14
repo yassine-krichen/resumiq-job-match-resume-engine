@@ -982,6 +982,75 @@ describe('ApplicationsService', () => {
     });
   });
 
+  describe('getById — read-time normalization of legacy pre-fix rows', () => {
+    it('coerces a legacy bare-string matchReasons into a 1-element array instead of crashing or passing the string through', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        matchReasons: 'a single legacy prose string', // pre-fix DB shape, predates commit 6670055
+        gapReport: null,
+        job: { id: 'job-1' },
+      });
+
+      const result = await service.getById(OWNER, APP_ID);
+
+      expect(result.matchReasons).toEqual(['a single legacy prose string']);
+    });
+
+    it('coerces legacy bare-string gapReport.strengths/recommendations and each missing_skill.suggested_resources into arrays', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        matchReasons: [],
+        gapReport: {
+          match_score: 20,
+          missing_skills: [
+            { skill: 'Kubernetes', priority: 'mandatory', suggested_resources: 'take a CKA course' },
+          ],
+          strengths: 'Strong TypeScript background',
+          recommendations: 'Build a k8s side project',
+        },
+        job: { id: 'job-1' },
+      });
+
+      const result = await service.getById(OWNER, APP_ID);
+
+      expect(result.gapReport).toEqual({
+        match_score: 20,
+        missing_skills: [
+          { skill: 'Kubernetes', priority: 'mandatory', suggested_resources: ['take a CKA course'] },
+        ],
+        strengths: ['Strong TypeScript background'],
+        recommendations: ['Build a k8s side project'],
+      });
+    });
+
+    it('leaves an already-array matchReasons and gapReport untouched for rows already in the post-fix shape', async () => {
+      prisma.application.findFirst.mockResolvedValue({
+        id: APP_ID,
+        userId: OWNER,
+        matchReasons: ['Strong match', 'ATS aligned'],
+        gapReport: {
+          match_score: 80,
+          missing_skills: [],
+          strengths: ['Strong TypeScript background'],
+          recommendations: [],
+        },
+        job: { id: 'job-1' },
+      });
+
+      const result = await service.getById(OWNER, APP_ID);
+
+      expect(result.matchReasons).toEqual(['Strong match', 'ATS aligned']);
+      expect(result.gapReport).toEqual({
+        match_score: 80,
+        missing_skills: [],
+        strengths: ['Strong TypeScript background'],
+        recommendations: [],
+      });
+    });
+  });
+
   describe('renderPreview (owner)', () => {
     it('throws BadRequestException when the owner has no career profile', async () => {
       prisma.application.findFirst.mockResolvedValue({ id: APP_ID, userId: OWNER });
