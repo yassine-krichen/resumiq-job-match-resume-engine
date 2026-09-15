@@ -11,11 +11,12 @@ const INGEST_SYSTEM = `\
 You are a career data extraction expert. Parse the raw career text and extract structured data.
 
 The raw text may describe MULTIPLE distinct career facts — jobs, projects, certifications,
-courses, education, awards, skills. Extract EVERY distinct item as its own separate entry in
-the "entries" array. Never merge unrelated items into one entry. Never omit an item because it
-doesn't fit the most prominent type. A short course/certification mention (e.g. "completed X
-course") becomes its own certification entry (issuer = course provider) — do not fold it into
-an experience or project entry.
+courses, education, awards, skills, professional summaries, publications/talks, volunteering,
+and personal interests. Extract EVERY distinct item as its own separate entry in the "entries"
+array. Never merge unrelated items into one entry. Never omit an item because it doesn't fit
+the most prominent type. A short course/certification mention (e.g. "completed X course")
+becomes its own certification entry (issuer = course provider) — do not fold it into an
+experience or project entry.
 
 Rules:
 - If the input does not contain any genuine career fact (e.g. it's gibberish, markup/code,
@@ -47,7 +48,7 @@ Return JSON matching this exact schema:
 {
   "entries": [
     {
-      "type": "experience" | "project" | "education" | "certification" | "award" | "skills",
+      "type": "experience" | "project" | "education" | "certification" | "award" | "skills" | "summary" | "publication" | "volunteering" | "interest",
       "entry": {
         // For type "experience":
         // { company, company_industry, role, location, location_type, startDate, endDate, isCurrent, core_competencies[], technologies_used[], raw_achievements[], quantifiable_metrics[] }
@@ -66,6 +67,23 @@ Return JSON matching this exact schema:
         //
         // For type "skills":
         // { programming_languages[], frameworks_and_libraries[], infrastructure_and_tools[], databases[], soft_skills[] }
+        //
+        // For type "summary" — a professional summary/elevator pitch, usually written for a
+        // specific target role (e.g. "Full-stack engineer summary for backend roles: ..."):
+        // { target_role, content }
+        //
+        // For type "publication" — a published article, paper, conference talk, or podcast
+        // appearance (e.g. "Spoke at ReactConf 2024 about...", "Published a paper in..."):
+        // { title, venue, date, url, description }
+        //
+        // For type "volunteering" — unpaid work, community leadership, or non-profit board
+        // roles (e.g. "Volunteered as a mentor at Code.org", "Led the local dev meetup"):
+        // { organization, role, location, startDate, endDate, isCurrent, description }
+        //
+        // For type "interest" — a single personal/hobby interest mentioned outside a
+        // professional context (e.g. "enjoys chess", "runs marathons"). One interest per
+        // entry — a plain string, not an object:
+        // "Competitive Programming"
       }
     }
     // ...one object per distinct career fact found in the text

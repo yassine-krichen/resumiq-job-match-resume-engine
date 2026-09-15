@@ -14,7 +14,13 @@ import { OnboardingService } from './onboarding.service';
 import { ProfileService } from '../profile/profile.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { MasterDB } from '@resumiq/ai-bridge';
-import { IngestBodySchema, type IngestBodyDto, type IngestEntryDto } from '@resumiq/schemas';
+import {
+  ConfirmIngestSchema,
+  IngestBodySchema,
+  type ConfirmIngestDto,
+  type IngestBodyDto,
+  type IngestEntryDto,
+} from '@resumiq/schemas';
 
 const SECTION_BY_TYPE: Record<IngestEntryDto['type'], keyof MasterDB> = {
   experience: 'experience',
@@ -23,6 +29,10 @@ const SECTION_BY_TYPE: Record<IngestEntryDto['type'], keyof MasterDB> = {
   certification: 'certifications',
   award: 'awards_and_honors',
   skills: 'skills',
+  summary: 'summaries',
+  publication: 'publications_and_speaking',
+  volunteering: 'volunteering_and_leadership',
+  interest: 'interests',
 };
 
 @Controller('onboarding')
@@ -35,8 +45,9 @@ export class OnboardingController {
 
   /**
    * POST /api/onboarding/ingest/stream
-   * SSE endpoint: streams progress events while the AI parses career text,
-   * then merges the result into the user's career profile.
+   * SSE endpoint: streams progress events while the AI parses career text.
+   * Parse-only — nothing is written to the profile here. The client reviews
+   * the returned entries and persists them via `POST /onboarding/ingest/confirm`.
    */
   @Post('ingest/stream')
   @HttpCode(200)
@@ -66,22 +77,7 @@ export class OnboardingController {
         (step) => send('progress', { step }),
       );
 
-      send('progress', { step: 'Merging into profile...' });
-
-      // mergeSections reads the profile once, applies every extracted entry
-      // to an in-memory copy, and writes once — so the whole batch merges
-      // atomically. Either all entries land, or (on failure) none do; no
-      // partial-commit that a client retry could then duplicate.
-      const updatedProfile = await this.profileService.mergeSections(
-        req.user.id,
-        result.entries.map((entry) => ({
-          section: SECTION_BY_TYPE[entry.type],
-          entry: entry.entry,
-        })),
-      );
-
       send('done', {
-        profile: updatedProfile,
         parsed: result.entries,
         droppedCount: result.droppedCount,
       });
@@ -90,5 +86,31 @@ export class OnboardingController {
       send('error', { message: (err as Error).message });
       res.end();
     }
+  }
+
+  /**
+   * POST /api/onboarding/ingest/confirm
+   * Persists the (possibly user-edited) entries a prior parse-only ingest
+   * returned. Kept separate from `ingest/stream` so the user reviews what's
+   * about to be written before it lands in their profile.
+   *
+   * mergeSections reads the profile once, applies every entry to an
+   * in-memory copy, and writes once — so the whole batch merges atomically.
+   * Either all entries land, or (on failure) none do; no partial-commit that
+   * a client retry could then duplicate.
+   */
+  @Post('ingest/confirm')
+  @HttpCode(200)
+  async confirmIngest(
+    @Req() req: { user: { id: string } },
+    @Body(new ZodValidationPipe(ConfirmIngestSchema)) body: ConfirmIngestDto,
+  ): Promise<MasterDB> {
+    return this.profileService.mergeSections(
+      req.user.id,
+      body.entries.map((entry) => ({
+        section: SECTION_BY_TYPE[entry.type],
+        entry: entry.entry,
+      })),
+    );
   }
 }

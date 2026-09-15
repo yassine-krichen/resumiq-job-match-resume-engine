@@ -65,12 +65,12 @@ describe('OnboardingController', () => {
     expect(guards).toContain(AuthGuard);
   });
 
-  describe('ingestStream', () => {
+  describe('ingestStream (parse-only)', () => {
     const experienceEntry = { company: 'Acme', role: 'Engineer' };
     const certificationEntry = { name: 'AWS Certified Developer', issuer: 'AWS' };
     const projectEntry = { name: 'Side Project X' };
 
-    it('calls mergeSections once, with every extracted entry mapped to its section, as a single atomic batch', async () => {
+    it('sends a "done" event with the parsed entries and droppedCount, and never persists anything', async () => {
       profileService.getProfile.mockResolvedValue(null);
       onboardingService.parseCareerText.mockResolvedValue({
         entries: [
@@ -78,27 +78,8 @@ describe('OnboardingController', () => {
           { type: 'certification', entry: certificationEntry },
           { type: 'project', entry: projectEntry },
         ],
+        droppedCount: 0,
       });
-      profileService.mergeSections.mockResolvedValue({} as never);
-
-      const res = fakeResponse();
-      await controller.ingestStream(REQ, res, { raw_text: 'some text' });
-
-      expect(profileService.mergeSections).toHaveBeenCalledTimes(1);
-      expect(profileService.mergeSections).toHaveBeenCalledWith('user-1', [
-        { section: 'experience', entry: experienceEntry },
-        { section: 'certifications', entry: certificationEntry },
-        { section: 'projects', entry: projectEntry },
-      ]);
-    });
-
-    it('sends a "done" event with the final merged profile and the parsed entries', async () => {
-      profileService.getProfile.mockResolvedValue(null);
-      onboardingService.parseCareerText.mockResolvedValue({
-        entries: [{ type: 'experience', entry: experienceEntry }],
-      });
-      const finalProfile = { experience: [experienceEntry] };
-      profileService.mergeSections.mockResolvedValue(finalProfile);
 
       const res = fakeResponse();
       await controller.ingestStream(REQ, res, { raw_text: 'some text' });
@@ -106,9 +87,15 @@ describe('OnboardingController', () => {
       const frames = parseSSEFrames(res.writes);
       const doneFrame = frames.find((f) => f.event === 'done');
       expect(doneFrame?.data).toEqual({
-        profile: finalProfile,
-        parsed: [{ type: 'experience', entry: experienceEntry }],
+        parsed: [
+          { type: 'experience', entry: experienceEntry },
+          { type: 'certification', entry: certificationEntry },
+          { type: 'project', entry: projectEntry },
+        ],
+        droppedCount: 0,
       });
+      expect(doneFrame?.data).not.toHaveProperty('profile');
+      expect(profileService.mergeSections).not.toHaveBeenCalled();
       expect(res.ended).toBe(true);
     });
 
@@ -118,8 +105,6 @@ describe('OnboardingController', () => {
         entries: [{ type: 'experience', entry: experienceEntry }],
         droppedCount: 2,
       });
-      const finalProfile = { experience: [experienceEntry] };
-      profileService.mergeSections.mockResolvedValue(finalProfile);
 
       const res = fakeResponse();
       await controller.ingestStream(REQ, res, { raw_text: 'some text' });
@@ -127,13 +112,31 @@ describe('OnboardingController', () => {
       const frames = parseSSEFrames(res.writes);
       const doneFrame = frames.find((f) => f.event === 'done');
       expect(doneFrame?.data).toEqual({
-        profile: finalProfile,
         parsed: [{ type: 'experience', entry: experienceEntry }],
         droppedCount: 2,
       });
     });
 
-    it('sends an "error" event and ends the stream when parsing fails, without merging anything', async () => {
+    it('loads the existing profile and passes it to parseCareerText as extraction context', async () => {
+      const existingProfile = { skills: { programming_languages: ['TypeScript'] } };
+      profileService.getProfile.mockResolvedValue(existingProfile);
+      onboardingService.parseCareerText.mockResolvedValue({
+        entries: [{ type: 'experience', entry: experienceEntry }],
+        droppedCount: 0,
+      });
+
+      const res = fakeResponse();
+      await controller.ingestStream(REQ, res, { raw_text: 'some text' });
+
+      expect(profileService.getProfile).toHaveBeenCalledWith('user-1');
+      expect(onboardingService.parseCareerText).toHaveBeenCalledWith(
+        'some text',
+        existingProfile,
+        expect.any(Function),
+      );
+    });
+
+    it('sends an "error" event and ends the stream when parsing fails, without persisting anything', async () => {
       profileService.getProfile.mockResolvedValue(null);
       onboardingService.parseCareerText.mockRejectedValue(
         new Error("Couldn't parse that text into your profile — try rephrasing or breaking it into shorter pieces."),
@@ -150,28 +153,52 @@ describe('OnboardingController', () => {
       expect(profileService.mergeSections).not.toHaveBeenCalled();
       expect(res.ended).toBe(true);
     });
+  });
 
-    it('merges nothing and reports the error when mergeSections fails partway through the batch (atomicity)', async () => {
-      profileService.getProfile.mockResolvedValue(null);
-      onboardingService.parseCareerText.mockResolvedValue({
+  describe('confirmIngest', () => {
+    it('maps every confirmed entry type to its MasterDB section and persists the whole batch in a single mergeSections call', async () => {
+      const finalProfile = { experience: [{ company: 'Acme' }] } as never;
+      profileService.mergeSections.mockResolvedValue(finalProfile);
+
+      const body = {
         entries: [
-          { type: 'experience', entry: experienceEntry },
-          { type: 'project', entry: projectEntry },
+          { type: 'experience' as const, entry: { company: 'Acme' } },
+          { type: 'project' as const, entry: { name: 'Side Project X' } },
+          { type: 'education' as const, entry: { institution: 'State U' } },
+          { type: 'certification' as const, entry: { name: 'AWS Certified' } },
+          { type: 'award' as const, entry: { title: 'Employee of the Year' } },
+          { type: 'skills' as const, entry: { programming_languages: ['TypeScript'] } },
+          { type: 'summary' as const, entry: { target_role: 'Backend Engineer' } },
+          { type: 'publication' as const, entry: { title: 'Scaling Postgres' } },
+          { type: 'volunteering' as const, entry: { organization: 'Code.org' } },
+          { type: 'interest' as const, entry: 'Chess' },
         ],
-      });
+      };
+
+      const result = await controller.confirmIngest(REQ, body as never);
+
+      expect(profileService.mergeSections).toHaveBeenCalledTimes(1);
+      expect(profileService.mergeSections).toHaveBeenCalledWith('user-1', [
+        { section: 'experience', entry: { company: 'Acme' } },
+        { section: 'projects', entry: { name: 'Side Project X' } },
+        { section: 'education', entry: { institution: 'State U' } },
+        { section: 'certifications', entry: { name: 'AWS Certified' } },
+        { section: 'awards_and_honors', entry: { title: 'Employee of the Year' } },
+        { section: 'skills', entry: { programming_languages: ['TypeScript'] } },
+        { section: 'summaries', entry: { target_role: 'Backend Engineer' } },
+        { section: 'publications_and_speaking', entry: { title: 'Scaling Postgres' } },
+        { section: 'volunteering_and_leadership', entry: { organization: 'Code.org' } },
+        { section: 'interests', entry: 'Chess' },
+      ]);
+      expect(result).toBe(finalProfile);
+    });
+
+    it('propagates the error when mergeSections fails, without swallowing it', async () => {
       profileService.mergeSections.mockRejectedValue(new Error('DB write failed'));
 
-      const res = fakeResponse();
-      await controller.ingestStream(REQ, res, { raw_text: 'some text' });
+      const body = { entries: [{ type: 'experience' as const, entry: { company: 'Acme' } }] };
 
-      // A single mergeSections call means there's no way for it to have
-      // partially applied entries before throwing — the whole batch is one
-      // read + one write, so failure means zero entries landed.
-      expect(profileService.mergeSections).toHaveBeenCalledTimes(1);
-      const frames = parseSSEFrames(res.writes);
-      const errorFrame = frames.find((f) => f.event === 'error');
-      expect(errorFrame?.data).toEqual({ message: 'DB write failed' });
-      expect(res.ended).toBe(true);
+      await expect(controller.confirmIngest(REQ, body as never)).rejects.toThrow('DB write failed');
     });
   });
 });

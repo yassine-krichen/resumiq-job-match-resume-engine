@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIngestCareerText } from '@/hooks/use-ingest-career-text';
+import { savePendingEntries } from './_lib/pending-entries';
 
 // Mirrors the server-side cap on IngestBodySchema.raw_text (packages/schemas)
 // — kept in sync manually since the frontend doesn't import backend schemas.
@@ -11,11 +12,16 @@ const RAW_TEXT_MAX_LENGTH = 20000;
 export default function OnboardingPage() {
   const router = useRouter();
   const [rawText, setRawText] = useState('');
-  const { loading, progress, error, parseSummary, ingest } = useIngestCareerText();
+  const { loading, progress, error, parseSummary, entries, ingest } = useIngestCareerText();
 
   function handleSubmit() {
     if (!rawText.trim()) return;
     ingest(rawText);
+  }
+
+  function goToReview() {
+    savePendingEntries(entries);
+    router.push('/onboarding/review');
   }
 
   // Once the stream reports done with nothing dropped, move straight to
@@ -23,9 +29,10 @@ export default function OnboardingPage() {
   // pasted items didn't make it into their profile.
   useEffect(() => {
     if (parseSummary && parseSummary.dropped === 0) {
-      router.push('/onboarding/review');
+      goToReview();
     }
-  }, [parseSummary, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parseSummary]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
@@ -68,7 +75,7 @@ export default function OnboardingPage() {
                 {parseSummary.dropped} couldn&apos;t be extracted.
               </p>
               <button
-                onClick={() => router.push('/onboarding/review')}
+                onClick={goToReview}
                 className="mt-2 font-medium underline underline-offset-4"
               >
                 Continue to review
@@ -88,7 +95,7 @@ export default function OnboardingPage() {
               disabled={!rawText.trim() || loading}
               className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Parse & add to profile
+              Parse & review
             </button>
           </div>
         </div>

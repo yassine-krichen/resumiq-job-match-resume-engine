@@ -90,36 +90,45 @@ export const AwardSchema = z.object({
   related_skills: z.array(z.string()).optional(),
 });
 
+export const SummaryEntrySchema = z.object({
+  target_role: z.string().min(1).max(200),
+  content: z.string().min(1).max(5000),
+});
+
+export const PublicationEntrySchema = z.object({
+  title: z.string().min(1).max(200),
+  venue: z.string().max(200).optional(),
+  date: z.string().max(50),
+  url: z.string().max(2000).optional(),
+  description: z.string().max(5000).optional(),
+});
+
+export const VolunteeringEntrySchema = z.object({
+  organization: z.string().min(1).max(200),
+  role: z.string().min(1).max(200),
+  location: z.string().max(200).optional(),
+  startDate: z.string().max(50),
+  endDate: z.string().max(50).optional(),
+  isCurrent: z.boolean().optional(),
+  description: z.string().max(5000).optional(),
+});
+
+// A single interest is a short freeform tag (e.g. "Competitive Programming")
+// — same bound as other short label fields (Award.title, Certification.name).
+export const InterestEntrySchema = z.string().min(1).max(200);
+
 export const MasterDBSchema = z.object({
   personal_info: PersonalInfoSchema,
-  summaries: z.array(z.object({ target_role: z.string(), content: z.string() })),
+  summaries: z.array(SummaryEntrySchema),
   experience: z.array(ExperienceEntrySchema),
   education: z.array(EducationEntrySchema),
   projects: z.array(ProjectEntrySchema),
   skills: SkillsSchema,
   certifications: z.array(CertificationSchema),
   awards_and_honors: z.array(AwardSchema),
-  publications_and_speaking: z.array(
-    z.object({
-      title: z.string(),
-      venue: z.string().optional(),
-      date: z.string(),
-      url: z.string().optional(),
-      description: z.string().optional(),
-    }),
-  ),
-  volunteering_and_leadership: z.array(
-    z.object({
-      organization: z.string(),
-      role: z.string(),
-      location: z.string().optional(),
-      startDate: z.string(),
-      endDate: z.string().optional(),
-      isCurrent: z.boolean().optional(),
-      description: z.string().optional(),
-    }),
-  ),
-  interests: z.array(z.string()),
+  publications_and_speaking: z.array(PublicationEntrySchema),
+  volunteering_and_leadership: z.array(VolunteeringEntrySchema),
+  interests: z.array(InterestEntrySchema),
 });
 
 // ── API Request/Response Schemas ────────────────────────────────────────────
@@ -301,6 +310,10 @@ export const IngestEntrySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('certification'), entry: CertificationSchema }),
   z.object({ type: z.literal('award'), entry: AwardSchema }),
   z.object({ type: z.literal('skills'), entry: SkillsSchema.partial() }),
+  z.object({ type: z.literal('summary'), entry: SummaryEntrySchema }),
+  z.object({ type: z.literal('publication'), entry: PublicationEntrySchema }),
+  z.object({ type: z.literal('volunteering'), entry: VolunteeringEntrySchema }),
+  z.object({ type: z.literal('interest'), entry: InterestEntrySchema }),
 ]);
 
 export const IngestResultSchema = z.object({
@@ -309,6 +322,15 @@ export const IngestResultSchema = z.object({
   // (see `parseCareerText`'s per-entry `safeParse` loop) — surfaced to the
   // frontend so a partially-failed paste doesn't silently look fully parsed.
   droppedCount: z.number().int().min(0).default(0),
+});
+
+// Body of `POST /onboarding/ingest/confirm` — the user-reviewed (possibly
+// edited/pruned) set of entries from a prior parse-only ingest, persisted
+// only once the user explicitly confirms them. Re-validated here rather than
+// trusted from the earlier parse response, since the client may have edited
+// field values in the review step.
+export const ConfirmIngestSchema = z.object({
+  entries: z.array(IngestEntrySchema).min(1),
 });
 
 // ── Phase 3: Job Discovery (Swipe Feed) ─────────────────────────────────────
@@ -436,6 +458,7 @@ export type JobIntakeResultDto = z.infer<typeof JobIntakeResultSchema>;
 export type IngestBodyDto = z.infer<typeof IngestBodySchema>;
 export type IngestEntryDto = z.infer<typeof IngestEntrySchema>;
 export type IngestResultDto = z.infer<typeof IngestResultSchema>;
+export type ConfirmIngestDto = z.infer<typeof ConfirmIngestSchema>;
 export type UserSettingsDto = z.infer<typeof UserSettingsSchema>;
 export type UpdateUserSettingsDto = z.infer<typeof UpdateUserSettingsSchema>;
 export type UpdateResumeSelectionDto = z.infer<typeof UpdateResumeSelectionSchema>;

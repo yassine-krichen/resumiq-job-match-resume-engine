@@ -2,18 +2,23 @@ import {
   AwardSchema,
   CertificationSchema,
   CompatibilityResultSchema,
+  ConfirmIngestSchema,
   CreateJobSchema,
   EducationEntrySchema,
   ExperienceEntrySchema,
   ExtractJobIntakeSchema,
   IngestBodySchema,
   IngestResultSchema,
+  InterestEntrySchema,
   JobDNASchema,
   JobIntakeResultSchema,
   ProjectEntrySchema,
+  PublicationEntrySchema,
+  SummaryEntrySchema,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
   UpdateResumeSelectionSchema,
+  VolunteeringEntrySchema,
 } from './index';
 
 describe('CreateJobSchema', () => {
@@ -588,5 +593,208 @@ describe('AwardSchema', () => {
     const tooLong = 'a'.repeat(5001);
 
     expect(() => AwardSchema.parse({ ...validEntry, description: tooLong })).toThrow();
+  });
+});
+
+describe('SummaryEntrySchema', () => {
+  const validEntry = {
+    target_role: 'Backend Engineer',
+    content: 'Backend engineer with 5 years of experience building distributed systems.',
+  };
+
+  it('accepts a fully valid entry', () => {
+    expect(() => SummaryEntrySchema.parse(validEntry)).not.toThrow();
+  });
+
+  it('rejects an empty target_role', () => {
+    expect(() => SummaryEntrySchema.parse({ ...validEntry, target_role: '' })).toThrow();
+  });
+
+  it('rejects an empty content', () => {
+    expect(() => SummaryEntrySchema.parse({ ...validEntry, content: '' })).toThrow();
+  });
+
+  it('rejects a target_role longer than 200 characters', () => {
+    const tooLong = 'a'.repeat(201);
+
+    expect(() => SummaryEntrySchema.parse({ ...validEntry, target_role: tooLong })).toThrow();
+  });
+
+  it('rejects content longer than 5,000 characters', () => {
+    const tooLong = 'a'.repeat(5001);
+
+    expect(() => SummaryEntrySchema.parse({ ...validEntry, content: tooLong })).toThrow();
+  });
+
+  it('rejects a payload missing the required content field', () => {
+    const { content: _content, ...withoutContent } = validEntry;
+
+    expect(() => SummaryEntrySchema.parse(withoutContent)).toThrow();
+  });
+});
+
+describe('PublicationEntrySchema', () => {
+  const validEntry = {
+    title: 'Scaling Postgres at 10x',
+    venue: 'ReactConf 2024',
+    date: '2024',
+    url: 'https://reactconf.example.com/talks/scaling-postgres',
+    description: 'Talk on read-replica sharding strategies.',
+  };
+
+  it('accepts a fully valid entry', () => {
+    expect(() => PublicationEntrySchema.parse(validEntry)).not.toThrow();
+  });
+
+  it('accepts a minimal entry with only the required title and date', () => {
+    expect(() =>
+      PublicationEntrySchema.parse({ title: 'Scaling Postgres at 10x', date: '2024' }),
+    ).not.toThrow();
+  });
+
+  it('rejects an empty title', () => {
+    expect(() => PublicationEntrySchema.parse({ ...validEntry, title: '' })).toThrow();
+  });
+
+  it('rejects a title longer than 200 characters', () => {
+    const tooLong = 'a'.repeat(201);
+
+    expect(() => PublicationEntrySchema.parse({ ...validEntry, title: tooLong })).toThrow();
+  });
+
+  it('rejects a payload missing the required title field', () => {
+    const { title: _title, ...withoutTitle } = validEntry;
+
+    expect(() => PublicationEntrySchema.parse(withoutTitle)).toThrow();
+  });
+
+  it('rejects a description longer than 5,000 characters', () => {
+    const tooLong = 'a'.repeat(5001);
+
+    expect(() => PublicationEntrySchema.parse({ ...validEntry, description: tooLong })).toThrow();
+  });
+});
+
+describe('VolunteeringEntrySchema', () => {
+  const validEntry = {
+    organization: 'Code.org',
+    role: 'Mentor',
+    location: 'Remote',
+    startDate: '2022',
+    endDate: '',
+    isCurrent: true,
+    description: 'Mentors underrepresented students in web development.',
+  };
+
+  it('accepts a fully valid entry', () => {
+    expect(() => VolunteeringEntrySchema.parse(validEntry)).not.toThrow();
+  });
+
+  it('accepts a minimal entry with only the required organization, role, and startDate', () => {
+    expect(() =>
+      VolunteeringEntrySchema.parse({ organization: 'Code.org', role: 'Mentor', startDate: '2022' }),
+    ).not.toThrow();
+  });
+
+  it('rejects an empty organization', () => {
+    expect(() => VolunteeringEntrySchema.parse({ ...validEntry, organization: '' })).toThrow();
+  });
+
+  it('rejects an empty role', () => {
+    expect(() => VolunteeringEntrySchema.parse({ ...validEntry, role: '' })).toThrow();
+  });
+
+  it('rejects a payload missing the required startDate field', () => {
+    const { startDate: _startDate, ...withoutStartDate } = validEntry;
+
+    expect(() => VolunteeringEntrySchema.parse(withoutStartDate)).toThrow();
+  });
+
+  it('rejects an organization name longer than 200 characters', () => {
+    const tooLong = 'a'.repeat(201);
+
+    expect(() => VolunteeringEntrySchema.parse({ ...validEntry, organization: tooLong })).toThrow();
+  });
+});
+
+describe('InterestEntrySchema', () => {
+  it('accepts a non-empty interest string', () => {
+    expect(() => InterestEntrySchema.parse('Competitive Programming')).not.toThrow();
+  });
+
+  it('rejects an empty string', () => {
+    expect(() => InterestEntrySchema.parse('')).toThrow();
+  });
+
+  it('rejects a string longer than 200 characters', () => {
+    const tooLong = 'a'.repeat(201);
+
+    expect(() => InterestEntrySchema.parse(tooLong)).toThrow();
+  });
+
+  it('rejects a non-string value (an object instead of a plain interest string)', () => {
+    expect(() => InterestEntrySchema.parse({ name: 'Chess' })).toThrow();
+  });
+});
+
+describe('ConfirmIngestSchema', () => {
+  const validExperienceEntry = {
+    type: 'experience',
+    entry: {
+      company: 'Acme Corp',
+      company_industry: 'Software',
+      role: 'Backend Engineer',
+      location: 'Remote',
+      location_type: 'Remote',
+      startDate: 'Jan 2023',
+      endDate: 'Present',
+      isCurrent: true,
+      core_competencies: [],
+      technologies_used: [],
+      raw_achievements: [],
+      quantifiable_metrics: [],
+    },
+  };
+
+  it('accepts a valid multi-type entries payload (experience + interest)', () => {
+    expect(() =>
+      ConfirmIngestSchema.parse({
+        entries: [validExperienceEntry, { type: 'interest', entry: 'Chess' }],
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects an empty entries array — confirm requires at least one entry to persist', () => {
+    expect(() => ConfirmIngestSchema.parse({ entries: [] })).toThrow();
+  });
+
+  it('rejects an entry with a discriminant not in the allowed type union (a client could tamper with this before confirming)', () => {
+    expect(() =>
+      ConfirmIngestSchema.parse({ entries: [{ type: 'not_a_real_type', entry: {} }] }),
+    ).toThrow();
+  });
+
+  it('rejects an entry whose sub-entry is missing required fields for its type (a user-edited field cleared to empty)', () => {
+    expect(() =>
+      ConfirmIngestSchema.parse({
+        entries: [{ type: 'experience', entry: { ...validExperienceEntry.entry, company: '' } }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a field a user edited past its max length before confirming', () => {
+    expect(() =>
+      ConfirmIngestSchema.parse({
+        entries: [
+          { type: 'experience', entry: { ...validExperienceEntry.entry, company: 'a'.repeat(201) } },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an interest entry edited into a non-string value', () => {
+    expect(() =>
+      ConfirmIngestSchema.parse({ entries: [{ type: 'interest', entry: { name: 'Chess' } }] }),
+    ).toThrow();
   });
 });

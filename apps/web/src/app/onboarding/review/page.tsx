@@ -3,42 +3,146 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
-import type { MasterDB } from '@resumiq/schemas';
+import type { IngestEntryDto, MasterDB } from '@resumiq/schemas';
 import { PageHeader } from '@/components/page-header';
+import { AddAchievementModal } from '@/app/profile/_components/add-achievement-modal';
+import { AddCertificationModal } from '@/app/profile/_components/add-certification-modal';
+import { AddEducationModal } from '@/app/profile/_components/add-education-modal';
+import { AddExperienceModal } from '@/app/profile/_components/add-experience-modal';
+import { AddProjectModal } from '@/app/profile/_components/add-project-modal';
+import { clearPendingEntries, loadPendingEntries, savePendingEntries } from '../_lib/pending-entries';
+
+type ExperienceEntry = Extract<IngestEntryDto, { type: 'experience' }>['entry'];
+type ProjectEntry = Extract<IngestEntryDto, { type: 'project' }>['entry'];
+type EducationEntry = Extract<IngestEntryDto, { type: 'education' }>['entry'];
+type CertificationEntry = Extract<IngestEntryDto, { type: 'certification' }>['entry'];
+type AwardEntry = Extract<IngestEntryDto, { type: 'award' }>['entry'];
+type SkillsEntry = Extract<IngestEntryDto, { type: 'skills' }>['entry'];
+type SummaryEntry = Extract<IngestEntryDto, { type: 'summary' }>['entry'];
+type PublicationEntry = Extract<IngestEntryDto, { type: 'publication' }>['entry'];
+type VolunteeringEntry = Extract<IngestEntryDto, { type: 'volunteering' }>['entry'];
+type InterestEntry = Extract<IngestEntryDto, { type: 'interest' }>['entry'];
+
+/** Pairs an entry with its position in the flat `entries` array, so editing
+ * or removing an item within a type-grouped section updates the right slot. */
+type IndexedEntry<T extends IngestEntryDto['type']> = {
+  index: number;
+  entry: Extract<IngestEntryDto, { type: T }>['entry'];
+};
+
+function entriesOfType<T extends IngestEntryDto['type']>(
+  entries: IngestEntryDto[],
+  type: T,
+): Array<IndexedEntry<T>> {
+  const result: Array<IndexedEntry<T>> = [];
+  entries.forEach((e, index) => {
+    if (e.type === type) {
+      result.push({ index, entry: e.entry as IndexedEntry<T>['entry'] });
+    }
+  });
+  return result;
+}
 
 export default function OnboardingReviewPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<MasterDB | null>(null);
-  const [loading, setLoading] = useState(true);
+  // `undefined` = not yet loaded from sessionStorage, `null` = nothing pending.
+  const [entries, setEntries] = useState<IngestEntryDto[] | null | undefined>(undefined);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // sessionStorage is only available client-side, and this route is
+  // server-rendered, so the read can't happen during the initial render (a
+  // `useState(() => loadPendingEntries())` lazy initializer would either
+  // throw on the server or, worse, read real data during client hydration
+  // while the server-rendered markup shows the `undefined` "Loading..."
+  // state — a hydration mismatch). Deferring to an effect with an empty dep
+  // array keeps the first client render identical to the server render,
+  // then swaps in the real value once mounted. This is a one-shot mount
+  // hydration, not an ongoing sync back to an external store (edits/removes
+  // below intentionally diverge `entries` from sessionStorage until
+  // confirm), so it isn't a fit for useSyncExternalStore either.
   useEffect(() => {
-    apiFetch<MasterDB>('/profile')
-      .then(setProfile)
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
+    const pending = loadPendingEntries();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEntries(pending && pending.length > 0 ? pending : null);
   }, []);
 
-  if (loading) {
+  function replaceEntryAt(index: number, entry: IngestEntryDto['entry']): Promise<void> {
+    setEntries((prev) => {
+      const next = (prev ?? []).map((e, i) => (i === index ? ({ ...e, entry } as IngestEntryDto) : e));
+      // Keep the sessionStorage snapshot in sync with every edit — otherwise
+      // a refresh before "Save to profile" re-reads the original, unedited
+      // parse and silently discards the user's changes.
+      savePendingEntries(next);
+      return next;
+    });
+    return Promise.resolve();
+  }
+
+  function removeEntryAt(index: number): Promise<void> {
+    setEntries((prev) => {
+      const next = (prev ?? []).filter((_, i) => i !== index);
+      savePendingEntries(next);
+      return next;
+    });
+    return Promise.resolve();
+  }
+
+  async function handleConfirm() {
+    if (!entries || entries.length === 0) return;
+    setSaving(true);
+    setError('');
+    try {
+      await apiFetch<MasterDB>('/onboarding/ingest/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ entries }),
+      });
+      clearPendingEntries();
+      router.push('/profile');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (entries === undefined) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">Loading profile...</p>
+        <p className="text-muted-foreground">Loading...</p>
       </div>
     );
   }
 
-  if (error) {
+  if (entries === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-red-500">{error}</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <p className="text-muted-foreground">Nothing to review — paste some career text first.</p>
+        <button
+          onClick={() => router.push('/onboarding')}
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Go to paste
+        </button>
       </div>
     );
   }
+
+  const experience = entriesOfType(entries, 'experience');
+  const projects = entriesOfType(entries, 'project');
+  const education = entriesOfType(entries, 'education');
+  const certifications = entriesOfType(entries, 'certification');
+  const awards = entriesOfType(entries, 'award');
+  const skills = entriesOfType(entries, 'skills');
+  const summaries = entriesOfType(entries, 'summary');
+  const publications = entriesOfType(entries, 'publication');
+  const volunteering = entriesOfType(entries, 'volunteering');
+  const interests = entriesOfType(entries, 'interest');
 
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
-        title="Review your profile"
+        title="Review before saving"
         containerClassName="mx-auto flex max-w-3xl items-center justify-between"
         actions={
           <button
@@ -52,104 +156,195 @@ export default function OnboardingReviewPage() {
 
       <div className="mx-auto max-w-3xl px-4 py-12">
         <p className="mb-8 text-muted-foreground">
-          Confirm the AI parsed your data correctly. You can always edit from your profile.
+          Nothing is saved yet. Edit or remove anything that&apos;s wrong, then confirm to write
+          these into your profile.
         </p>
 
-        {profile && (
-          <div className="space-y-4">
-            {profile.experience?.length > 0 && (
-              <Section title="Experience" count={profile.experience.length}>
-                {profile.experience.map((exp, i) => (
-                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
-                    <p className="font-medium">{exp.role} @ {exp.company}</p>
-                    <p className="text-sm text-muted-foreground">{exp.startDate} – {exp.isCurrent ? 'Present' : exp.endDate}</p>
-                    {exp.raw_achievements?.length > 0 && (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
-                        {exp.raw_achievements.map((achievement, j) => (
-                          <li key={j}>{achievement}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {exp.technologies_used?.length > 0 && (
-                      <p className="mt-2 text-xs text-muted-foreground">{exp.technologies_used.slice(0, 6).join(', ')}</p>
-                    )}
-                  </div>
-                ))}
-              </Section>
-            )}
+        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-            {profile.projects?.length > 0 && (
-              <Section title="Projects" count={profile.projects.length}>
-                {profile.projects.map((proj, i) => (
-                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
-                    <p className="font-medium">{proj.name}</p>
-                    <p className="text-sm text-muted-foreground">{proj.startDate} – {proj.endDate}</p>
-                    {proj.raw_achievements?.length > 0 && (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
-                        {proj.raw_achievements.map((achievement, j) => (
-                          <li key={j}>{achievement}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {proj.technologies_used?.length > 0 && (
-                      <p className="mt-2 text-xs text-muted-foreground">{proj.technologies_used.slice(0, 6).join(', ')}</p>
-                    )}
-                  </div>
-                ))}
-              </Section>
-            )}
+        <div className="space-y-4">
+          {experience.length > 0 && (
+            <Section title="Experience" count={experience.length}>
+              {experience.map(({ entry, index }) => (
+                <ReviewRow key={index} title={`${entry.role} @ ${entry.company}`}>
+                  <AddExperienceModal
+                    entry={entry as ExperienceEntry}
+                    submitting={saving}
+                    onAdd={(updated) => replaceEntryAt(index, updated)}
+                    onDelete={() => removeEntryAt(index)}
+                  />
+                </ReviewRow>
+              ))}
+            </Section>
+          )}
 
-            {profile.education?.length > 0 && (
-              <Section title="Education" count={profile.education.length}>
-                {profile.education.map((edu, i) => (
-                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
-                    <p className="font-medium">{edu.degree_type} in {edu.major}</p>
-                    <p className="text-sm text-muted-foreground">{edu.institution}</p>
-                  </div>
-                ))}
-              </Section>
-            )}
+          {projects.length > 0 && (
+            <Section title="Projects" count={projects.length}>
+              {projects.map(({ entry, index }) => (
+                <ReviewRow key={index} title={(entry as ProjectEntry).name}>
+                  <AddProjectModal
+                    entry={entry as ProjectEntry}
+                    submitting={saving}
+                    onAdd={(updated) => replaceEntryAt(index, updated)}
+                    onDelete={() => removeEntryAt(index)}
+                  />
+                </ReviewRow>
+              ))}
+            </Section>
+          )}
 
-            {profile.skills?.programming_languages?.length > 0 && (
-              <Section title="Skills" count={1}>
-                <div className="rounded-lg border border-border bg-muted p-4">
-                  <p className="text-sm text-foreground">
-                    <span className="font-medium">Languages: </span>
-                    {profile.skills.programming_languages.join(', ')}
-                  </p>
-                  {profile.skills.frameworks_and_libraries?.length > 0 && (
-                    <p className="mt-1 text-sm text-foreground">
-                      <span className="font-medium">Frameworks: </span>
-                      {profile.skills.frameworks_and_libraries.join(', ')}
+          {education.length > 0 && (
+            <Section title="Education" count={education.length}>
+              {education.map(({ entry, index }) => {
+                const edu = entry as EducationEntry;
+                return (
+                  <ReviewRow key={index} title={`${edu.degree_type} in ${edu.major}`} subtitle={edu.institution}>
+                    <AddEducationModal
+                      entry={edu}
+                      submitting={saving}
+                      onAdd={(updated) => replaceEntryAt(index, updated)}
+                      onDelete={() => removeEntryAt(index)}
+                    />
+                  </ReviewRow>
+                );
+              })}
+            </Section>
+          )}
+
+          {certifications.length > 0 && (
+            <Section title="Certifications" count={certifications.length}>
+              {certifications.map(({ entry, index }) => {
+                const cert = entry as CertificationEntry;
+                return (
+                  <ReviewRow key={index} title={cert.name} subtitle={cert.issuer}>
+                    <AddCertificationModal
+                      entry={cert}
+                      submitting={saving}
+                      onAdd={(updated) => replaceEntryAt(index, updated)}
+                      onDelete={() => removeEntryAt(index)}
+                    />
+                  </ReviewRow>
+                );
+              })}
+            </Section>
+          )}
+
+          {awards.length > 0 && (
+            <Section title="Awards" count={awards.length}>
+              {awards.map(({ entry, index }) => {
+                const award = entry as AwardEntry;
+                return (
+                  <ReviewRow key={index} title={award.title} subtitle={award.issuer}>
+                    <AddAchievementModal
+                      entry={award}
+                      submitting={saving}
+                      onAdd={(updated) => replaceEntryAt(index, updated)}
+                      onDelete={() => removeEntryAt(index)}
+                    />
+                  </ReviewRow>
+                );
+              })}
+            </Section>
+          )}
+
+          {/* The remaining types (skills, summary, publication, volunteering,
+           * interest) don't have a manual-CRUD modal in the profile page yet
+           * (Phase 3a only built modals for array sections with an edit UI
+           * need — see use-profile-section.ts's ArraySectionKey). Rather than
+           * build new modal infrastructure for types that don't need it
+           * elsewhere yet, these render as plain review-only cards: view +
+           * remove, no inline edit. */}
+          {skills.length > 0 && (
+            <Section title="Skills" count={skills.length}>
+              {skills.map(({ entry, index }) => (
+                <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
+                  <SkillsSummary skills={entry as SkillsEntry} />
+                </PlainReviewCard>
+              ))}
+            </Section>
+          )}
+
+          {summaries.length > 0 && (
+            <Section title="Summaries" count={summaries.length}>
+              {summaries.map(({ entry, index }) => {
+                const summary = entry as SummaryEntry;
+                return (
+                  <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
+                    <p className="font-medium">{summary.target_role}</p>
+                    <p className="mt-1 text-sm text-foreground">{summary.content}</p>
+                  </PlainReviewCard>
+                );
+              })}
+            </Section>
+          )}
+
+          {publications.length > 0 && (
+            <Section title="Publications & speaking" count={publications.length}>
+              {publications.map(({ entry, index }) => {
+                const pub = entry as PublicationEntry;
+                return (
+                  <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
+                    <p className="font-medium">{pub.title}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {[pub.venue, pub.date].filter(Boolean).join(' · ')}
                     </p>
-                  )}
-                </div>
-              </Section>
-            )}
+                    {pub.url && (
+                      <p className="mt-1 text-sm text-foreground">
+                        <span className="font-medium">URL: </span>
+                        {pub.url}
+                      </p>
+                    )}
+                    {pub.description && (
+                      <p className="mt-1 text-sm text-foreground">{pub.description}</p>
+                    )}
+                  </PlainReviewCard>
+                );
+              })}
+            </Section>
+          )}
 
-            {profile.certifications?.length > 0 && (
-              <Section title="Certifications" count={profile.certifications.length}>
-                {profile.certifications.map((cert, i) => (
-                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
-                    <p className="font-medium">{cert.name}</p>
-                    <p className="text-sm text-muted-foreground">{cert.issuer}{cert.date ? ` – ${cert.date}` : ''}</p>
-                  </div>
-                ))}
-              </Section>
-            )}
+          {volunteering.length > 0 && (
+            <Section title="Volunteering & leadership" count={volunteering.length}>
+              {volunteering.map(({ entry, index }) => {
+                const vol = entry as VolunteeringEntry;
+                return (
+                  <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
+                    <p className="font-medium">{vol.role} @ {vol.organization}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {vol.startDate} – {vol.isCurrent ? 'Present' : (vol.endDate ?? '')}
+                    </p>
+                    {vol.location && (
+                      <p className="mt-1 text-sm text-muted-foreground">{vol.location}</p>
+                    )}
+                    {vol.description && (
+                      <p className="mt-1 text-sm text-foreground">{vol.description}</p>
+                    )}
+                  </PlainReviewCard>
+                );
+              })}
+            </Section>
+          )}
 
-            {profile.awards_and_honors?.length > 0 && (
-              <Section title="Awards" count={profile.awards_and_honors.length}>
-                {profile.awards_and_honors.map((award, i) => (
-                  <div key={i} className="rounded-lg border border-border bg-muted p-4">
-                    <p className="font-medium">{award.title}</p>
-                    <p className="text-sm text-muted-foreground">{award.issuer}{award.date ? ` – ${award.date}` : ''}</p>
-                  </div>
-                ))}
-              </Section>
-            )}
-          </div>
-        )}
+          {interests.length > 0 && (
+            <Section title="Interests" count={interests.length}>
+              {interests.map(({ entry, index }) => (
+                <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
+                  <p className="text-sm text-foreground">{entry as InterestEntry}</p>
+                </PlainReviewCard>
+              ))}
+            </Section>
+          )}
+        </div>
+
+        <div className="mt-8 flex items-center justify-end gap-3">
+          <button
+            onClick={handleConfirm}
+            disabled={saving || entries.length === 0}
+            className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save to profile'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -174,5 +369,82 @@ function Section({
       </h2>
       <div className="space-y-3">{children}</div>
     </div>
+  );
+}
+
+function ReviewRow({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-muted p-4">
+      <div>
+        <p className="font-medium">{title}</p>
+        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function PlainReviewCard({
+  onRemove,
+  children,
+}: {
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-muted p-4">
+      <div className="flex-1">{children}</div>
+      <button
+        onClick={onRemove}
+        className="shrink-0 text-sm text-muted-foreground hover:text-red-600"
+      >
+        Remove
+      </button>
+    </div>
+  );
+}
+
+function SkillsSummary({ skills }: { skills: SkillsEntry }) {
+  return (
+    <>
+      {(skills.programming_languages?.length ?? 0) > 0 && (
+        <p className="text-sm text-foreground">
+          <span className="font-medium">Languages: </span>
+          {skills.programming_languages!.join(', ')}
+        </p>
+      )}
+      {(skills.frameworks_and_libraries?.length ?? 0) > 0 && (
+        <p className="mt-1 text-sm text-foreground">
+          <span className="font-medium">Frameworks: </span>
+          {skills.frameworks_and_libraries!.join(', ')}
+        </p>
+      )}
+      {(skills.infrastructure_and_tools?.length ?? 0) > 0 && (
+        <p className="mt-1 text-sm text-foreground">
+          <span className="font-medium">Infrastructure & tools: </span>
+          {skills.infrastructure_and_tools!.join(', ')}
+        </p>
+      )}
+      {(skills.databases?.length ?? 0) > 0 && (
+        <p className="mt-1 text-sm text-foreground">
+          <span className="font-medium">Databases: </span>
+          {skills.databases!.join(', ')}
+        </p>
+      )}
+      {(skills.soft_skills?.length ?? 0) > 0 && (
+        <p className="mt-1 text-sm text-foreground">
+          <span className="font-medium">Soft skills: </span>
+          {skills.soft_skills!.join(', ')}
+        </p>
+      )}
+    </>
   );
 }

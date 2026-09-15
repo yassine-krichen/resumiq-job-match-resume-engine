@@ -147,5 +147,109 @@ describe('OnboardingService', () => {
       expect(result.entries).toHaveLength(1);
       expect(result.droppedCount).toBe(2);
     });
+
+    it('classifies a professional summary into a "summary" entry', async () => {
+      const summaryEntry = {
+        target_role: 'Backend Engineer',
+        content: 'Backend engineer with 5 years building distributed systems.',
+      };
+
+      generateJSONMock.mockResolvedValue({
+        entries: [{ type: 'summary', entry: summaryEntry }],
+      });
+
+      const result = await service.parseCareerText('some raw text', null);
+
+      expect(result.entries).toHaveLength(1);
+      expect(result.entries[0]).toEqual({ type: 'summary', entry: summaryEntry });
+      expect(result.droppedCount).toBe(0);
+    });
+
+    it('classifies a conference talk into a "publication" entry', async () => {
+      const publicationEntry = {
+        title: 'Scaling Postgres at 10x',
+        venue: 'ReactConf 2024',
+        date: '2024',
+        url: 'https://reactconf.example.com/talks/scaling-postgres',
+        description: 'Talk on read-replica sharding strategies.',
+      };
+
+      generateJSONMock.mockResolvedValue({
+        entries: [{ type: 'publication', entry: publicationEntry }],
+      });
+
+      const result = await service.parseCareerText('some raw text', null);
+
+      expect(result.entries).toHaveLength(1);
+      expect(result.entries[0]).toEqual({ type: 'publication', entry: publicationEntry });
+      expect(result.droppedCount).toBe(0);
+    });
+
+    it('classifies community mentoring into a "volunteering" entry', async () => {
+      const volunteeringEntry = {
+        organization: 'Code.org',
+        role: 'Mentor',
+        location: 'Remote',
+        startDate: '2022',
+        endDate: '',
+        isCurrent: true,
+        description: 'Mentors underrepresented students in web development.',
+      };
+
+      generateJSONMock.mockResolvedValue({
+        entries: [{ type: 'volunteering', entry: volunteeringEntry }],
+      });
+
+      const result = await service.parseCareerText('some raw text', null);
+
+      expect(result.entries).toHaveLength(1);
+      expect(result.entries[0]).toEqual({ type: 'volunteering', entry: volunteeringEntry });
+      expect(result.droppedCount).toBe(0);
+    });
+
+    it('classifies a personal hobby mention into an "interest" entry (a plain string, not an object)', async () => {
+      generateJSONMock.mockResolvedValue({
+        entries: [{ type: 'interest', entry: 'Competitive Programming' }],
+      });
+
+      const result = await service.parseCareerText('some raw text', null);
+
+      expect(result.entries).toHaveLength(1);
+      expect(result.entries[0]).toEqual({ type: 'interest', entry: 'Competitive Programming' });
+      expect(result.droppedCount).toBe(0);
+    });
+
+    it('extracts a mix of a new-type entry (summary) alongside an original-type entry (experience) from the same batch', async () => {
+      const experienceEntry = {
+        company: 'Acme Corp',
+        company_industry: 'Software',
+        role: 'Backend Engineer',
+        location: 'Remote',
+        location_type: 'Remote',
+        startDate: 'Jan 2023',
+        endDate: 'Present',
+        isCurrent: true,
+        core_competencies: [],
+        technologies_used: [],
+        raw_achievements: ['Built a service.'],
+        quantifiable_metrics: [],
+      };
+      const summaryEntry = {
+        target_role: 'Backend Engineer',
+        content: 'Backend engineer with 5 years of experience.',
+      };
+
+      generateJSONMock.mockResolvedValue({
+        entries: [
+          { type: 'summary', entry: summaryEntry },
+          { type: 'experience', entry: experienceEntry },
+        ],
+      });
+
+      const result = await service.parseCareerText('some raw text', null);
+
+      expect(result.entries.map((e) => e.type)).toEqual(['summary', 'experience']);
+      expect(result.droppedCount).toBe(0);
+    });
   });
 });

@@ -66,6 +66,55 @@ describe('useIngestCareerText', () => {
     expect(result.current.parseSummary).toEqual({ parsed: 2, dropped: 1 });
   });
 
+  it('exposes the raw parsed entries from the done payload, for the review step to read before confirming', () => {
+    let options!: SSEOptions;
+    vi.mocked(apiSSE).mockImplementation((_path, _body, opts) => {
+      options = opts as SSEOptions;
+      return () => {};
+    });
+    const { result } = renderHook(() => useIngestCareerText());
+    const parsedEntries = [
+      { type: 'experience', entry: { company: 'Acme' } },
+      { type: 'interest', entry: 'Chess' },
+    ];
+
+    act(() => result.current.ingest('some text'));
+    act(() => options.onDone({ parsed: parsedEntries, droppedCount: 0 }));
+
+    expect(result.current.entries).toEqual(parsedEntries);
+  });
+
+  it('resets entries to empty when a new ingest() call starts, so a stale parse from a previous paste is not reused', () => {
+    let options!: SSEOptions;
+    vi.mocked(apiSSE).mockImplementation((_path, _body, opts) => {
+      options = opts as SSEOptions;
+      return () => {};
+    });
+    const { result } = renderHook(() => useIngestCareerText());
+
+    act(() => result.current.ingest('first paste'));
+    act(() => options.onDone({ parsed: [{ type: 'interest', entry: 'Chess' }], droppedCount: 0 }));
+    expect(result.current.entries).toHaveLength(1);
+
+    act(() => result.current.ingest('second paste'));
+
+    expect(result.current.entries).toEqual([]);
+  });
+
+  it('defaults entries to an empty array when the done payload omits parsed', () => {
+    let options!: SSEOptions;
+    vi.mocked(apiSSE).mockImplementation((_path, _body, opts) => {
+      options = opts as SSEOptions;
+      return () => {};
+    });
+    const { result } = renderHook(() => useIngestCareerText());
+
+    act(() => result.current.ingest('some text'));
+    act(() => options.onDone({}));
+
+    expect(result.current.entries).toEqual([]);
+  });
+
   it('defaults parseSummary to zero counts when the done payload omits parsed/droppedCount', () => {
     let options!: SSEOptions;
     vi.mocked(apiSSE).mockImplementation((_path, _body, opts) => {
