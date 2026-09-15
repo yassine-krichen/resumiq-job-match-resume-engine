@@ -9,6 +9,7 @@ import { AddCertificationModal } from './_components/add-certification-modal';
 import { AddEducationModal } from './_components/add-education-modal';
 import { AddExperienceModal } from './_components/add-experience-modal';
 import { AddProjectModal } from './_components/add-project-modal';
+import { ImportExportPanel } from './_components/import-export-panel';
 import { useProfileSection } from './_components/use-profile-section';
 import { PageHeader } from '@/components/page-header';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -105,6 +106,8 @@ export default function ProfilePage() {
       />
 
       <main className="mx-auto max-w-4xl px-6 py-10">
+        {profile && <ImportExportPanel profile={profile} onImported={setProfile} />}
+
         {/* Summary stats */}
         <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
           {[

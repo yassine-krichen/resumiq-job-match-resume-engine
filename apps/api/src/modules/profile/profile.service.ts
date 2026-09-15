@@ -71,6 +71,30 @@ export class ProfileService {
     return this.upsertProfile(userId, profile);
   }
 
+  /**
+   * Merges an imported `MasterDB` profile (Phase 4 export/import) into the
+   * existing one. Reuses `mergeSectionIntoProfile` per-section rather than
+   * writing new merge logic: array sections (experience, projects, ...) are
+   * exploded into one `{ section, entry }` pair per element so each entry is
+   * *appended*, matching the exact append behavior `mergeSections` already
+   * uses for onboarding's multi-entry ingest. `skills` hits the existing
+   * dedupe-merge branch, and `personal_info` hits the existing scalar
+   * "imported value replaces" branch — same as every other scalar profile
+   * section merge in this codebase, not a new merge rule invented for import.
+   */
+  async importProfile(userId: string, data: MasterDB): Promise<MasterDB> {
+    const entries: Array<{ section: keyof MasterDB; entry: unknown }> = [];
+    for (const key of Object.keys(data) as Array<keyof MasterDB>) {
+      const value = data[key];
+      if (Array.isArray(value)) {
+        for (const entry of value) entries.push({ section: key, entry });
+      } else {
+        entries.push({ section: key, entry: value });
+      }
+    }
+    return this.mergeSections(userId, entries);
+  }
+
   /** Pure merge of a single section entry into an in-memory profile — no DB access. */
   private mergeSectionIntoProfile(
     profile: MasterDB,
@@ -81,7 +105,10 @@ export class ProfileService {
 
     const sectionValue = base[section];
     if (Array.isArray(sectionValue)) {
-      (base[section] as unknown[]) = [...sectionValue, entry];
+      const alreadyExists = sectionValue.some(
+        (existingEntry) => canonicalStringify(existingEntry) === canonicalStringify(entry),
+      );
+      (base[section] as unknown[]) = alreadyExists ? sectionValue : [...sectionValue, entry];
     } else if (section === 'skills' && typeof entry === 'object' && entry !== null) {
       base.skills = this.mergeSkills(base.skills, entry as Partial<MasterDB['skills']>);
     } else {
@@ -178,4 +205,38 @@ export class ProfileService {
 
 function dedupe(arr: string[]): string[] {
   return [...new Set(arr.map((s) => s.trim()).filter(Boolean))];
+}
+
+/**
+ * Deep-equality-safe stringify for comparing JSON-shaped values.
+ *
+ * Object keys are sorted recursively before serializing, so two entries with
+ * the same properties in a different order compare equal. This matters
+ * because the "imported" side of a comparison is rebuilt by Zod in
+ * schema-declaration key order, while the "existing" side comes back from a
+ * Postgres `jsonb` column, which returns keys in Postgres's own internal
+ * canonical order — neither matches the other or the original upload, so a
+ * raw `JSON.stringify` comparison would almost always report false
+ * mismatches on identical data.
+ *
+ * Array element order is preserved (NOT sorted): two entries whose
+ * array-of-strings fields (e.g. `technologies_used`) list the same items in
+ * a different order are treated as genuinely different data.
+ *
+ * Only handles plain JSON-shaped values (objects, arrays, strings, numbers,
+ * booleans, null) — the entries this is used for never contain anything
+ * else (no Dates, functions, undefined, or circular references).
+ */
+function canonicalStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalStringify(item)).join(',')}]`;
+  }
+  if (value !== null && typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>).sort();
+    const entries = keys.map(
+      (key) => `${JSON.stringify(key)}:${canonicalStringify((value as Record<string, unknown>)[key])}`,
+    );
+    return `{${entries.join(',')}}`;
+  }
+  return JSON.stringify(value);
 }

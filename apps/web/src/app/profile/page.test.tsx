@@ -316,6 +316,62 @@ describe('ProfilePage', () => {
     expect(screen.getByText('2022-05')).toBeInTheDocument();
   });
 
+  it('renders the import/export panel once a profile is loaded, wired to the current profile', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(buildProfile());
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^export profile$/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /^import profile$/i })).toBeInTheDocument();
+  });
+
+  it("wires ImportExportPanel's onImported callback to the page's profile state, so a successful import is reflected in the summary stats", async () => {
+    vi.mocked(apiFetch).mockResolvedValueOnce(buildProfile()); // GET /profile on mount
+
+    const { container } = renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^import profile$/i })).toBeInTheDocument(),
+    );
+
+    const mergedProfile = buildProfile({
+      experience: [
+        {
+          company: 'Acme',
+          company_industry: '',
+          role: 'Engineer',
+          location: '',
+          location_type: '',
+          startDate: '2020',
+          endDate: '',
+          isCurrent: true,
+          core_competencies: [],
+          technologies_used: [],
+          raw_achievements: [],
+          quantifiable_metrics: [],
+        },
+      ],
+    });
+    vi.mocked(apiFetch).mockResolvedValueOnce(mergedProfile); // POST /profile/import
+
+    // The import trigger's file input is intentionally hidden with no
+    // accessible name — select it directly, same approach as
+    // `import-export-panel.test.tsx`.
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([JSON.stringify(buildProfile())], 'career-profile.json', {
+      type: 'application/json',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => {
+      const statsGrid = screen.getByText('Roles').closest('.grid') as HTMLElement;
+      const card = within(statsGrid).getByText('Roles').closest('div') as HTMLElement;
+      expect(within(card).getByText('1')).toBeInTheDocument();
+    });
+  });
+
   it('renders an inline Edit trigger for every experience entry', async () => {
     vi.mocked(apiFetch).mockResolvedValue(
       buildProfile({

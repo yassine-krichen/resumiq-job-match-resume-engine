@@ -211,6 +211,168 @@ describe('ProfileService', () => {
     });
   });
 
+  describe('importProfile (Phase 4 export/import)', () => {
+    const existingExperience = {
+      company: 'Old Co',
+      company_industry: '',
+      role: 'Engineer',
+      location: '',
+      location_type: '',
+      startDate: '2018-01',
+      endDate: '2020-01',
+      isCurrent: false,
+      core_competencies: [],
+      technologies_used: [],
+      raw_achievements: [],
+      quantifiable_metrics: [],
+    };
+    const importedExperience = {
+      company: 'New Co',
+      company_industry: '',
+      role: 'Senior Engineer',
+      location: '',
+      location_type: '',
+      startDate: '2020-01',
+      endDate: '',
+      isCurrent: true,
+      core_competencies: [],
+      technologies_used: [],
+      raw_achievements: [],
+      quantifiable_metrics: [],
+    };
+
+    function importedMasterDB(): MasterDB {
+      const db = emptyMasterDB();
+      db.personal_info = {
+        name: 'New Name',
+        location: 'Remote',
+        phone: '',
+        email: 'new@example.com',
+        work_authorization: [],
+        clearances: [],
+        links: [],
+      };
+      db.experience = [importedExperience];
+      db.skills.programming_languages = ['Python', 'Go'];
+      return db;
+    }
+
+    it('appends imported array-section entries to the existing ones, dedupe-merges skills, and wholly replaces personal_info', async () => {
+      const existing = emptyMasterDB();
+      existing.personal_info.name = 'Old Name';
+      existing.experience = [existingExperience];
+      existing.skills.programming_languages = ['TypeScript', 'Python'];
+      prisma.careerProfile.findUnique.mockResolvedValue(toRow('user-1', existing));
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => ({
+        userId: 'user-1',
+        ...update,
+      }));
+
+      const result = await service.importProfile('user-1', importedMasterDB());
+
+      expect(result.experience).toEqual([existingExperience, importedExperience]);
+      expect(result.personal_info.name).toBe('New Name');
+      expect(result.personal_info.email).toBe('new@example.com');
+      expect(result.skills.programming_languages).toEqual(['TypeScript', 'Python', 'Go']);
+    });
+
+    it('does not duplicate array-section entries when the same export is re-imported, but still appends a genuinely new entry', async () => {
+      let stored = toRow('user-1', emptyMasterDB());
+      prisma.careerProfile.findUnique.mockImplementation(async () => stored);
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => {
+        stored = { userId: 'user-1', ...update };
+        return stored;
+      });
+
+      const importPayload = importedMasterDB();
+      await service.importProfile('user-1', importPayload);
+      const reimportResult = await service.importProfile('user-1', importPayload);
+
+      // Re-importing the identical payload must not duplicate the entry.
+      expect(reimportResult.experience).toEqual([importedExperience]);
+
+      const differentExperience = { ...importedExperience, company: 'Another Co' };
+      const secondPayload = importedMasterDB();
+      secondPayload.experience = [differentExperience];
+      const secondResult = await service.importProfile('user-1', secondPayload);
+
+      // A genuinely new/different entry is still appended normally.
+      expect(secondResult.experience).toEqual([importedExperience, differentExperience]);
+    });
+
+    it('recognizes an existing entry as a duplicate even when its object keys are in a different order', async () => {
+      // Simulates the real production mismatch: the imported side is
+      // rebuilt by Zod in schema-declaration key order, while the existing
+      // side comes back from a Postgres `jsonb` column in Postgres's own
+      // canonical key order — never the same order, even for identical data.
+      const existingEntrySameDataDifferentKeyOrder = {
+        isCurrent: importedExperience.isCurrent,
+        endDate: importedExperience.endDate,
+        startDate: importedExperience.startDate,
+        location_type: importedExperience.location_type,
+        location: importedExperience.location,
+        role: importedExperience.role,
+        company_industry: importedExperience.company_industry,
+        company: importedExperience.company,
+        quantifiable_metrics: importedExperience.quantifiable_metrics,
+        raw_achievements: importedExperience.raw_achievements,
+        technologies_used: importedExperience.technologies_used,
+        core_competencies: importedExperience.core_competencies,
+      };
+      const existing = emptyMasterDB();
+      existing.experience = [existingEntrySameDataDifferentKeyOrder];
+      prisma.careerProfile.findUnique.mockResolvedValue(toRow('user-1', existing));
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => ({
+        userId: 'user-1',
+        ...update,
+      }));
+
+      const result = await service.importProfile('user-1', importedMasterDB());
+
+      expect(result.experience).toEqual([existingEntrySameDataDifferentKeyOrder]);
+    });
+
+    it('treats entries with the same object keys but a reordered array-of-strings sub-field as genuinely different (not deduped)', async () => {
+      const existingEntryReorderedTechnologies = {
+        ...importedExperience,
+        technologies_used: ['Kubernetes', 'React'],
+      };
+      const importPayload = importedMasterDB();
+      importPayload.experience = [{ ...importedExperience, technologies_used: ['React', 'Kubernetes'] }];
+
+      const existing = emptyMasterDB();
+      existing.experience = [existingEntryReorderedTechnologies];
+      prisma.careerProfile.findUnique.mockResolvedValue(toRow('user-1', existing));
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => ({
+        userId: 'user-1',
+        ...update,
+      }));
+
+      const result = await service.importProfile('user-1', importPayload);
+
+      expect(result.experience).toEqual([
+        existingEntryReorderedTechnologies,
+        importPayload.experience[0],
+      ]);
+    });
+
+    it("only merges into the authenticated user's own profile, never another user's", async () => {
+      const existing = emptyMasterDB();
+      prisma.careerProfile.findUnique.mockResolvedValue(toRow('user-1', existing));
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => ({
+        userId: 'user-1',
+        ...update,
+      }));
+
+      await service.importProfile('user-1', importedMasterDB());
+
+      expect(prisma.careerProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      const upsertArgs = prisma.careerProfile.upsert.mock.calls[0][0];
+      expect(upsertArgs.where).toEqual({ userId: 'user-1' });
+      expect(upsertArgs.where.userId).not.toBe('user-2');
+    });
+  });
+
   describe('strength score computation (via upsertProfile)', () => {
     it('scores 0 for a completely empty profile', async () => {
       prisma.careerProfile.findUnique.mockResolvedValue(null);

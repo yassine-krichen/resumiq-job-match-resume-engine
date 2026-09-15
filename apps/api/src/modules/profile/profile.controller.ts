@@ -4,13 +4,19 @@ import {
   Get,
   NotFoundException,
   Patch,
+  Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { ProfileService } from './profile.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { UpdateCareerProfileSchema, type UpdateCareerProfileDto } from '@resumiq/schemas';
+import {
+  MasterDBSchema,
+  UpdateCareerProfileSchema,
+  type MasterDB,
+  type UpdateCareerProfileDto,
+} from '@resumiq/schemas';
 
 @Controller('profile')
 @UseGuards(AuthGuard)
@@ -30,5 +36,23 @@ export class ProfileController {
     @Body(new ZodValidationPipe(UpdateCareerProfileSchema)) body: UpdateCareerProfileDto,
   ) {
     return this.profileService.upsertProfile(req.user.id, body);
+  }
+
+  /**
+   * POST /profile/import
+   * Merges an uploaded profile export into the caller's own profile.
+   * Validated against the full `MasterDBSchema` — an import file is at least
+   * as untrusted as LLM-extracted onboarding output, so it goes through the
+   * same `ZodValidationPipe` convention rather than a looser shape check.
+   * Merge semantics (append arrays, dedupe-merge skills) are the same ones
+   * `ProfileService.mergeSections` already uses for onboarding-confirm — see
+   * `ProfileService.importProfile`.
+   */
+  @Post('import')
+  async importProfile(
+    @Req() req: { user: { id: string } },
+    @Body(new ZodValidationPipe(MasterDBSchema)) body: MasterDB,
+  ) {
+    return this.profileService.importProfile(req.user.id, body);
   }
 }
