@@ -143,8 +143,8 @@ describe('apiSSE', () => {
     vi.useRealTimers();
   });
 
-  describe('45s idle timeout', () => {
-    it('aborts the stream and reports a timeout-shaped error when no chunk arrives for 45s', async () => {
+  describe('60s idle timeout', () => {
+    it('aborts the stream and reports a timeout-shaped error when no chunk arrives for 60s', async () => {
       vi.useFakeTimers();
       // Body whose reader never resolves on its own — only settles (with an
       // AbortError) once the request's own signal aborts, exactly like a
@@ -173,12 +173,12 @@ describe('apiSSE', () => {
         { onProgress: vi.fn(), onDone: vi.fn(), onError },
       );
 
-      await vi.advanceTimersByTimeAsync(45_000);
+      await vi.advanceTimersByTimeAsync(60_000);
 
-      expect(onError).toHaveBeenCalledWith('No response from server for 45s — timed out');
+      expect(onError).toHaveBeenCalledWith('No response from server for 60s — timed out');
     });
 
-    it('resets the idle timer on each received chunk, so a stream that keeps sending data past the original 45s deadline never times out', async () => {
+    it('resets the idle timer on each received chunk, so a stream that keeps sending data past the original 60s deadline never times out', async () => {
       vi.useFakeTimers();
 
       // A controllable body: `read()` stays pending until `pushChunk` is
@@ -219,12 +219,12 @@ describe('apiSSE', () => {
       // Let the stream reach its first pending reader.read() call.
       await vi.advanceTimersByTimeAsync(0);
 
-      // A chunk arrives just before the original 45s idle deadline would fire.
-      await vi.advanceTimersByTimeAsync(40_000);
+      // A chunk arrives just before the original 60s idle deadline would fire.
+      await vi.advanceTimersByTimeAsync(55_000);
       pushChunk('event: progress\ndata: {"step":"Parsing..."}\n\n');
       await vi.advanceTimersByTimeAsync(0);
 
-      // 10s later (50s total elapsed) — past the ORIGINAL 45s deadline, but
+      // 10s later (65s total elapsed) — past the ORIGINAL 60s deadline, but
       // the chunk above reset the idle timer, so no timeout should fire.
       await vi.advanceTimersByTimeAsync(10_000);
 

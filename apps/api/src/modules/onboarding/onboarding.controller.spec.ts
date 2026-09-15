@@ -153,6 +153,24 @@ describe('OnboardingController', () => {
       expect(profileService.mergeSections).not.toHaveBeenCalled();
       expect(res.ended).toBe(true);
     });
+
+    it('sends the clean parse-timeout message as an "error" event when parseCareerText times out', async () => {
+      profileService.getProfile.mockResolvedValue(null);
+      onboardingService.parseCareerText.mockRejectedValue(
+        new Error('Taking longer than expected — try shortening the input or try again.'),
+      );
+
+      const res = fakeResponse();
+      await controller.ingestStream(REQ, res, { raw_text: 'some text' });
+
+      const frames = parseSSEFrames(res.writes);
+      const errorFrame = frames.find((f) => f.event === 'error');
+      expect(errorFrame?.data).toEqual({
+        message: 'Taking longer than expected — try shortening the input or try again.',
+      });
+      expect(profileService.mergeSections).not.toHaveBeenCalled();
+      expect(res.ended).toBe(true);
+    });
   });
 
   describe('confirmIngest', () => {

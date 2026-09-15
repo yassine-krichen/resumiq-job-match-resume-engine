@@ -252,4 +252,76 @@ describe('OnboardingService', () => {
       expect(result.droppedCount).toBe(0);
     });
   });
+
+  describe('parseCareerText heartbeat + timeout', () => {
+    const PARSE_TIMEOUT_MESSAGE =
+      'Taking longer than expected — try shortening the input or try again.';
+
+    const summaryEntry = {
+      target_role: 'Backend Engineer',
+      content: 'Backend engineer with 5 years of experience.',
+    };
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('emits a "Still analyzing..." progress heartbeat every 12s while generateJSON is still in flight', async () => {
+      let resolveGenerateJSON!: (value: unknown) => void;
+      generateJSONMock.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveGenerateJSON = resolve;
+          }),
+      );
+      const onProgress = jest.fn();
+
+      const resultPromise = service.parseCareerText('some raw text', null, onProgress);
+
+      // Two heartbeat ticks (24s) elapse before the LLM call ever resolves.
+      await jest.advanceTimersByTimeAsync(12_000);
+      await jest.advanceTimersByTimeAsync(12_000);
+
+      const heartbeatCalls = onProgress.mock.calls.filter(([step]) => step === 'Still analyzing...');
+      expect(heartbeatCalls).toHaveLength(2);
+
+      resolveGenerateJSON({ entries: [{ type: 'summary', entry: summaryEntry }] });
+      const result = await resultPromise;
+
+      expect(result.entries).toEqual([{ type: 'summary', entry: summaryEntry }]);
+    });
+
+    it('rejects with the clean PARSE_TIMEOUT_MESSAGE (not a raw/generic error) when generateJSON never resolves within 45s', async () => {
+      generateJSONMock.mockImplementation(() => new Promise(() => {})); // never settles
+
+      const resultPromise = service.parseCareerText('some raw text', null);
+      const assertion = expect(resultPromise).rejects.toThrow(PARSE_TIMEOUT_MESSAGE);
+
+      await jest.advanceTimersByTimeAsync(45_000);
+      await assertion;
+    });
+
+    it('clears both the heartbeat interval and the timeout timer once generateJSON resolves before the 45s deadline', async () => {
+      const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+      generateJSONMock.mockResolvedValue({
+        entries: [{ type: 'summary', entry: summaryEntry }],
+      });
+
+      await service.parseCareerText('some raw text', null);
+
+      expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+      expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+      // No heartbeat or timeout callback should fire after the call already
+      // settled — proves the timers were actually cleared, not just spied on.
+      expect(jest.getTimerCount()).toBe(0);
+
+      clearIntervalSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    });
+  });
 });

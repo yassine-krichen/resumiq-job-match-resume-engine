@@ -10,7 +10,10 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 // genuinely hung connection (server died mid-stream, network stall) with no
 // bytes at all for this long is treated as a terminal error rather than
 // leaving the caller on "Analyzing..." forever.
-const SSE_IDLE_TIMEOUT_MS = 45_000;
+// The backend sends a heartbeat `progress` event every ~12s while an LLM
+// call is in flight (see onboarding.service.ts), so this idle timer should
+// rarely come close to firing — 60s leaves a comfortable margin over that.
+const SSE_IDLE_TIMEOUT_MS = 60_000;
 
 export async function apiFetch<T>(
   path: string,

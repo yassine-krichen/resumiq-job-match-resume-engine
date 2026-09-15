@@ -7,6 +7,26 @@ import { IngestEntrySchema, type IngestEntryDto, type IngestResultDto } from '@r
 const PARSE_FAILURE_MESSAGE =
   "Couldn't parse that text into your profile — try rephrasing or breaking it into shorter pieces.";
 
+const PARSE_TIMEOUT_MESSAGE =
+  'Taking longer than expected — try shortening the input or try again.';
+
+/**
+ * How often to emit a heartbeat `progress` event while `generateJSON()` is
+ * in flight. The frontend's SSE client resets an idle timer only when bytes
+ * arrive, and a single LLM call can legitimately run tens of seconds with no
+ * intermediate output — this keeps bytes flowing so it isn't mistaken for a
+ * hung connection.
+ */
+const HEARTBEAT_INTERVAL_MS = 12_000;
+
+/**
+ * Server-side gives up and reports a clean error before the frontend's SSE
+ * idle timeout would fire (60s), rather than either silently stalling past
+ * it or leaving the much longer 120s hard abort in `callFreellmapi` as the
+ * only signal.
+ */
+const PARSE_TIMEOUT_MS = 45_000;
+
 const INGEST_SYSTEM = `\
 You are a career data extraction expert. Parse the raw career text and extract structured data.
 
@@ -101,10 +121,24 @@ export class OnboardingService {
     onProgress?: (step: string) => void,
   ): Promise<IngestResultDto> {
     onProgress?.('Analyzing text...');
-    const raw = await generateJSON<unknown>(
-      INGEST_SYSTEM,
-      buildIngestPrompt(rawText, existingDb),
-    );
+
+    const heartbeat = setInterval(() => {
+      onProgress?.('Still analyzing...');
+    }, HEARTBEAT_INTERVAL_MS);
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let raw: unknown;
+    try {
+      raw = await Promise.race([
+        generateJSON<unknown>(INGEST_SYSTEM, buildIngestPrompt(rawText, existingDb)),
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(PARSE_TIMEOUT_MESSAGE)), PARSE_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      clearInterval(heartbeat);
+      clearTimeout(timeoutId);
+    }
 
     // Top-level shape check only — each entry is validated individually below
     // so that one malformed entry doesn't discard every other valid entry the
