@@ -2,6 +2,30 @@ import { z } from 'zod';
 
 // ── Career Profile Schemas ──────────────────────────────────────────────────
 
+/**
+ * Budget-tier LLM extraction (observed live with `gemini-3.5-flash-lite` via
+ * freellmapi, the pinned onboarding-ingest model) frequently emits an
+ * explicit `null` for a field it has no info for, rather than omitting the
+ * key (e.g. `"issuer": null`, `"location": null`). Zod's `.optional()` /
+ * `.default()` only activate on a *missing* key, not an explicit `null`, so
+ * a single stray null field rejected an otherwise well-formed entry outright
+ * — `IngestEntrySchema.safeParse()` in `parseCareerText` then silently
+ * dropped the whole entry, not just the null field (observed: 8 of 9
+ * correctly-extracted entries dropped over exactly this in one real paste).
+ * Strip null-valued keys before validating each entry object so
+ * `.optional()` / `.default()` behave as the field declarations intend.
+ */
+function withNullKeysStripped<T extends z.ZodTypeAny>(schema: T): z.ZodType<z.output<T>> {
+  return z.preprocess((val) => {
+    if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+      return Object.fromEntries(
+        Object.entries(val as Record<string, unknown>).filter(([, v]) => v !== null),
+      );
+    }
+    return val;
+  }, schema) as z.ZodType<z.output<T>>;
+}
+
 export const PersonalInfoSchema = z.object({
   name: z.string().min(1),
   location: z.string(),
@@ -12,50 +36,64 @@ export const PersonalInfoSchema = z.object({
   links: z.array(z.object({ platform: z.string(), url: z.string().url() })).max(20),
 });
 
-export const ExperienceEntrySchema = z.object({
-  company: z.string().min(1).max(200),
-  company_industry: z.string().max(200),
-  role: z.string().min(1).max(200),
-  location: z.string().max(200),
-  location_type: z.string().max(100),
-  startDate: z.string().max(50),
-  endDate: z.string().max(50),
-  isCurrent: z.boolean(),
-  core_competencies: z.array(z.string()).max(30),
-  technologies_used: z.array(z.string()).max(50),
-  raw_achievements: z.array(z.string()).max(30),
-  quantifiable_metrics: z.array(z.string()).max(30),
-});
+export const ExperienceEntrySchema = withNullKeysStripped(
+  z.object({
+    company: z.string().min(1).max(200),
+    // Frequently absent/unknown from casual raw-text extraction — default to
+    // '' rather than require the LLM to fabricate or omit them, which would
+    // otherwise fail validation and silently drop the whole entry (same
+    // pattern as CertificationSchema below).
+    company_industry: z.string().max(200).default(''),
+    role: z.string().min(1).max(200),
+    location: z.string().max(200).default(''),
+    location_type: z.string().max(100).default(''),
+    startDate: z.string().max(50),
+    endDate: z.string().max(50),
+    isCurrent: z.boolean(),
+    core_competencies: z.array(z.string()).max(30),
+    technologies_used: z.array(z.string()).max(50),
+    raw_achievements: z.array(z.string()).max(30),
+    quantifiable_metrics: z.array(z.string()).max(30),
+  }),
+);
 
-export const ProjectEntrySchema = z.object({
-  name: z.string().min(1).max(200),
-  context: z.string().max(2000),
-  // LLM extraction rarely has a well-formed URL for every link it mentions
-  // (e.g. "hosted on a private repo") — relax to a plain string rather than
-  // failing validation on an otherwise-good entry.
-  links: z.array(z.object({ type: z.string(), url: z.string() })).max(10),
-  startDate: z.string().max(50),
-  endDate: z.string().max(50),
-  technologies_used: z.array(z.string()).max(50),
-  raw_achievements: z.array(z.string()).max(30),
-  quantifiable_metrics: z.array(z.string()).max(30),
-});
+export const ProjectEntrySchema = withNullKeysStripped(
+  z.object({
+    name: z.string().min(1).max(200),
+    context: z.string().max(2000).default(''),
+    // LLM extraction rarely has a well-formed URL for every link it mentions
+    // (e.g. "hosted on a private repo") — relax to a plain string rather than
+    // failing validation on an otherwise-good entry.
+    links: z.array(z.object({ type: z.string(), url: z.string() })).max(10),
+    startDate: z.string().max(50),
+    endDate: z.string().max(50),
+    technologies_used: z.array(z.string()).max(50),
+    raw_achievements: z.array(z.string()).max(30),
+    quantifiable_metrics: z.array(z.string()).max(30),
+  }),
+);
 
-export const EducationEntrySchema = z.object({
-  institution: z.string().min(1).max(200),
-  degree_type: z.string().min(1).max(100),
-  major: z.string().min(1).max(200),
-  minor: z.string().max(200),
-  location: z.string().max(200),
-  startDate: z.string().max(50),
-  endDate: z.string().max(50),
-  gpa: z.string().max(20),
-  honors: z.array(z.string()).max(20),
-  relevant_coursework: z.array(z.string()).max(30),
-  thesis_or_capstone: z.string().max(500),
-  extracurriculars: z.array(z.string()).max(20),
-  description: z.string().max(5000),
-});
+export const EducationEntrySchema = withNullKeysStripped(
+  z.object({
+    institution: z.string().min(1).max(200),
+    // Frequently absent/unknown from casual raw-text extraction — default to
+    // '' rather than require the LLM to fabricate or omit it, which would
+    // otherwise fail validation and silently drop the whole entry (same
+    // pattern as CertificationSchema below).
+    degree_type: z.string().max(100).default(''),
+    major: z.string().min(1).max(200),
+    minor: z.string().max(200).default(''),
+    location: z.string().max(200).default(''),
+    startDate: z.string().max(50),
+    endDate: z.string().max(50),
+    gpa: z.string().max(20),
+    honors: z.array(z.string()).max(20),
+    relevant_coursework: z.array(z.string()).max(30),
+    thesis_or_capstone: z.string().max(500).default(''),
+    extracurriculars: z.array(z.string()).max(20),
+    description: z.string().max(5000).default(''),
+  }),
+);
 
 export const SkillsSchema = z.object({
   programming_languages: z.array(z.string()).max(150),
@@ -68,50 +106,76 @@ export const SkillsSchema = z.object({
   soft_skills: z.array(z.string()).max(100),
 });
 
-export const CertificationSchema = z.object({
-  name: z.string().min(1).max(200),
-  issuer: z.string().min(1).max(200),
-  date: z.string().max(50),
-  // These are frequently absent from casual raw-text extraction (the user
-  // rarely states an expiration date, credential ID, or verification link)
-  // — default to '' rather than require the LLM to fabricate or omit them,
-  // which would otherwise fail validation and silently drop the whole entry.
-  expiration_date: z.string().max(50).default(''),
-  credential_id: z.string().max(200).default(''),
-  link: z.string().max(2000).default(''),
-  description: z.string().max(5000).default(''),
-});
+export const CertificationSchema = withNullKeysStripped(
+  z.object({
+    name: z.string().min(1).max(200),
+    // Frequently absent/unknown from casual raw-text extraction — default to
+    // '' rather than require the LLM to fabricate or omit it, which would
+    // otherwise fail validation and silently drop the whole entry (same
+    // pattern as the fields below).
+    issuer: z.string().max(200).default(''),
+    // Frequently absent from casual raw-text extraction (the user rarely
+    // states an exact certification date) — default to '' like the fields
+    // below rather than require the LLM to fabricate or omit it, which
+    // would otherwise fail validation and silently drop the whole entry.
+    date: z.string().max(50).default(''),
+    // These are frequently absent from casual raw-text extraction (the user
+    // rarely states an expiration date, credential ID, or verification link)
+    // — default to '' rather than require the LLM to fabricate or omit them,
+    // which would otherwise fail validation and silently drop the whole entry.
+    expiration_date: z.string().max(50).default(''),
+    credential_id: z.string().max(200).default(''),
+    link: z.string().max(2000).default(''),
+    description: z.string().max(5000).default(''),
+  }),
+);
 
-export const AwardSchema = z.object({
-  title: z.string().min(1).max(200),
-  issuer: z.string().max(200),
-  date: z.string().max(50),
-  description: z.string().max(5000).default(''),
-  related_skills: z.array(z.string()).max(20).optional(),
-});
+export const AwardSchema = withNullKeysStripped(
+  z.object({
+    title: z.string().min(1).max(200),
+    // Frequently absent/unknown from casual raw-text extraction — default to
+    // '' rather than require the LLM to fabricate or omit them, which would
+    // otherwise fail validation and silently drop the whole entry (same
+    // pattern as CertificationSchema above).
+    issuer: z.string().max(200).default(''),
+    date: z.string().max(50).default(''),
+    description: z.string().max(5000).default(''),
+    related_skills: z.array(z.string()).max(20).optional(),
+  }),
+);
 
-export const SummaryEntrySchema = z.object({
-  target_role: z.string().min(1).max(200),
-  content: z.string().min(1).max(5000),
-});
+export const SummaryEntrySchema = withNullKeysStripped(
+  z.object({
+    target_role: z.string().min(1).max(200),
+    content: z.string().min(1).max(5000),
+  }),
+);
 
-export const PublicationEntrySchema = z.object({
-  title: z.string().min(1).max(200),
-  venue: z.string().max(200).optional(),
-  date: z.string().max(50),
-  url: z.string().max(2000).optional(),
-  description: z.string().max(5000).optional(),
-});
+export const PublicationEntrySchema = withNullKeysStripped(
+  z.object({
+    title: z.string().min(1).max(200),
+    venue: z.string().max(200).optional(),
+    date: z.string().max(50).default(''),
+    url: z.string().max(2000).optional(),
+    description: z.string().max(5000).optional(),
+  }),
+);
 
-export const VolunteeringEntrySchema = z.object({
-  organization: z.string().min(1).max(200),
-  role: z.string().min(1).max(200),
-  location: z.string().max(200).optional(),
-  startDate: z.string().max(50),
-  endDate: z.string().max(50).optional(),
-  isCurrent: z.boolean().optional(),
-  description: z.string().max(5000).optional(),
-});
+export const VolunteeringEntrySchema = withNullKeysStripped(
+  z.object({
+    organization: z.string().min(1).max(200),
+    role: z.string().min(1).max(200),
+    location: z.string().max(200).optional(),
+    // Frequently absent/unknown from casual raw-text extraction — relax to
+    // optional (same pattern as the sibling fields below) rather than
+    // require the LLM to fabricate or omit it, which would otherwise fail
+    // validation and silently drop the whole entry.
+    startDate: z.string().max(50).optional(),
+    endDate: z.string().max(50).optional(),
+    isCurrent: z.boolean().optional(),
+    description: z.string().max(5000).optional(),
+  }),
+);
 
 // A single interest is a short freeform tag (e.g. "Competitive Programming")
 // — same bound as other short label fields (Award.title, Certification.name).
@@ -309,7 +373,7 @@ export const IngestEntrySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('education'), entry: EducationEntrySchema }),
   z.object({ type: z.literal('certification'), entry: CertificationSchema }),
   z.object({ type: z.literal('award'), entry: AwardSchema }),
-  z.object({ type: z.literal('skills'), entry: SkillsSchema.partial() }),
+  z.object({ type: z.literal('skills'), entry: withNullKeysStripped(SkillsSchema.partial()) }),
   z.object({ type: z.literal('summary'), entry: SummaryEntrySchema }),
   z.object({ type: z.literal('publication'), entry: PublicationEntrySchema }),
   z.object({ type: z.literal('volunteering'), entry: VolunteeringEntrySchema }),

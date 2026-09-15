@@ -198,7 +198,7 @@ export default function OnboardingReviewPage() {
               {education.map(({ entry, index }) => {
                 const edu = entry as EducationEntry;
                 return (
-                  <ReviewRow key={index} title={`${edu.degree_type} in ${edu.major}`} subtitle={edu.institution}>
+                  <ReviewRow key={index} title={edu.degree_type ? `${edu.degree_type} in ${edu.major}` : edu.major} subtitle={edu.institution}>
                     <AddEducationModal
                       entry={edu}
                       submitting={saving}

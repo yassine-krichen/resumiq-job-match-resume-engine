@@ -230,7 +230,7 @@ export default function ProfilePage() {
             education.map((edu, i) => (
               <div key={i} className="flex items-start justify-between gap-3 rounded-lg border border-border p-4">
                 <div>
-                  <p className="font-medium">{edu.degree_type} in {edu.major}</p>
+                  <p className="font-medium">{edu.degree_type ? `${edu.degree_type} in ${edu.major}` : edu.major}</p>
                   <p className="text-sm text-muted-foreground">{edu.institution}</p>
                   <p className="text-sm text-muted-foreground">{edu.startDate} – {edu.endDate}</p>
                 </div>

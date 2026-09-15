@@ -598,8 +598,11 @@ describe('EducationEntrySchema', () => {
     expect(() => EducationEntrySchema.parse({ ...validEntry, institution: '' })).toThrow();
   });
 
-  it('rejects an empty degree_type', () => {
-    expect(() => EducationEntrySchema.parse({ ...validEntry, degree_type: '' })).toThrow();
+  it('accepts a missing degree_type, defaulting it to an empty string', () => {
+    const { degree_type: _degreeType, ...withoutDegreeType } = validEntry;
+    const result = EducationEntrySchema.parse(withoutDegreeType);
+
+    expect(result.degree_type).toBe('');
   });
 
   it('rejects an empty major', () => {
@@ -716,8 +719,11 @@ describe('CertificationSchema', () => {
     expect(() => CertificationSchema.parse({ ...validEntry, name: '' })).toThrow();
   });
 
-  it('rejects an empty issuer', () => {
-    expect(() => CertificationSchema.parse({ ...validEntry, issuer: '' })).toThrow();
+  it('accepts a missing issuer, defaulting it to an empty string', () => {
+    const { issuer: _issuer, ...withoutIssuer } = validEntry;
+    const result = CertificationSchema.parse(withoutIssuer);
+
+    expect(result.issuer).toBe('');
   });
 
   it('accepts a name at exactly the 200-character boundary', () => {
@@ -881,9 +887,9 @@ describe('VolunteeringEntrySchema', () => {
     expect(() => VolunteeringEntrySchema.parse(validEntry)).not.toThrow();
   });
 
-  it('accepts a minimal entry with only the required organization, role, and startDate', () => {
+  it('accepts a minimal entry with only the required organization and role', () => {
     expect(() =>
-      VolunteeringEntrySchema.parse({ organization: 'Code.org', role: 'Mentor', startDate: '2022' }),
+      VolunteeringEntrySchema.parse({ organization: 'Code.org', role: 'Mentor' }),
     ).not.toThrow();
   });
 
@@ -895,10 +901,10 @@ describe('VolunteeringEntrySchema', () => {
     expect(() => VolunteeringEntrySchema.parse({ ...validEntry, role: '' })).toThrow();
   });
 
-  it('rejects a payload missing the required startDate field', () => {
+  it('accepts a payload missing the startDate field', () => {
     const { startDate: _startDate, ...withoutStartDate } = validEntry;
 
-    expect(() => VolunteeringEntrySchema.parse(withoutStartDate)).toThrow();
+    expect(() => VolunteeringEntrySchema.parse(withoutStartDate)).not.toThrow();
   });
 
   it('rejects an organization name longer than 200 characters', () => {

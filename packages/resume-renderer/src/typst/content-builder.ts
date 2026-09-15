@@ -54,7 +54,7 @@ function renderEducation(db: MasterDB): string {
   );
 
   const entries = sortedEdu.map((edu) => {
-    let degreeStr = `${edu.degree_type} in ${edu.major}`;
+    let degreeStr = edu.degree_type ? `${edu.degree_type} in ${edu.major}` : edu.major;
     if (edu.gpa) degreeStr += `, GPA: ${edu.gpa}`;
     const honors = edu.honors ?? [];
     if (honors.length > 0) degreeStr += ` -- ${honors.slice(0, 2).join(', ')}`;

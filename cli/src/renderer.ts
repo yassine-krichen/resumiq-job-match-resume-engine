@@ -85,7 +85,7 @@ function renderEducation(db: MasterDB): string {
   );
 
   for (const edu of sortedEdu) {
-    let degreeStr = `${edu.degree_type} in ${edu.major}`;
+    let degreeStr = edu.degree_type ? `${edu.degree_type} in ${edu.major}` : edu.major;
     if (edu.gpa) degreeStr += `, GPA: ${edu.gpa}`;
     // Honor list can be long — cap at 2 to prevent tabular overflow
     const honors = edu.honors ?? [];
