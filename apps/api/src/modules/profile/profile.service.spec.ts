@@ -53,7 +53,11 @@ function toRow(userId: string, db: MasterDB) {
 }
 
 describe('ProfileService', () => {
-  let prisma: { careerProfile: { findUnique: jest.Mock; upsert: jest.Mock } };
+  let prisma: {
+    careerProfile: { findUnique: jest.Mock; upsert: jest.Mock };
+    $transaction: jest.Mock;
+    $executeRaw: jest.Mock;
+  };
   let service: ProfileService;
 
   beforeEach(() => {
@@ -62,8 +66,104 @@ describe('ProfileService', () => {
         findUnique: jest.fn(),
         upsert: jest.fn(),
       },
+      // `withUserLock` runs work inside `prisma.$transaction`, passing a `tx`
+      // client. Since every call site in this suite mutates through
+      // `prisma.careerProfile` (not a separate `tx` object), the mocked
+      // transaction just hands the same client back as `tx`.
+      $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(prisma)),
+      $executeRaw: jest.fn(),
     };
     service = new ProfileService(prisma as unknown as PrismaService);
+  });
+
+  describe('per-user advisory lock (race condition fix)', () => {
+    it('acquires the advisory lock before reading the profile, for each of upsertProfile/mergeSection/mergeSections', async () => {
+      prisma.careerProfile.findUnique.mockResolvedValue(null);
+      prisma.careerProfile.upsert.mockImplementation(async ({ create }) => ({
+        userId: 'user-1',
+        ...create,
+      }));
+
+      const callOrder: string[] = [];
+      prisma.$executeRaw.mockImplementation(async () => {
+        callOrder.push('lock');
+      });
+      prisma.careerProfile.findUnique.mockImplementation(async () => {
+        callOrder.push('read');
+        return null;
+      });
+
+      await service.upsertProfile('user-1', emptyMasterDB());
+      await service.mergeSection('user-1', 'skills', { programming_languages: ['Go'] });
+      await service.mergeSections('user-1', [
+        { section: 'skills', entry: { programming_languages: ['Go'] } },
+      ]);
+
+      expect(callOrder).toEqual(['lock', 'read', 'lock', 'read', 'lock', 'read']);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(3);
+    });
+
+    it('serializes two concurrent mergeSection writes so neither silently overwrites the other', async () => {
+      // Stands in for Postgres's advisory lock: a tiny mutex that forces
+      // work items passed to `$transaction` to run strictly one-at-a-time,
+      // reproducing the serialization `pg_advisory_xact_lock` provides
+      // against the real database.
+      let queue: Promise<unknown> = Promise.resolve();
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => Promise<unknown>) => {
+        const run = queue.then(() => cb(prisma));
+        queue = run.catch(() => undefined);
+        return run;
+      });
+
+      let stored: ReturnType<typeof toRow> | null = toRow('user-1', emptyMasterDB());
+      prisma.careerProfile.findUnique.mockImplementation(async () => stored);
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => {
+        // Simulate a real DB doing work between read and write, widening the
+        // race window so an unserialized pair of writers would interleave.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        stored = { userId: 'user-1', ...update };
+        return stored;
+      });
+
+      const experienceEntry = {
+        company: 'Acme',
+        company_industry: '',
+        role: 'Engineer',
+        location: '',
+        location_type: '',
+        startDate: '2020',
+        endDate: '2022',
+        isCurrent: false,
+        core_competencies: [],
+        technologies_used: [],
+        raw_achievements: [],
+        quantifiable_metrics: [],
+      };
+      const educationEntry = {
+        institution: 'MIT',
+        degree_type: 'BSc',
+        major: 'CS',
+        minor: '',
+        location: '',
+        startDate: '2016',
+        endDate: '2020',
+        gpa: '',
+        honors: [],
+        relevant_coursework: [],
+        thesis_or_capstone: '',
+        extracurriculars: [],
+        description: '',
+      };
+
+      const [resultA, resultB] = await Promise.all([
+        service.mergeSection('user-1', 'experience', experienceEntry),
+        service.mergeSection('user-1', 'education', educationEntry),
+      ]);
+
+      expect(resultB.experience).toEqual([experienceEntry]);
+      expect(resultB.education).toEqual([educationEntry]);
+      expect(resultA).toBeDefined();
+    });
   });
 
   describe('skills merge/dedupe (via mergeSection)', () => {
@@ -175,9 +275,7 @@ describe('ProfileService', () => {
         { section: 'skills', entry: { programming_languages: ['Go'] } },
       ]);
 
-      // upsertProfile does its own internal read to compute the merged patch,
-      // so findUnique is called twice — the key atomicity guarantee is a
-      // single write (upsert), not a single read.
+      expect(prisma.careerProfile.findUnique).toHaveBeenCalledTimes(1);
       expect(prisma.careerProfile.upsert).toHaveBeenCalledTimes(1);
       expect(result.experience).toEqual([newExperience]);
       expect(result.certifications).toEqual([newCertification]);

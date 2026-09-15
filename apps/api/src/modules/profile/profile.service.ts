@@ -18,25 +18,11 @@ export class ProfileService {
   }
 
   async upsertProfile(userId: string, data: Partial<MasterDB>): Promise<MasterDB> {
-    const existing = await this.prisma.careerProfile.findUnique({ where: { userId } });
-
-    const merged = existing ? this.mergeMasterDB(this.toMasterDB(existing), data) : (data as MasterDB);
-    const strengthScore = this.computeStrengthScore(merged);
-
-    const profile = await this.prisma.careerProfile.upsert({
-      where: { userId },
-      create: {
-        userId,
-        ...this.fromMasterDB(merged),
-        strengthScore,
-      },
-      update: {
-        ...this.fromMasterDB(merged),
-        strengthScore,
-      },
+    return this.withUserLock(userId, async (tx) => {
+      const existing = await this.readProfileTx(tx, userId);
+      const merged = existing ? this.mergeMasterDB(existing, data) : (data as MasterDB);
+      return this.writeProfileTx(tx, userId, merged);
     });
-
-    return this.toMasterDB(profile);
   }
 
   async mergeSection(
@@ -44,10 +30,12 @@ export class ProfileService {
     section: keyof MasterDB,
     entry: unknown,
   ): Promise<MasterDB> {
-    const existing = await this.getProfile(userId);
-    const base: MasterDB = existing ?? this.emptyMasterDB(userId);
-    const merged = this.mergeSectionIntoProfile(base, section, entry);
-    return this.upsertProfile(userId, merged);
+    return this.withUserLock(userId, async (tx) => {
+      const existing = await this.readProfileTx(tx, userId);
+      const base: MasterDB = existing ?? this.emptyMasterDB(userId);
+      const merged = this.mergeSectionIntoProfile(base, section, entry);
+      return this.writeProfileTx(tx, userId, merged);
+    });
   }
 
   /**
@@ -63,12 +51,14 @@ export class ProfileService {
     userId: string,
     entries: Array<{ section: keyof MasterDB; entry: unknown }>,
   ): Promise<MasterDB> {
-    const existing = await this.getProfile(userId);
-    let profile: MasterDB = existing ?? this.emptyMasterDB(userId);
-    for (const { section, entry } of entries) {
-      profile = this.mergeSectionIntoProfile(profile, section, entry);
-    }
-    return this.upsertProfile(userId, profile);
+    return this.withUserLock(userId, async (tx) => {
+      const existing = await this.readProfileTx(tx, userId);
+      let profile: MasterDB = existing ?? this.emptyMasterDB(userId);
+      for (const { section, entry } of entries) {
+        profile = this.mergeSectionIntoProfile(profile, section, entry);
+      }
+      return this.writeProfileTx(tx, userId, profile);
+    });
   }
 
   /**
@@ -93,6 +83,61 @@ export class ProfileService {
       }
     }
     return this.mergeSections(userId, entries);
+  }
+
+  /**
+   * Serializes all profile mutations for a given user behind a Postgres
+   * transaction-scoped advisory lock (released automatically when the
+   * transaction commits/rolls back). Prevents the read-merge-write race where
+   * two concurrent mutations (e.g. two onboarding sections landing at once)
+   * both read the same stale row and the second upsert silently clobbers the
+   * first writer's change.
+   *
+   * `hashtext()` reduces userId to a 32-bit int, so two different userIds
+   * could theoretically hash-collide and serialize unnecessarily against each
+   * other — a performance nit, not a correctness bug, not worth the two-int
+   * `pg_advisory_xact_lock` overload for this.
+   */
+  private async withUserLock<T>(
+    userId: string,
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+      return work(tx);
+    });
+  }
+
+  private async readProfileTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+  ): Promise<MasterDB | null> {
+    const profile = await tx.careerProfile.findUnique({ where: { userId } });
+    if (!profile) return null;
+    return this.toMasterDB(profile);
+  }
+
+  private async writeProfileTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    merged: MasterDB,
+  ): Promise<MasterDB> {
+    const strengthScore = this.computeStrengthScore(merged);
+
+    const profile = await tx.careerProfile.upsert({
+      where: { userId },
+      create: {
+        userId,
+        ...this.fromMasterDB(merged),
+        strengthScore,
+      },
+      update: {
+        ...this.fromMasterDB(merged),
+        strengthScore,
+      },
+    });
+
+    return this.toMasterDB(profile);
   }
 
   /** Pure merge of a single section entry into an in-memory profile — no DB access. */

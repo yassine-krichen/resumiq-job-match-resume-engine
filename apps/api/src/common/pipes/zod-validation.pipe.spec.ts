@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { MasterDBSchema } from '@resumiq/schemas';
 import { z } from 'zod';
 import { ZodValidationPipe } from './zod-validation.pipe';
 
@@ -41,5 +42,52 @@ describe('ZodValidationPipe', () => {
       expect(serialized).not.toContain('"expected"');
       expect(serialized).not.toContain('"received"');
     }
+  });
+
+  it('throws BadRequestException (not a raw ZodError) for a MasterDBSchema payload exceeding the experience count cap', () => {
+    const pipe = new ZodValidationPipe(MasterDBSchema);
+    const oversizedMasterDB = {
+      personal_info: {
+        name: 'Jane Doe',
+        location: 'Remote',
+        phone: '555-1234',
+        email: 'jane@example.com',
+        work_authorization: [],
+        clearances: [],
+        links: [],
+      },
+      summaries: [],
+      experience: Array.from({ length: 51 }, (_, i) => ({
+        company: `Company-${i}`,
+        company_industry: 'Software',
+        role: 'Engineer',
+        location: 'Remote',
+        location_type: 'Remote',
+        startDate: '2023',
+        endDate: '2023',
+        isCurrent: false,
+        core_competencies: [],
+        technologies_used: [],
+        raw_achievements: [],
+        quantifiable_metrics: [],
+      })),
+      education: [],
+      projects: [],
+      skills: {
+        programming_languages: [],
+        frameworks_and_libraries: [],
+        infrastructure_and_tools: [],
+        databases: [],
+        spoken_languages: [],
+        soft_skills: [],
+      },
+      certifications: [],
+      awards_and_honors: [],
+      publications_and_speaking: [],
+      volunteering_and_leadership: [],
+      interests: [],
+    };
+
+    expect(() => pipe.transform(oversizedMasterDB)).toThrow(BadRequestException);
   });
 });

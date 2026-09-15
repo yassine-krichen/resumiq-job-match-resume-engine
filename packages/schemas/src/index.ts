@@ -7,9 +7,9 @@ export const PersonalInfoSchema = z.object({
   location: z.string(),
   phone: z.string(),
   email: z.string().email(),
-  work_authorization: z.array(z.string()),
-  clearances: z.array(z.string()),
-  links: z.array(z.object({ platform: z.string(), url: z.string().url() })),
+  work_authorization: z.array(z.string()).max(10),
+  clearances: z.array(z.string()).max(10),
+  links: z.array(z.object({ platform: z.string(), url: z.string().url() })).max(20),
 });
 
 export const ExperienceEntrySchema = z.object({
@@ -21,10 +21,10 @@ export const ExperienceEntrySchema = z.object({
   startDate: z.string().max(50),
   endDate: z.string().max(50),
   isCurrent: z.boolean(),
-  core_competencies: z.array(z.string()),
-  technologies_used: z.array(z.string()),
-  raw_achievements: z.array(z.string()),
-  quantifiable_metrics: z.array(z.string()),
+  core_competencies: z.array(z.string()).max(30),
+  technologies_used: z.array(z.string()).max(50),
+  raw_achievements: z.array(z.string()).max(30),
+  quantifiable_metrics: z.array(z.string()).max(30),
 });
 
 export const ProjectEntrySchema = z.object({
@@ -33,12 +33,12 @@ export const ProjectEntrySchema = z.object({
   // LLM extraction rarely has a well-formed URL for every link it mentions
   // (e.g. "hosted on a private repo") — relax to a plain string rather than
   // failing validation on an otherwise-good entry.
-  links: z.array(z.object({ type: z.string(), url: z.string() })),
+  links: z.array(z.object({ type: z.string(), url: z.string() })).max(10),
   startDate: z.string().max(50),
   endDate: z.string().max(50),
-  technologies_used: z.array(z.string()),
-  raw_achievements: z.array(z.string()),
-  quantifiable_metrics: z.array(z.string()),
+  technologies_used: z.array(z.string()).max(50),
+  raw_achievements: z.array(z.string()).max(30),
+  quantifiable_metrics: z.array(z.string()).max(30),
 });
 
 export const EducationEntrySchema = z.object({
@@ -50,22 +50,22 @@ export const EducationEntrySchema = z.object({
   startDate: z.string().max(50),
   endDate: z.string().max(50),
   gpa: z.string().max(20),
-  honors: z.array(z.string()),
-  relevant_coursework: z.array(z.string()),
+  honors: z.array(z.string()).max(20),
+  relevant_coursework: z.array(z.string()).max(30),
   thesis_or_capstone: z.string().max(500),
-  extracurriculars: z.array(z.string()),
+  extracurriculars: z.array(z.string()).max(20),
   description: z.string().max(5000),
 });
 
 export const SkillsSchema = z.object({
-  programming_languages: z.array(z.string()),
-  frameworks_and_libraries: z.array(z.string()),
-  infrastructure_and_tools: z.array(z.string()),
-  databases: z.array(z.string()),
-  spoken_languages: z.array(
-    z.object({ language: z.string(), fluency: z.string(), note: z.string().optional() }),
-  ),
-  soft_skills: z.array(z.string()),
+  programming_languages: z.array(z.string()).max(150),
+  frameworks_and_libraries: z.array(z.string()).max(200),
+  infrastructure_and_tools: z.array(z.string()).max(200),
+  databases: z.array(z.string()).max(100),
+  spoken_languages: z
+    .array(z.object({ language: z.string(), fluency: z.string(), note: z.string().optional() }))
+    .max(20),
+  soft_skills: z.array(z.string()).max(100),
 });
 
 export const CertificationSchema = z.object({
@@ -87,7 +87,7 @@ export const AwardSchema = z.object({
   issuer: z.string().max(200),
   date: z.string().max(50),
   description: z.string().max(5000).default(''),
-  related_skills: z.array(z.string()).optional(),
+  related_skills: z.array(z.string()).max(20).optional(),
 });
 
 export const SummaryEntrySchema = z.object({
@@ -119,16 +119,16 @@ export const InterestEntrySchema = z.string().min(1).max(200);
 
 export const MasterDBSchema = z.object({
   personal_info: PersonalInfoSchema,
-  summaries: z.array(SummaryEntrySchema),
-  experience: z.array(ExperienceEntrySchema),
-  education: z.array(EducationEntrySchema),
-  projects: z.array(ProjectEntrySchema),
+  summaries: z.array(SummaryEntrySchema).max(10),
+  experience: z.array(ExperienceEntrySchema).max(50),
+  education: z.array(EducationEntrySchema).max(20),
+  projects: z.array(ProjectEntrySchema).max(50),
   skills: SkillsSchema,
-  certifications: z.array(CertificationSchema),
-  awards_and_honors: z.array(AwardSchema),
-  publications_and_speaking: z.array(PublicationEntrySchema),
-  volunteering_and_leadership: z.array(VolunteeringEntrySchema),
-  interests: z.array(InterestEntrySchema),
+  certifications: z.array(CertificationSchema).max(50),
+  awards_and_honors: z.array(AwardSchema).max(50),
+  publications_and_speaking: z.array(PublicationEntrySchema).max(50),
+  volunteering_and_leadership: z.array(VolunteeringEntrySchema).max(30),
+  interests: z.array(InterestEntrySchema).max(50),
 });
 
 // ── API Request/Response Schemas ────────────────────────────────────────────
@@ -317,7 +317,7 @@ export const IngestEntrySchema = z.discriminatedUnion('type', [
 ]);
 
 export const IngestResultSchema = z.object({
-  entries: z.array(IngestEntrySchema).min(1),
+  entries: z.array(IngestEntrySchema).min(1).max(100),
   // Count of AI-extracted entries dropped for failing per-entry validation
   // (see `parseCareerText`'s per-entry `safeParse` loop) — surfaced to the
   // frontend so a partially-failed paste doesn't silently look fully parsed.
@@ -330,7 +330,7 @@ export const IngestResultSchema = z.object({
 // trusted from the earlier parse response, since the client may have edited
 // field values in the review step.
 export const ConfirmIngestSchema = z.object({
-  entries: z.array(IngestEntrySchema).min(1),
+  entries: z.array(IngestEntrySchema).min(1).max(100),
 });
 
 // ── Phase 3: Job Discovery (Swipe Feed) ─────────────────────────────────────

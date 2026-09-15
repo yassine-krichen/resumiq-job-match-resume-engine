@@ -12,8 +12,11 @@ import {
   InterestEntrySchema,
   JobDNASchema,
   JobIntakeResultSchema,
+  MasterDBSchema,
+  PersonalInfoSchema,
   ProjectEntrySchema,
   PublicationEntrySchema,
+  SkillsSchema,
   SummaryEntrySchema,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
@@ -361,6 +364,18 @@ describe('IngestResultSchema', () => {
   it('rejects an empty entries array', () => {
     expect(() => IngestResultSchema.parse({ entries: [] })).toThrow();
   });
+
+  it('accepts entries with exactly 100 items (the max)', () => {
+    const entries = Array.from({ length: 100 }, () => ({ type: 'interest', entry: 'Chess' }));
+
+    expect(() => IngestResultSchema.parse({ entries })).not.toThrow();
+  });
+
+  it('rejects entries with more than 100 items', () => {
+    const entries = Array.from({ length: 101 }, () => ({ type: 'interest', entry: 'Chess' }));
+
+    expect(() => IngestResultSchema.parse({ entries })).toThrow();
+  });
 });
 
 describe('IngestBodySchema', () => {
@@ -382,6 +397,57 @@ describe('IngestBodySchema', () => {
     const tooLong = 'a'.repeat(20001);
 
     expect(() => IngestBodySchema.parse({ raw_text: tooLong })).toThrow();
+  });
+});
+
+describe('PersonalInfoSchema', () => {
+  const validEntry = {
+    name: 'Jane Doe',
+    location: 'Remote',
+    phone: '555-1234',
+    email: 'jane@example.com',
+    work_authorization: [],
+    clearances: [],
+    links: [],
+  };
+
+  it('accepts a fully valid entry', () => {
+    expect(() => PersonalInfoSchema.parse(validEntry)).not.toThrow();
+  });
+
+  it.each([
+    { field: 'work_authorization', max: 10 },
+    { field: 'clearances', max: 10 },
+  ])('rejects $field with more than $max entries', ({ field, max }) => {
+    const oversized = Array.from({ length: max + 1 }, (_, i) => `item-${i}`);
+
+    expect(() => PersonalInfoSchema.parse({ ...validEntry, [field]: oversized })).toThrow();
+  });
+
+  it('rejects links with more than 20 entries', () => {
+    const oversized = Array.from({ length: 21 }, (_, i) => ({
+      platform: 'GitHub',
+      url: `https://github.com/user-${i}`,
+    }));
+
+    expect(() => PersonalInfoSchema.parse({ ...validEntry, links: oversized })).toThrow();
+  });
+
+  it('accepts links with exactly 20 entries (the max)', () => {
+    const boundary = Array.from({ length: 20 }, (_, i) => ({
+      platform: 'GitHub',
+      url: `https://github.com/user-${i}`,
+    }));
+
+    expect(() => PersonalInfoSchema.parse({ ...validEntry, links: boundary })).not.toThrow();
+  });
+
+  it('accepts work_authorization with exactly 10 entries (the max)', () => {
+    const boundary = Array.from({ length: 10 }, (_, i) => `auth-${i}`);
+
+    expect(() =>
+      PersonalInfoSchema.parse({ ...validEntry, work_authorization: boundary }),
+    ).not.toThrow();
   });
 });
 
@@ -424,6 +490,25 @@ describe('ExperienceEntrySchema', () => {
 
     expect(() => ExperienceEntrySchema.parse({ ...validEntry, company: tooLong })).toThrow();
   });
+
+  it.each([
+    { field: 'core_competencies', max: 30 },
+    { field: 'technologies_used', max: 50 },
+    { field: 'raw_achievements', max: 30 },
+    { field: 'quantifiable_metrics', max: 30 },
+  ])('rejects $field with more than $max entries', ({ field, max }) => {
+    const oversized = Array.from({ length: max + 1 }, (_, i) => `item-${i}`);
+
+    expect(() => ExperienceEntrySchema.parse({ ...validEntry, [field]: oversized })).toThrow();
+  });
+
+  it('accepts technologies_used with exactly 50 entries (the max)', () => {
+    const boundary = Array.from({ length: 50 }, (_, i) => `tech-${i}`);
+
+    expect(() =>
+      ExperienceEntrySchema.parse({ ...validEntry, technologies_used: boundary }),
+    ).not.toThrow();
+  });
 });
 
 describe('ProjectEntrySchema', () => {
@@ -462,6 +547,29 @@ describe('ProjectEntrySchema', () => {
     const tooLong = 'a'.repeat(2001);
 
     expect(() => ProjectEntrySchema.parse({ ...validEntry, context: tooLong })).toThrow();
+  });
+
+  it.each([
+    { field: 'links', max: 10 },
+    { field: 'technologies_used', max: 50 },
+    { field: 'raw_achievements', max: 30 },
+    { field: 'quantifiable_metrics', max: 30 },
+  ])('rejects $field with more than $max entries', ({ field, max }) => {
+    const value =
+      field === 'links'
+        ? Array.from({ length: max + 1 }, (_, i) => ({ type: 'repo', url: `https://example.com/${i}` }))
+        : Array.from({ length: max + 1 }, (_, i) => `item-${i}`);
+
+    expect(() => ProjectEntrySchema.parse({ ...validEntry, [field]: value })).toThrow();
+  });
+
+  it('accepts links with exactly 10 entries (the max)', () => {
+    const boundary = Array.from({ length: 10 }, (_, i) => ({
+      type: 'repo',
+      url: `https://example.com/${i}`,
+    }));
+
+    expect(() => ProjectEntrySchema.parse({ ...validEntry, links: boundary })).not.toThrow();
   });
 });
 
@@ -514,6 +622,77 @@ describe('EducationEntrySchema', () => {
     const tooLong = 'a'.repeat(5001);
 
     expect(() => EducationEntrySchema.parse({ ...validEntry, description: tooLong })).toThrow();
+  });
+
+  it.each([
+    { field: 'honors', max: 20 },
+    { field: 'relevant_coursework', max: 30 },
+    { field: 'extracurriculars', max: 20 },
+  ])('rejects $field with more than $max entries', ({ field, max }) => {
+    const oversized = Array.from({ length: max + 1 }, (_, i) => `item-${i}`);
+
+    expect(() => EducationEntrySchema.parse({ ...validEntry, [field]: oversized })).toThrow();
+  });
+
+  it('accepts relevant_coursework with exactly 30 entries (the max)', () => {
+    const boundary = Array.from({ length: 30 }, (_, i) => `course-${i}`);
+
+    expect(() =>
+      EducationEntrySchema.parse({ ...validEntry, relevant_coursework: boundary }),
+    ).not.toThrow();
+  });
+});
+
+describe('SkillsSchema', () => {
+  const validEntry = {
+    programming_languages: [],
+    frameworks_and_libraries: [],
+    infrastructure_and_tools: [],
+    databases: [],
+    spoken_languages: [],
+    soft_skills: [],
+  };
+
+  it('accepts a fully valid entry', () => {
+    expect(() => SkillsSchema.parse(validEntry)).not.toThrow();
+  });
+
+  it.each([
+    { field: 'programming_languages', max: 150 },
+    { field: 'frameworks_and_libraries', max: 200 },
+    { field: 'infrastructure_and_tools', max: 200 },
+    { field: 'databases', max: 100 },
+    { field: 'soft_skills', max: 100 },
+  ])('rejects $field with more than $max entries', ({ field, max }) => {
+    const oversized = Array.from({ length: max + 1 }, (_, i) => `item-${i}`);
+
+    expect(() => SkillsSchema.parse({ ...validEntry, [field]: oversized })).toThrow();
+  });
+
+  it('rejects spoken_languages with more than 20 entries', () => {
+    const oversized = Array.from({ length: 21 }, (_, i) => ({
+      language: `Lang-${i}`,
+      fluency: 'fluent',
+    }));
+
+    expect(() => SkillsSchema.parse({ ...validEntry, spoken_languages: oversized })).toThrow();
+  });
+
+  it('accepts spoken_languages with exactly 20 entries (the max)', () => {
+    const boundary = Array.from({ length: 20 }, (_, i) => ({
+      language: `Lang-${i}`,
+      fluency: 'fluent',
+    }));
+
+    expect(() =>
+      SkillsSchema.parse({ ...validEntry, spoken_languages: boundary }),
+    ).not.toThrow();
+  });
+
+  it('accepts databases with exactly 100 entries (the max)', () => {
+    const boundary = Array.from({ length: 100 }, (_, i) => `db-${i}`);
+
+    expect(() => SkillsSchema.parse({ ...validEntry, databases: boundary })).not.toThrow();
   });
 });
 
@@ -593,6 +772,18 @@ describe('AwardSchema', () => {
     const tooLong = 'a'.repeat(5001);
 
     expect(() => AwardSchema.parse({ ...validEntry, description: tooLong })).toThrow();
+  });
+
+  it('rejects related_skills with more than 20 entries', () => {
+    const oversized = Array.from({ length: 21 }, (_, i) => `skill-${i}`);
+
+    expect(() => AwardSchema.parse({ ...validEntry, related_skills: oversized })).toThrow();
+  });
+
+  it('accepts related_skills with exactly 20 entries (the max)', () => {
+    const boundary = Array.from({ length: 20 }, (_, i) => `skill-${i}`);
+
+    expect(() => AwardSchema.parse({ ...validEntry, related_skills: boundary })).not.toThrow();
   });
 });
 
@@ -737,6 +928,125 @@ describe('InterestEntrySchema', () => {
   });
 });
 
+describe('MasterDBSchema', () => {
+  const validPersonalInfo = {
+    name: 'Jane Doe',
+    location: 'Remote',
+    phone: '555-1234',
+    email: 'jane@example.com',
+    work_authorization: [],
+    clearances: [],
+    links: [],
+  };
+
+  const validSkills = {
+    programming_languages: [],
+    frameworks_and_libraries: [],
+    infrastructure_and_tools: [],
+    databases: [],
+    spoken_languages: [],
+    soft_skills: [],
+  };
+
+  const validMasterDB = {
+    personal_info: validPersonalInfo,
+    summaries: [],
+    experience: [],
+    education: [],
+    projects: [],
+    skills: validSkills,
+    certifications: [],
+    awards_and_honors: [],
+    publications_and_speaking: [],
+    volunteering_and_leadership: [],
+    interests: [],
+  };
+
+  // Minimal valid element for each capped array, keyed by MasterDBSchema field name.
+  const minimalEntryFactories: Record<string, (i: number) => unknown> = {
+    summaries: (i) => ({ target_role: `Role-${i}`, content: 'Backend engineer.' }),
+    experience: (i) => ({
+      company: `Company-${i}`,
+      company_industry: 'Software',
+      role: 'Engineer',
+      location: 'Remote',
+      location_type: 'Remote',
+      startDate: '2023',
+      endDate: '2023',
+      isCurrent: false,
+      core_competencies: [],
+      technologies_used: [],
+      raw_achievements: [],
+      quantifiable_metrics: [],
+    }),
+    education: (i) => ({
+      institution: `University-${i}`,
+      degree_type: 'BSc',
+      major: 'Computer Science',
+      minor: '',
+      location: '',
+      startDate: '2018',
+      endDate: '2022',
+      gpa: '',
+      honors: [],
+      relevant_coursework: [],
+      thesis_or_capstone: '',
+      extracurriculars: [],
+      description: '',
+    }),
+    projects: (i) => ({
+      name: `Project-${i}`,
+      context: '',
+      links: [],
+      startDate: '2022',
+      endDate: '2022',
+      technologies_used: [],
+      raw_achievements: [],
+      quantifiable_metrics: [],
+    }),
+    certifications: (i) => ({ name: `Cert-${i}`, issuer: 'AWS', date: '2023' }),
+    awards_and_honors: (i) => ({ title: `Award-${i}`, issuer: '', date: '2023' }),
+    publications_and_speaking: (i) => ({ title: `Publication-${i}`, date: '2023' }),
+    volunteering_and_leadership: (i) => ({ organization: `Org-${i}`, role: 'Mentor', startDate: '2022' }),
+    interests: (i) => `Interest-${i}`,
+  };
+
+  it('accepts a fully valid, entirely empty profile', () => {
+    expect(() => MasterDBSchema.parse(validMasterDB)).not.toThrow();
+  });
+
+  it.each([
+    { field: 'summaries', max: 10 },
+    { field: 'experience', max: 50 },
+    { field: 'education', max: 20 },
+    { field: 'projects', max: 50 },
+    { field: 'certifications', max: 50 },
+    { field: 'awards_and_honors', max: 50 },
+    { field: 'publications_and_speaking', max: 50 },
+    { field: 'volunteering_and_leadership', max: 30 },
+    { field: 'interests', max: 50 },
+  ])('rejects $field with more than $max entries', ({ field, max }) => {
+    const factory = minimalEntryFactories[field];
+    const oversized = Array.from({ length: max + 1 }, (_, i) => factory(i));
+
+    expect(() => MasterDBSchema.parse({ ...validMasterDB, [field]: oversized })).toThrow();
+  });
+
+  it('accepts experience with exactly 50 entries (the max)', () => {
+    const boundary = Array.from({ length: 50 }, (_, i) => minimalEntryFactories.experience(i));
+
+    expect(() => MasterDBSchema.parse({ ...validMasterDB, experience: boundary })).not.toThrow();
+  });
+
+  it('accepts certifications with exactly 50 entries (the max)', () => {
+    const boundary = Array.from({ length: 50 }, (_, i) => minimalEntryFactories.certifications(i));
+
+    expect(() =>
+      MasterDBSchema.parse({ ...validMasterDB, certifications: boundary }),
+    ).not.toThrow();
+  });
+});
+
 describe('ConfirmIngestSchema', () => {
   const validExperienceEntry = {
     type: 'experience',
@@ -796,5 +1106,17 @@ describe('ConfirmIngestSchema', () => {
     expect(() =>
       ConfirmIngestSchema.parse({ entries: [{ type: 'interest', entry: { name: 'Chess' } }] }),
     ).toThrow();
+  });
+
+  it('accepts entries with exactly 100 items (the max)', () => {
+    const entries = Array.from({ length: 100 }, () => ({ type: 'interest', entry: 'Chess' }));
+
+    expect(() => ConfirmIngestSchema.parse({ entries })).not.toThrow();
+  });
+
+  it('rejects entries.length = 101 on the confirm-persist payload', () => {
+    const entries = Array.from({ length: 101 }, () => ({ type: 'interest', entry: 'Chess' }));
+
+    expect(() => ConfirmIngestSchema.parse({ entries })).toThrow();
   });
 });
