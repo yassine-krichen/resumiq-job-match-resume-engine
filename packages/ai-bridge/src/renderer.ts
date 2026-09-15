@@ -371,8 +371,8 @@ function renderVolunteering(selection: AISelection, db: MasterDB): string {
     }
 
     const dateRange = entry.isCurrent
-      ? `${tex(entry.startDate)} -- Present`
-      : `${tex(entry.startDate)} -- ${tex(entry.endDate ?? '')}`;
+      ? `${tex(entry.startDate ?? '')} -- Present`
+      : `${tex(entry.startDate ?? '')} -- ${tex(entry.endDate ?? '')}`;
 
     lines.push('    \\resumeSubheading');
     lines.push(`      {${tex(entry.organization)}}{${dateRange}}`);

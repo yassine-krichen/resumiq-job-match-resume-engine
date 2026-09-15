@@ -11,6 +11,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@resumiq/schemas": "*",
     "dotenv": "^16.0.0"
   },
   "devDependencies": {

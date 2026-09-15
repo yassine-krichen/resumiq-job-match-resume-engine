@@ -163,8 +163,15 @@ export class OnboardingService {
         entries.push(parsed.data);
       } else {
         droppedCount += 1;
+        // Include the entry's declared "type" (not just the Zod error) so a
+        // dropped entry is debuggable from logs alone — which category was
+        // affected — without needing to reproduce the failure.
+        const entryType =
+          typeof rawEntry === 'object' && rawEntry !== null && 'type' in rawEntry
+            ? String((rawEntry as { type?: unknown }).type)
+            : 'unknown';
         this.logger.warn(
-          `Dropping one AI-extracted entry that failed validation: ${parsed.error.message}`,
+          `Dropping AI-extracted "${entryType}" entry that failed validation: ${parsed.error.message}`,
         );
       }
     }

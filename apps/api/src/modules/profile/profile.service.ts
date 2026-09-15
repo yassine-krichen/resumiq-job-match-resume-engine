@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { MasterDB } from '@resumiq/ai-bridge';
+import type { MasterDB } from '@resumiq/schemas';
 
 type Json = Prisma.InputJsonValue;
 

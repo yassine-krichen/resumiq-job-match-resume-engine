@@ -1,112 +1,19 @@
-export interface PersonalInfo {
-  name: string;
-  location: string;
-  phone: string;
-  email: string;
-  work_authorization: string[];
-  clearances: string[];
-  links: Array<{ platform: string; url: string }>;
-}
+// `MasterDB` and its entry types are the Zod-inferred source of truth from
+// `@resumiq/schemas` (validated by onboarding-parse and profile import/export)
+// — re-exported here (rather than hand-declared) so this package's types
+// cannot drift out of sync with the schema the way they previously did.
+export type { MasterDB } from '@resumiq/schemas';
+import type { MasterDB } from '@resumiq/schemas';
 
-export interface ExperienceEntry {
-  company: string;
-  company_industry: string;
-  role: string;
-  location: string;
-  location_type: string;
-  startDate: string;
-  endDate: string;
-  isCurrent: boolean;
-  core_competencies: string[];
-  technologies_used: string[];
-  raw_achievements: string[];
-  quantifiable_metrics: string[];
-}
-
-export interface ProjectEntry {
-  name: string;
-  context: string;
-  links: Array<{ type: string; url: string }>;
-  startDate: string;
-  endDate: string;
-  technologies_used: string[];
-  raw_achievements: string[];
-  quantifiable_metrics: string[];
-}
-
-export interface EducationEntry {
-  institution: string;
-  degree_type: string;
-  major: string;
-  minor: string;
-  location: string;
-  startDate: string;
-  endDate: string;
-  gpa: string;
-  honors: string[];
-  relevant_coursework: string[];
-  thesis_or_capstone: string;
-  extracurriculars: string[];
-  description: string;
-}
-
-export interface Certification {
-  name: string;
-  issuer: string;
-  date: string;
-  expiration_date: string;
-  credential_id: string;
-  link: string;
-  description: string;
-}
-
-export interface Award {
-  title: string;
-  issuer: string;
-  date: string;
-  description: string;
-}
-
-export interface Publication {
-  title: string;
-  venue?: string;
-  date: string;
-  url?: string;
-  description?: string;
-}
-
-export interface VolunteeringEntry {
-  organization: string;
-  role: string;
-  location?: string;
-  startDate: string;
-  endDate?: string;
-  isCurrent?: boolean;
-  description?: string;
-}
-
-export interface Skills {
-  programming_languages: string[];
-  frameworks_and_libraries: string[];
-  infrastructure_and_tools: string[];
-  databases: string[];
-  spoken_languages: Array<{ language: string; fluency: string; note?: string }>;
-  soft_skills: string[];
-}
-
-export interface MasterDB {
-  personal_info: PersonalInfo;
-  summaries: Array<{ target_role: string; content: string }>;
-  experience: ExperienceEntry[];
-  education: EducationEntry[];
-  projects: ProjectEntry[];
-  skills: Skills;
-  certifications: Certification[];
-  awards_and_honors: Award[];
-  publications_and_speaking: Publication[];
-  volunteering_and_leadership: VolunteeringEntry[];
-  interests: string[];
-}
+export type PersonalInfo = MasterDB['personal_info'];
+export type ExperienceEntry = MasterDB['experience'][number];
+export type ProjectEntry = MasterDB['projects'][number];
+export type EducationEntry = MasterDB['education'][number];
+export type Skills = MasterDB['skills'];
+export type Certification = MasterDB['certifications'][number];
+export type Award = MasterDB['awards_and_honors'][number];
+export type Publication = MasterDB['publications_and_speaking'][number];
+export type VolunteeringEntry = MasterDB['volunteering_and_leadership'][number];
 
 /** Output of `parseJobIntake` — best-effort metadata extraction from a raw
  * paste, used to pre-fill the manual job-intake review form. Distinct from
