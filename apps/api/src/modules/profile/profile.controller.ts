@@ -13,8 +13,10 @@ import { ProfileService } from './profile.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import {
   MasterDBSchema,
+  ProfileEntryMutationSchema,
   UpdateCareerProfileSchema,
   type MasterDB,
+  type ProfileEntryMutationDto,
   type UpdateCareerProfileDto,
 } from '@resumiq/schemas';
 
@@ -36,6 +38,23 @@ export class ProfileController {
     @Body(new ZodValidationPipe(UpdateCareerProfileSchema)) body: UpdateCareerProfileDto,
   ) {
     return this.profileService.upsertProfile(req.user.id, body);
+  }
+
+  /**
+   * PATCH /profile/entries
+   * Adds, updates, or removes a single entry in one array-shaped profile
+   * section (the profile page's manual add/edit/delete-entry controls).
+   * Unlike `PATCH /profile`, the mutation is applied server-side against a
+   * transaction-fresh read (see `ProfileService#mutateSectionEntry`) instead
+   * of a client-computed full-array replace, so overlapping requests can't
+   * silently drop each other's entry.
+   */
+  @Patch('entries')
+  async mutateSectionEntry(
+    @Req() req: { user: { id: string } },
+    @Body(new ZodValidationPipe(ProfileEntryMutationSchema)) body: ProfileEntryMutationDto,
+  ) {
+    return this.profileService.mutateSectionEntry(req.user.id, body);
   }
 
   /**

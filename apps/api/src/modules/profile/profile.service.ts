@@ -1,7 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { MasterDB } from '@resumiq/schemas';
+import { MasterDBSchema, type MasterDB, type ProfileEntryMutationDto } from '@resumiq/schemas';
 
 type Json = Prisma.InputJsonValue;
 
@@ -59,6 +64,110 @@ export class ProfileService {
       }
       return this.writeProfileTx(tx, userId, profile);
     });
+  }
+
+  /**
+   * Applies a single add/update/remove entry operation to one array-shaped
+   * profile section, reading fresh state and writing back the merged result
+   * inside the same `withUserLock`-protected transaction `mergeSection`
+   * uses. This is what the profile page's manual "Add Entry"/edit/delete
+   * controls call — replaces the old client-computed-full-array `PATCH
+   * /profile`, which built the next array from a `profile` prop snapshot
+   * that could already be stale by the time the request landed (two tabs, a
+   * slow request retried, a remount), silently dropping whichever entry the
+   * losing request's snapshot didn't know about yet. Because the mutation
+   * (append / replace-at-index / remove-at-index) is applied here against a
+   * transaction-fresh read, two overlapping requests can no longer clobber
+   * each other's entry — the second one to acquire the lock sees the first
+   * one's write.
+   *
+   * The mutated section's *own* array (element shape + `.max(...)` cap, per
+   * `MasterDBSchema`) is re-validated against the merged result before
+   * persisting — this closes a gap where the previous full-array `PATCH
+   * /profile` path only validated the incoming request body's array, never
+   * the final merged document, so a section could grow past its documented
+   * cap over repeated partial patches. Deliberately scoped to just the
+   * mutated section rather than the whole `MasterDB` document: an entry add
+   * to `certifications` shouldn't fail because an unrelated, already-stored
+   * field elsewhere on the profile (e.g. an empty `personal_info.email`
+   * before onboarding fills it in) happens not to satisfy that field's own
+   * schema.
+   *
+   * `update`/`remove` are addressed by `index`, which is resolved against
+   * the fresh read above — but `index` alone isn't enough: if some other
+   * request changed the array's length between when the client last read
+   * state and when this request landed (e.g. a concurrent remove shifted
+   * every later index down by one), `index` can now point at a *different*
+   * entry than the one the client meant to edit, and the mutation would
+   * silently apply to the wrong entry with no error. `applyEntryMutation`
+   * closes this by requiring `update`/`remove` to also carry `expectedEntry`
+   * (the entry as the client last knew it) and comparing it — via the same
+   * `canonicalStringify` deep-equality `mergeSectionIntoProfile` already
+   * uses for dedup — against whatever is actually found at `index` in the
+   * fresh read, rejecting with `ConflictException` on a mismatch instead of
+   * proceeding.
+   */
+  async mutateSectionEntry(userId: string, mutation: ProfileEntryMutationDto): Promise<MasterDB> {
+    return this.withUserLock(userId, async (tx) => {
+      const existing = await this.readProfileTx(tx, userId);
+      const base: MasterDB = existing ?? this.emptyMasterDB(userId);
+      const merged = this.applyEntryMutation(base, mutation);
+
+      const sectionSchema = MasterDBSchema.shape[mutation.section];
+      const validated = sectionSchema.safeParse(merged[mutation.section]);
+      if (!validated.success) {
+        const issues = validated.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        }));
+        throw new BadRequestException(issues);
+      }
+
+      return this.writeProfileTx(tx, userId, merged);
+    });
+  }
+
+  /** Pure add/update/remove of a single entry in an array-shaped section — no DB access. */
+  private applyEntryMutation(profile: MasterDB, mutation: ProfileEntryMutationDto): MasterDB {
+    const base: MasterDB = { ...profile };
+    const currentEntries = base[mutation.section] as unknown[];
+
+    if (mutation.operation === 'add') {
+      (base[mutation.section] as unknown[]) = [...currentEntries, mutation.entry];
+      return base;
+    }
+
+    if (mutation.index >= currentEntries.length) {
+      throw new NotFoundException(
+        `No entry at index ${mutation.index} in section "${mutation.section}"`,
+      );
+    }
+
+    // Optimistic-concurrency check: `index` was just resolved against a
+    // transaction-fresh read, but the client computed it from its own
+    // last-known snapshot, which may already be stale (e.g. another request
+    // removed an earlier entry, shifting this index onto a different entry).
+    // Comparing the entry actually found here against what the client last
+    // saw at that index catches that case and rejects rather than silently
+    // mutating the wrong entry.
+    const entryAtIndex = currentEntries[mutation.index];
+    if (canonicalStringify(entryAtIndex) !== canonicalStringify(mutation.expectedEntry)) {
+      throw new ConflictException(
+        `Entry at index ${mutation.index} in section "${mutation.section}" has changed since it was last loaded — refresh and try again.`,
+      );
+    }
+
+    if (mutation.operation === 'update') {
+      (base[mutation.section] as unknown[]) = currentEntries.map((existingEntry, i) =>
+        i === mutation.index ? mutation.entry : existingEntry,
+      );
+    } else {
+      (base[mutation.section] as unknown[]) = currentEntries.filter(
+        (_, i) => i !== mutation.index,
+      );
+    }
+
+    return base;
   }
 
   /**

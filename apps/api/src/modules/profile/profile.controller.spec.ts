@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
-import { MasterDBSchema, type MasterDB } from '@resumiq/schemas';
+import { MasterDBSchema, ProfileEntryMutationSchema, type MasterDB } from '@resumiq/schemas';
 import { ProfileController } from './profile.controller';
 import { ProfileService } from './profile.service';
 import { AuthGuard } from '../auth/auth.guard';
@@ -55,6 +55,7 @@ describe('ProfileController', () => {
     getProfile: jest.Mock;
     upsertProfile: jest.Mock;
     importProfile: jest.Mock;
+    mutateSectionEntry: jest.Mock;
   };
   let controller: ProfileController;
   const REQ = { user: { id: 'user-1' } };
@@ -64,6 +65,7 @@ describe('ProfileController', () => {
       getProfile: jest.fn(),
       upsertProfile: jest.fn(),
       importProfile: jest.fn(),
+      mutateSectionEntry: jest.fn(),
     };
     controller = new ProfileController(profileService as unknown as ProfileService);
   });
@@ -101,6 +103,47 @@ describe('ProfileController', () => {
 
       expect(profileService.upsertProfile).toHaveBeenCalledWith('user-1', patch);
       expect(result).toBe(updated);
+    });
+  });
+
+  describe('mutateSectionEntry (PATCH /profile/entries)', () => {
+    it("delegates to ProfileService#mutateSectionEntry scoped to the authenticated user's id and returns the merged profile", async () => {
+      const merged = buildMasterDB();
+      profileService.mutateSectionEntry.mockResolvedValue(merged);
+      const body = {
+        operation: 'add' as const,
+        section: 'certifications' as const,
+        entry: { name: 'AWS SAA', issuer: 'AWS', date: '', expiration_date: '', credential_id: '', link: '', description: '' },
+      };
+
+      const result = await controller.mutateSectionEntry(REQ, body);
+
+      expect(profileService.mutateSectionEntry).toHaveBeenCalledWith('user-1', body);
+      expect(result).toBe(merged);
+    });
+
+    it('rejects a body with an unknown operation, and never reaches the service', () => {
+      const pipe = new ZodValidationPipe(ProfileEntryMutationSchema);
+      const invalid = { operation: 'replace', section: 'certifications', entry: {} };
+
+      expect(() => pipe.transform(invalid)).toThrow(BadRequestException);
+      expect(profileService.mutateSectionEntry).not.toHaveBeenCalled();
+    });
+
+    it('rejects an update operation missing the required index, and never reaches the service', () => {
+      const pipe = new ZodValidationPipe(ProfileEntryMutationSchema);
+      const invalid = { operation: 'update', section: 'certifications', entry: {} };
+
+      expect(() => pipe.transform(invalid)).toThrow(BadRequestException);
+      expect(profileService.mutateSectionEntry).not.toHaveBeenCalled();
+    });
+
+    it('rejects a body targeting a non-array section (e.g. skills), and never reaches the service', () => {
+      const pipe = new ZodValidationPipe(ProfileEntryMutationSchema);
+      const invalid = { operation: 'add', section: 'skills', entry: {} };
+
+      expect(() => pipe.transform(invalid)).toThrow(BadRequestException);
+      expect(profileService.mutateSectionEntry).not.toHaveBeenCalled();
     });
   });
 

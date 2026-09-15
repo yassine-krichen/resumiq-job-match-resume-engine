@@ -214,6 +214,64 @@ export const CreateJobSchema = z.object({
 
 export const UpdateCareerProfileSchema = MasterDBSchema.partial();
 
+// Array-shaped `MasterDB` sections that the profile UI's manual add/edit/
+// delete-entry controls operate on (mirrors `ArraySectionKey` in
+// `use-profile-section.ts` — every key here has an array value in
+// `MasterDBSchema`, `skills`/`personal_info` are deliberately excluded).
+export const ProfileArraySectionSchema = z.enum([
+  'summaries',
+  'experience',
+  'education',
+  'projects',
+  'certifications',
+  'awards_and_honors',
+  'publications_and_speaking',
+  'volunteering_and_leadership',
+  'interests',
+]);
+
+/**
+ * Body of `PATCH /profile/entries` — a single add/update/remove operation on
+ * one entry of an array-shaped profile section. Validated for *shape* only
+ * here (section/operation/index); the `entry` payload itself is validated
+ * against the section's own per-entry schema server-side, as part of
+ * re-validating the full merged `MasterDB` document after the mutation is
+ * applied (see `ProfileService#mutateSectionEntry`) — the same
+ * read-fresh-then-write-once-inside-the-lock pattern `mergeSection` already
+ * uses, so overlapping requests can no longer silently drop each other's
+ * entry the way the old client-computed-full-array `PATCH /profile` did.
+ *
+ * `update`/`remove` additionally carry `expectedEntry` — the entry as the
+ * client last knew it — since `index` alone is addressed against a
+ * transaction-fresh array and can silently land on the wrong entry if some
+ * other request changed the array's length ahead of this one (e.g. a
+ * concurrent remove shifting indices). The server compares the entry it
+ * actually finds at `index` against `expectedEntry` before applying the
+ * mutation and rejects with a conflict if they differ, rather than silently
+ * mutating whatever now happens to sit at that index (see
+ * `ProfileService#mutateSectionEntry`).
+ */
+export const ProfileEntryMutationSchema = z.discriminatedUnion('operation', [
+  z.object({
+    operation: z.literal('add'),
+    section: ProfileArraySectionSchema,
+    entry: z.unknown(),
+  }),
+  z.object({
+    operation: z.literal('update'),
+    section: ProfileArraySectionSchema,
+    index: z.number().int().min(0),
+    entry: z.unknown(),
+    expectedEntry: z.unknown(),
+  }),
+  z.object({
+    operation: z.literal('remove'),
+    section: ProfileArraySectionSchema,
+    index: z.number().int().min(0),
+    expectedEntry: z.unknown(),
+  }),
+]);
+
 // ── Manual Job Intake — paste-and-parse extraction ──────────────────────────
 
 export const ExtractJobIntakeSchema = z.object({
@@ -517,6 +575,8 @@ export const InterviewPrepReportSchema = z.object({
 export type MasterDB = z.infer<typeof MasterDBSchema>;
 export type CreateJobDto = z.infer<typeof CreateJobSchema>;
 export type UpdateCareerProfileDto = z.infer<typeof UpdateCareerProfileSchema>;
+export type ProfileArraySection = z.infer<typeof ProfileArraySectionSchema>;
+export type ProfileEntryMutationDto = z.infer<typeof ProfileEntryMutationSchema>;
 export type ExtractJobIntakeDto = z.infer<typeof ExtractJobIntakeSchema>;
 export type JobIntakeResultDto = z.infer<typeof JobIntakeResultSchema>;
 export type IngestBodyDto = z.infer<typeof IngestBodySchema>;

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
-import type { MasterDB } from '@resumiq/schemas';
+import type { MasterDB, ProfileArraySection } from '@resumiq/schemas';
 
 /** Keys of `MasterDB` whose value is an array — the only sections this hook
  * (and its add/edit/delete UI) can operate on. */
@@ -25,11 +25,12 @@ export interface UseProfileSectionResult<T> {
  * Shared add/edit/delete logic for any array-shaped `MasterDB` profile
  * section (experience, projects, education, certifications, awards, ...).
  *
- * `PATCH /profile` replaces a section's array wholesale — `ProfileService
- * .upsertProfile` merges the request body over the existing profile with a
- * shallow `{ ...base, ...patch }` (see `mergeMasterDB`), so a partial-index
- * update isn't possible server-side. Every mutation here therefore builds
- * the *entire* next array client-side and sends that.
+ * Each mutation is sent to `PATCH /profile/entries` as a single add/update/
+ * remove operation — the server applies it against a transaction-fresh read
+ * (see `ProfileService#mutateSectionEntry`), so overlapping saves (two tabs,
+ * a slow request retried, a remount) can no longer silently drop each
+ * other's entry the way building the entire next array client-side from a
+ * possibly-stale `profile` prop snapshot could.
  */
 export function useProfileSection<K extends ArraySectionKey>(
   profile: MasterDB | null,
@@ -39,13 +40,23 @@ export function useProfileSection<K extends ArraySectionKey>(
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  async function save(nextArray: MasterDB[K]): Promise<void> {
+  async function mutate(
+    operation:
+      | { operation: 'add'; entry: MasterDB[K][number] }
+      | {
+          operation: 'update';
+          index: number;
+          entry: MasterDB[K][number];
+          expectedEntry: MasterDB[K][number];
+        }
+      | { operation: 'remove'; index: number; expectedEntry: MasterDB[K][number] },
+  ): Promise<void> {
     setSaving(true);
     setError('');
     try {
-      const updated = await apiFetch<MasterDB>('/profile', {
+      const updated = await apiFetch<MasterDB>('/profile/entries', {
         method: 'PATCH',
-        body: JSON.stringify({ [section]: nextArray }),
+        body: JSON.stringify({ section: section as ProfileArraySection, ...operation }),
       });
       onUpdated(updated);
     } catch (err) {
@@ -58,25 +69,23 @@ export function useProfileSection<K extends ArraySectionKey>(
     }
   }
 
-  function currentEntries(): Array<MasterDB[K][number]> {
-    return ((profile?.[section] as Array<MasterDB[K][number]> | undefined) ?? []);
-  }
-
   async function addEntry(entry: MasterDB[K][number]): Promise<void> {
     if (!profile) return;
-    await save([...currentEntries(), entry] as MasterDB[K]);
+    await mutate({ operation: 'add', entry });
   }
 
   async function updateEntry(index: number, entry: MasterDB[K][number]): Promise<void> {
     if (!profile) return;
-    const next = currentEntries().map((item, i) => (i === index ? entry : item));
-    await save(next as MasterDB[K]);
+    // `expectedEntry` is the entry as this client last saw it — the server
+    // compares it against a transaction-fresh read at `index` and rejects
+    // the mutation if they differ, so a stale index (e.g. from a concurrent
+    // remove shifting indices) can't silently land on the wrong entry.
+    await mutate({ operation: 'update', index, entry, expectedEntry: profile[section][index] });
   }
 
   async function removeEntry(index: number): Promise<void> {
     if (!profile) return;
-    const next = currentEntries().filter((_, i) => i !== index);
-    await save(next as MasterDB[K]);
+    await mutate({ operation: 'remove', index, expectedEntry: profile[section][index] });
   }
 
   return { saving, error, addEntry, updateEntry, removeEntry };

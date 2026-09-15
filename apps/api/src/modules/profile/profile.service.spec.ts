@@ -166,6 +166,246 @@ describe('ProfileService', () => {
     });
   });
 
+  describe('mutateSectionEntry (manual add/edit/delete-entry — lost-update fix)', () => {
+    it('serializes two concurrent add operations so the second does not clobber the first (no lost update)', async () => {
+      // Same mutex stand-in as the mergeSection race test above: forces
+      // `$transaction` callbacks to run strictly one-at-a-time, reproducing
+      // what `pg_advisory_xact_lock` provides against the real database.
+      let queue: Promise<unknown> = Promise.resolve();
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => Promise<unknown>) => {
+        const run = queue.then(() => cb(prisma));
+        queue = run.catch(() => undefined);
+        return run;
+      });
+
+      let stored: ReturnType<typeof toRow> | null = toRow('user-1', emptyMasterDB());
+      prisma.careerProfile.findUnique.mockImplementation(async () => stored);
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => {
+        // Widen the read-then-write race window so an unserialized pair of
+        // writers would interleave and one would overwrite the other.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        stored = { userId: 'user-1', ...update };
+        return stored;
+      });
+
+      const certA = {
+        name: 'AWS Certified Developer',
+        issuer: 'AWS',
+        date: '2023',
+        expiration_date: '',
+        credential_id: '',
+        link: '',
+        description: '',
+      };
+      const certB = {
+        name: 'CKA',
+        issuer: 'CNCF',
+        date: '2023',
+        expiration_date: '',
+        credential_id: '',
+        link: '',
+        description: '',
+      };
+
+      const [, resultB] = await Promise.all([
+        service.mutateSectionEntry('user-1', {
+          operation: 'add',
+          section: 'certifications',
+          entry: certA,
+        }),
+        service.mutateSectionEntry('user-1', {
+          operation: 'add',
+          section: 'certifications',
+          entry: certB,
+        }),
+      ]);
+
+      // Both concurrently-added entries must be present in the end state —
+      // the old client-computed-full-array `PATCH /profile` path would have
+      // silently dropped whichever entry lost the race.
+      expect(resultB.certifications).toEqual(
+        expect.arrayContaining([certA, certB]),
+      );
+      expect(resultB.certifications).toHaveLength(2);
+    });
+
+    it('replaces only the entry at the given index against a fresh read', async () => {
+      const existing = emptyMasterDB();
+      existing.certifications = [
+        { name: 'AWS SAA', issuer: 'AWS', date: '2022', expiration_date: '', credential_id: '', link: '', description: '' },
+        { name: 'CKA', issuer: 'CNCF', date: '2023', expiration_date: '', credential_id: '', link: '', description: '' },
+      ];
+      prisma.careerProfile.findUnique.mockResolvedValue(toRow('user-1', existing));
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => ({
+        userId: 'user-1',
+        ...update,
+      }));
+
+      const renewed = { ...existing.certifications[1], name: 'CKA (renewed)' };
+      const result = await service.mutateSectionEntry('user-1', {
+        operation: 'update',
+        section: 'certifications',
+        index: 1,
+        entry: renewed,
+        expectedEntry: existing.certifications[1],
+      });
+
+      expect(result.certifications).toEqual([existing.certifications[0], renewed]);
+    });
+
+    it('removes only the entry at the given index against a fresh read', async () => {
+      const existing = emptyMasterDB();
+      existing.certifications = [
+        { name: 'AWS SAA', issuer: 'AWS', date: '2022', expiration_date: '', credential_id: '', link: '', description: '' },
+        { name: 'CKA', issuer: 'CNCF', date: '2023', expiration_date: '', credential_id: '', link: '', description: '' },
+      ];
+      prisma.careerProfile.findUnique.mockResolvedValue(toRow('user-1', existing));
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => ({
+        userId: 'user-1',
+        ...update,
+      }));
+
+      const result = await service.mutateSectionEntry('user-1', {
+        operation: 'remove',
+        section: 'certifications',
+        index: 0,
+        expectedEntry: existing.certifications[0],
+      });
+
+      expect(result.certifications).toEqual([existing.certifications[1]]);
+    });
+
+    it('throws NotFoundException when removing an out-of-range index', async () => {
+      prisma.careerProfile.findUnique.mockResolvedValue(toRow('user-1', emptyMasterDB()));
+
+      await expect(
+        service.mutateSectionEntry('user-1', {
+          operation: 'remove',
+          section: 'certifications',
+          index: 0,
+          expectedEntry: undefined,
+        }),
+      ).rejects.toThrow('No entry at index 0');
+      expect(prisma.careerProfile.upsert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a stale-index update with ConflictException when a concurrent remove shifted indices under it (optimistic-concurrency check)', async () => {
+      // Same mutex stand-in as the concurrent-add test above: forces
+      // `$transaction` callbacks to run strictly one-at-a-time, reproducing
+      // what `pg_advisory_xact_lock` provides against the real database —
+      // here used to force a deterministic interleaving so the race is
+      // reproduced reliably rather than depending on scheduling luck.
+      let queue: Promise<unknown> = Promise.resolve();
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => Promise<unknown>) => {
+        const run = queue.then(() => cb(prisma));
+        queue = run.catch(() => undefined);
+        return run;
+      });
+
+      const entryE0 = {
+        name: 'AWS SAA',
+        issuer: 'AWS',
+        date: '2022',
+        expiration_date: '',
+        credential_id: '',
+        link: '',
+        description: '',
+      };
+      const entryE1 = {
+        name: 'CKA',
+        issuer: 'CNCF',
+        date: '2023',
+        expiration_date: '',
+        credential_id: '',
+        link: '',
+        description: '',
+      };
+      const entryE2 = {
+        name: 'CKS',
+        issuer: 'CNCF',
+        date: '2024',
+        expiration_date: '',
+        credential_id: '',
+        link: '',
+        description: '',
+      };
+      const existing = emptyMasterDB();
+      existing.certifications = [entryE0, entryE1, entryE2];
+
+      let stored: ReturnType<typeof toRow> | null = toRow('user-1', existing);
+      prisma.careerProfile.findUnique.mockImplementation(async () => stored);
+      prisma.careerProfile.upsert.mockImplementation(async ({ update }) => {
+        // Widen the read-then-write race window so an unserialized pair of
+        // writers would interleave.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        stored = { userId: 'user-1', ...update };
+        return stored;
+      });
+
+      // Client A opened the edit form for E1 while the array was still
+      // [E0, E1, E2], capturing index 1 and expectedEntry: E1.
+      // Client B (called first below, so it acquires the lock first) removes
+      // E0, leaving [E1, E2] — E1 has now shifted down to index 0, and index
+      // 1 now points at E2. The old index-only code would silently apply A's
+      // "update E1" onto E2 instead; the optimistic-concurrency check must
+      // reject it.
+      const removeE0 = service.mutateSectionEntry('user-1', {
+        operation: 'remove',
+        section: 'certifications',
+        index: 0,
+        expectedEntry: entryE0,
+      });
+      const staleUpdateForE1 = service.mutateSectionEntry('user-1', {
+        operation: 'update',
+        section: 'certifications',
+        index: 1,
+        entry: { ...entryE1, name: 'CKA (renewed)' },
+        expectedEntry: entryE1,
+      });
+
+      await expect(removeE0).resolves.toBeDefined();
+      await expect(staleUpdateForE1).rejects.toThrow(
+        /has changed since it was last loaded/,
+      );
+
+      // The rejected stale update must not have been applied — E2 (silently
+      // misdirected target under the old index-only code) is untouched, and
+      // the array reflects only the remove.
+      expect(stored?.certifications).toEqual([entryE1, entryE2]);
+    });
+
+    it('rejects the mutation with a BadRequestException when the merged section would exceed its schema cap', async () => {
+      const existing = emptyMasterDB();
+      existing.certifications = Array.from({ length: 50 }, (_, i) => ({
+        name: `Cert ${i}`,
+        issuer: '',
+        date: '',
+        expiration_date: '',
+        credential_id: '',
+        link: '',
+        description: '',
+      }));
+      prisma.careerProfile.findUnique.mockResolvedValue(toRow('user-1', existing));
+
+      await expect(
+        service.mutateSectionEntry('user-1', {
+          operation: 'add',
+          section: 'certifications',
+          entry: {
+            name: 'One too many',
+            issuer: '',
+            date: '',
+            expiration_date: '',
+            credential_id: '',
+            link: '',
+            description: '',
+          },
+        }),
+      ).rejects.toThrow();
+      expect(prisma.careerProfile.upsert).not.toHaveBeenCalled();
+    });
+  });
+
   describe('skills merge/dedupe (via mergeSection)', () => {
     it('dedupes overlapping skills when merging a new skills entry into an existing profile', async () => {
       const existing = emptyMasterDB();

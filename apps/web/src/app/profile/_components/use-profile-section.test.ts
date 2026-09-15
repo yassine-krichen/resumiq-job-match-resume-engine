@@ -48,7 +48,7 @@ describe('useProfileSection', () => {
     vi.mocked(apiFetch).mockReset();
   });
 
-  it('appends the new entry to the end of the section array and PATCHes the full resulting array', async () => {
+  it('sends a single add-entry operation to PATCH /profile/entries', async () => {
     const profile = buildProfile();
     const onUpdated = vi.fn();
     vi.mocked(apiFetch).mockResolvedValue(buildProfile());
@@ -59,16 +59,18 @@ describe('useProfileSection', () => {
       await result.current.addEntry(newCert);
     });
 
-    expect(apiFetch).toHaveBeenCalledWith('/profile', {
+    expect(apiFetch).toHaveBeenCalledWith('/profile/entries', {
       method: 'PATCH',
       body: JSON.stringify({
-        certifications: [...profile.certifications, newCert],
+        section: 'certifications',
+        operation: 'add',
+        entry: newCert,
       }),
     });
     expect(onUpdated).toHaveBeenCalledWith(buildProfile());
   });
 
-  it('replaces only the entry at the given index and leaves the others untouched', async () => {
+  it('sends a single update-entry operation with the target index to PATCH /profile/entries', async () => {
     const profile = buildProfile();
     vi.mocked(apiFetch).mockResolvedValue(buildProfile());
     const { result } = renderHook(() => useProfileSection(profile, vi.fn(), 'certifications'));
@@ -78,15 +80,19 @@ describe('useProfileSection', () => {
       await result.current.updateEntry(1, updatedCert);
     });
 
-    expect(apiFetch).toHaveBeenCalledWith('/profile', {
+    expect(apiFetch).toHaveBeenCalledWith('/profile/entries', {
       method: 'PATCH',
       body: JSON.stringify({
-        certifications: [profile.certifications[0], updatedCert],
+        section: 'certifications',
+        operation: 'update',
+        index: 1,
+        entry: updatedCert,
+        expectedEntry: profile.certifications[1],
       }),
     });
   });
 
-  it('removes only the entry at the given index, shifting the rest down', async () => {
+  it('sends a single remove-entry operation with the target index to PATCH /profile/entries', async () => {
     const profile = buildProfile();
     vi.mocked(apiFetch).mockResolvedValue(buildProfile());
     const { result } = renderHook(() => useProfileSection(profile, vi.fn(), 'certifications'));
@@ -95,10 +101,13 @@ describe('useProfileSection', () => {
       await result.current.removeEntry(0);
     });
 
-    expect(apiFetch).toHaveBeenCalledWith('/profile', {
+    expect(apiFetch).toHaveBeenCalledWith('/profile/entries', {
       method: 'PATCH',
       body: JSON.stringify({
-        certifications: [profile.certifications[1]],
+        section: 'certifications',
+        operation: 'remove',
+        index: 0,
+        expectedEntry: profile.certifications[0],
       }),
     });
   });
@@ -181,7 +190,17 @@ describe('useProfileSection', () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it('does not deduplicate or block a second save call fired while the first is still in flight — both requests go out (single-flight is not enforced by this hook)', async () => {
+  it('fires two overlapping add-entry calls as two independent single-entry operations, neither depending on a snapshot of the other', async () => {
+    // Each `addEntry` call sends only its own `{ operation: 'add', entry }`
+    // — never a client-computed full array — so it carries no stale
+    // knowledge of the section's current contents. The server merges each
+    // operation against a transaction-fresh read (see
+    // `ProfileService#mutateSectionEntry`), so unlike the old client-array
+    // PATCH, whichever request's lock is acquired second still lands on top
+    // of the first request's write instead of clobbering it. This test
+    // exercises the hook's side (both calls fire and both resolve); the
+    // server-side no-lost-update guarantee is covered by
+    // `profile.service.spec.ts`.
     const profile = buildProfile();
     let resolveFirst!: (value: MasterDB) => void;
     const firstPromise = new Promise<MasterDB>((resolve) => {
@@ -192,11 +211,13 @@ describe('useProfileSection', () => {
 
     const { result } = renderHook(() => useProfileSection(profile, vi.fn(), 'certifications'));
 
+    const firstEntry = profile.certifications[0];
+    const secondEntry = profile.certifications[1];
     let firstAdd!: Promise<void>;
     let secondAdd!: Promise<void>;
     act(() => {
-      firstAdd = result.current.addEntry(profile.certifications[0]);
-      secondAdd = result.current.addEntry(profile.certifications[1]);
+      firstAdd = result.current.addEntry(firstEntry);
+      secondAdd = result.current.addEntry(secondEntry);
     });
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
@@ -206,9 +227,14 @@ describe('useProfileSection', () => {
       await Promise.all([firstAdd, secondAdd]);
     });
 
-    // Both calls fired independently against the same `currentEntries()`
-    // snapshot taken at call time — the hook has no request queue/lock, so
-    // overlapping saves race rather than serialize.
     expect(apiFetch).toHaveBeenCalledTimes(2);
+    expect(apiFetch).toHaveBeenNthCalledWith(1, '/profile/entries', {
+      method: 'PATCH',
+      body: JSON.stringify({ section: 'certifications', operation: 'add', entry: firstEntry }),
+    });
+    expect(apiFetch).toHaveBeenNthCalledWith(2, '/profile/entries', {
+      method: 'PATCH',
+      body: JSON.stringify({ section: 'certifications', operation: 'add', entry: secondEntry }),
+    });
   });
 });

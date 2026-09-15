@@ -196,7 +196,7 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Leadership')).toBeInTheDocument();
   });
 
-  it('adds a new achievement to the existing awards list and PATCHes /profile with the full updated array, not just the new entry', async () => {
+  it('adds a new achievement by sending a single add-entry operation to PATCH /profile/entries, not the full awards array', async () => {
     vi.mocked(apiFetch).mockResolvedValueOnce(
       buildProfile({
         awards_and_honors: [
@@ -220,25 +220,18 @@ describe('ProfilePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /^add achievement$/i }));
 
     await waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith('/profile', {
+      expect(apiFetch).toHaveBeenCalledWith('/profile/entries', {
         method: 'PATCH',
         body: JSON.stringify({
-          awards_and_honors: [
-            {
-              title: 'Existing Award',
-              issuer: '',
-              date: '2023-01',
-              description: '',
-              related_skills: [],
-            },
-            {
-              title: 'New Award',
-              issuer: '',
-              date: '',
-              description: '',
-              related_skills: [],
-            },
-          ],
+          section: 'awards_and_honors',
+          operation: 'add',
+          entry: {
+            title: 'New Award',
+            issuer: '',
+            date: '',
+            description: '',
+            related_skills: [],
+          },
         }),
       }),
     );
