@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { JobCard } from './job-card';
 import type { DiscoverFeedItem } from './types';
@@ -9,6 +9,16 @@ import type { DiscoverFeedItem } from './types';
 // removal callback actually fires — keeps the animation visible instead of
 // the card just vanishing.
 const EXIT_ANIMATION_MS = 200;
+
+// Horizontal drag distance (px) past which a release counts as a swipe
+// instead of snapping back. ~1/3 of the card's max-w-xl (576px) width —
+// far enough to filter out accidental taps/clicks, close enough that a
+// deliberate Tinder-style flick doesn't feel unresponsive.
+const DRAG_THRESHOLD_PX = 120;
+
+// Degrees of rotation per pixel dragged — a subtle tilt so the card feels
+// picked up, without the rotation dominating the gesture.
+const DRAG_ROTATION_FACTOR = 0.05;
 
 type ExitDirection = 'left' | 'right' | null;
 
@@ -30,6 +40,13 @@ export function SwipeDeck({ items, onDismiss, onSwipeRight }: SwipeDeckProps): R
   const top = items[0] ?? null;
   const next = items[1] ?? null;
   const [exitDirection, setExitDirection] = useState<ExitDirection>(null);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartXRef = useRef<number | null>(null);
+  // Guards against a second pointer (e.g. a second touch point on a
+  // multi-touch device) hijacking an in-progress drag: only move/up/cancel
+  // events from the pointer that started the drag are allowed to affect it.
+  const activePointerIdRef = useRef<number | null>(null);
 
   // A newly-arrived top card (a different job id) always starts fully
   // visible, even if the previous card was mid-exit-animation when it left.
@@ -39,6 +56,7 @@ export function SwipeDeck({ items, onDismiss, onSwipeRight }: SwipeDeckProps): R
   if (top?.job.id !== renderedTopId) {
     setRenderedTopId(top?.job.id);
     setExitDirection(null);
+    setDragX(0);
   }
 
   const triggerExit = useCallback(
@@ -51,6 +69,38 @@ export function SwipeDeck({ items, onDismiss, onSwipeRight }: SwipeDeckProps): R
       }, EXIT_ANIMATION_MS);
     },
     [top, exitDirection, onDismiss, onSwipeRight],
+  );
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Ignore additional pointers while one is already driving a drag —
+      // e.g. a second touch landing on the card mid-gesture.
+      if (exitDirection || activePointerIdRef.current !== null) return;
+      activePointerIdRef.current = e.pointerId;
+      dragStartXRef.current = e.clientX;
+      setIsDragging(true);
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    [exitDirection],
+  );
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStartXRef.current === null || e.pointerId !== activePointerIdRef.current) return;
+    setDragX(e.clientX - dragStartXRef.current);
+  }, []);
+
+  const endDrag = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (dragStartXRef.current === null || e.pointerId !== activePointerIdRef.current) return;
+      activePointerIdRef.current = null;
+      dragStartXRef.current = null;
+      setIsDragging(false);
+      if (Math.abs(dragX) > DRAG_THRESHOLD_PX) {
+        triggerExit(dragX > 0 ? 'right' : 'left');
+      }
+      setDragX(0);
+    },
+    [dragX, triggerExit],
   );
 
   useEffect(() => {
@@ -83,6 +133,18 @@ export function SwipeDeck({ items, onDismiss, onSwipeRight }: SwipeDeckProps): R
         ? 'translate-x-[120%] rotate-6 opacity-0'
         : 'translate-x-0 rotate-0 opacity-100';
 
+  // While actively dragging, the card follows the pointer 1:1 with no CSS
+  // transition (via inline style, overriding the class-driven transform
+  // below). On release, the inline style is removed and the class-driven
+  // transform/transition takes over — animating either the swipe-away exit
+  // or the snap-back to center.
+  const dragStyle: React.CSSProperties | undefined = isDragging
+    ? {
+        transform: `translateX(${dragX}px) rotate(${dragX * DRAG_ROTATION_FACTOR}deg)`,
+        transition: 'none',
+      }
+    : undefined;
+
   return (
     <div className="w-full max-w-xl">
       <div className="relative min-h-[420px]">
@@ -92,7 +154,12 @@ export function SwipeDeck({ items, onDismiss, onSwipeRight }: SwipeDeckProps): R
           </div>
         )}
         <div
-          className={`absolute inset-x-0 top-0 transition-all duration-200 ease-in ${exitTransform}`}
+          className={`absolute inset-x-0 top-0 cursor-grab touch-pan-y transition-all duration-200 ease-in active:cursor-grabbing ${exitTransform}`}
+          style={dragStyle}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
         >
           <JobCard item={top} />
         </div>
@@ -111,7 +178,9 @@ export function SwipeDeck({ items, onDismiss, onSwipeRight }: SwipeDeckProps): R
           Apply
         </Button>
       </div>
-      <p className="mt-2 text-center text-xs text-muted-foreground">Use ← to skip, → to apply</p>
+      <p className="mt-2 text-center text-xs text-muted-foreground">
+        Drag the card, or use ← to skip, → to apply
+      </p>
     </div>
   );
 }
