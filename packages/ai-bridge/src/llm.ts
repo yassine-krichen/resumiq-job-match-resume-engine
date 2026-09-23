@@ -77,7 +77,14 @@ async function callFreellmapi(system: string, user: string): Promise<string> {
         ],
         temperature: 0.4,
       }),
-      signal: AbortSignal.timeout(120_000),
+      // freellmapi's "auto" pool (rotating free-tier models) has heavy
+      // latency variance — measured live against the onboarding-ingest
+      // prompt: min 32.5s, p50 ~60s, max 113.6s across 8 real calls (see
+      // `apps/api/src/modules/onboarding/onboarding.service.ts`'s
+      // `PARSE_TIMEOUT_MS` comment). This hard abort needs headroom above
+      // that caller-side soft timeout (120s) so a request that's about to
+      // succeed isn't killed here first.
+      signal: AbortSignal.timeout(180_000),
     });
 
   let res = await request();

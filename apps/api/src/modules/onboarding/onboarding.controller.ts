@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Logger,
   Post,
   Req,
   Res,
@@ -10,7 +11,7 @@ import {
 import { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
-import { OnboardingService } from './onboarding.service';
+import { OnboardingService, IngestUserFacingError } from './onboarding.service';
 import { ProfileService } from '../profile/profile.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { MasterDB } from '@resumiq/ai-bridge';
@@ -21,6 +22,11 @@ import {
   type IngestBodyDto,
   type IngestEntryDto,
 } from '@resumiq/schemas';
+
+/** Generic, client-facing message for any failure that isn't a known `IngestUserFacingError`
+ * — never leak internal error details (zod messages, LLM provider errors) to the browser. */
+const GENERIC_INGEST_ERROR_MESSAGE =
+  'Something went wrong while parsing your text. Please try again.';
 
 const SECTION_BY_TYPE: Record<IngestEntryDto['type'], keyof MasterDB> = {
   experience: 'experience',
@@ -38,6 +44,8 @@ const SECTION_BY_TYPE: Record<IngestEntryDto['type'], keyof MasterDB> = {
 @Controller('onboarding')
 @UseGuards(AuthGuard)
 export class OnboardingController {
+  private readonly logger = new Logger(OnboardingController.name);
+
   constructor(
     private readonly onboardingService: OnboardingService,
     private readonly profileService: ProfileService,
@@ -79,11 +87,19 @@ export class OnboardingController {
 
       send('done', {
         parsed: result.entries,
-        droppedCount: result.droppedCount,
+        droppedEntries: result.droppedEntries,
       });
       res.end();
     } catch (err) {
-      send('error', { message: (err as Error).message });
+      if (err instanceof IngestUserFacingError) {
+        send('error', { message: err.message });
+      } else {
+        this.logger.error(
+          `Unexpected failure during career-text ingest: ${(err as Error).message}`,
+          (err as Error).stack,
+        );
+        send('error', { message: GENERIC_INGEST_ERROR_MESSAGE });
+      }
       res.end();
     }
   }

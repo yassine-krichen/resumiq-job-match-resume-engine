@@ -12,7 +12,8 @@ const RAW_TEXT_MAX_LENGTH = 20000;
 export default function OnboardingPage() {
   const router = useRouter();
   const [rawText, setRawText] = useState('');
-  const { loading, progress, error, parseSummary, entries, ingest } = useIngestCareerText();
+  const { loading, progress, error, parseSummary, entries, droppedEntries, ingest } =
+    useIngestCareerText();
 
   function handleSubmit() {
     if (!rawText.trim()) return;
@@ -74,6 +75,14 @@ export default function OnboardingPage() {
                 {parseSummary.parsed} item{parseSummary.parsed === 1 ? '' : 's'} parsed,{' '}
                 {parseSummary.dropped} couldn&apos;t be extracted.
               </p>
+              <ul className="mt-2 space-y-1">
+                {droppedEntries.map((dropped, i) => (
+                  <li key={i} className="text-xs">
+                    <span className="font-medium">{dropped.type}</span>: {dropped.reason} —{' '}
+                    <span className="italic">{dropped.snippet}</span>
+                  </li>
+                ))}
+              </ul>
               <button
                 onClick={goToReview}
                 className="mt-2 font-medium underline underline-offset-4"

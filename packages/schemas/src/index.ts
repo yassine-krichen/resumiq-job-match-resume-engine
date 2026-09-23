@@ -36,64 +36,78 @@ export const PersonalInfoSchema = z.object({
   links: z.array(z.object({ platform: z.string(), url: z.string().url() })).max(20),
 });
 
-export const ExperienceEntrySchema = withNullKeysStripped(
-  z.object({
-    company: z.string().min(1).max(200),
-    // Frequently absent/unknown from casual raw-text extraction — default to
-    // '' rather than require the LLM to fabricate or omit them, which would
-    // otherwise fail validation and silently drop the whole entry (same
-    // pattern as CertificationSchema below).
-    company_industry: z.string().max(200).default(''),
-    role: z.string().min(1).max(200),
-    location: z.string().max(200).default(''),
-    location_type: z.string().max(100).default(''),
-    startDate: z.string().max(50),
-    endDate: z.string().max(50),
-    isCurrent: z.boolean(),
-    core_competencies: z.array(z.string()).max(30),
-    technologies_used: z.array(z.string()).max(50),
-    raw_achievements: z.array(z.string()).max(30),
-    quantifiable_metrics: z.array(z.string()).max(30),
-  }),
-);
+// The `*Shape` object schemas below are the single source of truth for both
+// the strict, shared schemas (`ExperienceEntrySchema` etc. — used by
+// `MasterDBSchema`/`POST /profile/import`/`ProfileService.mutateSectionEntry`,
+// which must stay at least as strict as before) and the onboarding-ingest
+// path (further below), which layers lenient coercion of the AI's common
+// shape drift *on top of* these same shapes rather than relaxing the shapes
+// themselves. A shared shape only carries a relaxation here when it's a
+// deliberate, harmless one that also makes sense for a human-edited/imported
+// payload — e.g. `.default([])` on a genuinely optional list field so an
+// omitted array doesn't fail validation.
 
-export const ProjectEntrySchema = withNullKeysStripped(
-  z.object({
-    name: z.string().min(1).max(200),
-    context: z.string().max(2000).default(''),
-    // LLM extraction rarely has a well-formed URL for every link it mentions
-    // (e.g. "hosted on a private repo") — relax to a plain string rather than
-    // failing validation on an otherwise-good entry.
-    links: z.array(z.object({ type: z.string(), url: z.string() })).max(10),
-    startDate: z.string().max(50),
-    endDate: z.string().max(50),
-    technologies_used: z.array(z.string()).max(50),
-    raw_achievements: z.array(z.string()).max(30),
-    quantifiable_metrics: z.array(z.string()).max(30),
-  }),
-);
+const ExperienceEntryShape = z.object({
+  company: z.string().min(1).max(200),
+  // Frequently absent/unknown from casual raw-text extraction — default to
+  // '' rather than require the LLM to fabricate or omit them, which would
+  // otherwise fail validation and silently drop the whole entry (same
+  // pattern as CertificationSchema below).
+  company_industry: z.string().max(200).default(''),
+  role: z.string().min(1).max(200),
+  location: z.string().max(200).default(''),
+  location_type: z.string().max(100).default(''),
+  startDate: z.string().max(50),
+  endDate: z.string().max(50),
+  isCurrent: z.boolean(),
+  // These are genuinely optional facts a caller may have no info for (e.g. a
+  // role with no explicit "competencies" list) — defaulted to `[]` rather
+  // than required, a deliberate relaxation from a bare required array.
+  core_competencies: z.array(z.string()).max(30).default([]),
+  technologies_used: z.array(z.string()).max(50).default([]),
+  raw_achievements: z.array(z.string()).max(30).default([]),
+  quantifiable_metrics: z.array(z.string()).max(30).default([]),
+});
+export const ExperienceEntrySchema = withNullKeysStripped(ExperienceEntryShape);
 
-export const EducationEntrySchema = withNullKeysStripped(
-  z.object({
-    institution: z.string().min(1).max(200),
-    // Frequently absent/unknown from casual raw-text extraction — default to
-    // '' rather than require the LLM to fabricate or omit it, which would
-    // otherwise fail validation and silently drop the whole entry (same
-    // pattern as CertificationSchema below).
-    degree_type: z.string().max(100).default(''),
-    major: z.string().min(1).max(200),
-    minor: z.string().max(200).default(''),
-    location: z.string().max(200).default(''),
-    startDate: z.string().max(50),
-    endDate: z.string().max(50),
-    gpa: z.string().max(20),
-    honors: z.array(z.string()).max(20),
-    relevant_coursework: z.array(z.string()).max(30),
-    thesis_or_capstone: z.string().max(500).default(''),
-    extracurriculars: z.array(z.string()).max(20),
-    description: z.string().max(5000).default(''),
-  }),
-);
+const ProjectEntryShape = z.object({
+  name: z.string().min(1).max(200),
+  context: z.string().max(2000).default(''),
+  links: z.array(z.object({ type: z.string(), url: z.string() })).max(10).default([]),
+  startDate: z.string().max(50),
+  endDate: z.string().max(50),
+  // See the same-named fields on `ExperienceEntryShape` above — optional
+  // facts a caller legitimately has nothing for, rather than a required
+  // field.
+  technologies_used: z.array(z.string()).max(50).default([]),
+  raw_achievements: z.array(z.string()).max(30).default([]),
+  quantifiable_metrics: z.array(z.string()).max(30).default([]),
+});
+export const ProjectEntrySchema = withNullKeysStripped(ProjectEntryShape);
+
+const EducationEntryShape = z.object({
+  institution: z.string().min(1).max(200),
+  // Frequently absent/unknown from casual raw-text extraction — default to
+  // '' rather than require the LLM to fabricate or omit it, which would
+  // otherwise fail validation and silently drop the whole entry (same
+  // pattern as CertificationSchema below).
+  degree_type: z.string().max(100).default(''),
+  major: z.string().min(1).max(200),
+  minor: z.string().max(200).default(''),
+  location: z.string().max(200).default(''),
+  startDate: z.string().max(50),
+  endDate: z.string().max(50),
+  gpa: z.string().max(20),
+  // See the same-named fields on `ExperienceEntryShape` above — optional
+  // facts a caller legitimately has nothing for, rather than a required
+  // field.
+  honors: z.array(z.string()).max(20).default([]),
+  relevant_coursework: z.array(z.string()).max(30).default([]),
+  thesis_or_capstone: z.string().max(500).default(''),
+  extracurriculars: z.array(z.string()).max(20).default([]),
+  description: z.string().max(5000).default(''),
+});
+export const EducationEntrySchema = withNullKeysStripped(EducationEntryShape);
 
 export const SkillsSchema = z.object({
   programming_languages: z.array(z.string()).max(150),
@@ -106,76 +120,71 @@ export const SkillsSchema = z.object({
   soft_skills: z.array(z.string()).max(100),
 });
 
-export const CertificationSchema = withNullKeysStripped(
-  z.object({
-    name: z.string().min(1).max(200),
-    // Frequently absent/unknown from casual raw-text extraction — default to
-    // '' rather than require the LLM to fabricate or omit it, which would
-    // otherwise fail validation and silently drop the whole entry (same
-    // pattern as the fields below).
-    issuer: z.string().max(200).default(''),
-    // Frequently absent from casual raw-text extraction (the user rarely
-    // states an exact certification date) — default to '' like the fields
-    // below rather than require the LLM to fabricate or omit it, which
-    // would otherwise fail validation and silently drop the whole entry.
-    date: z.string().max(50).default(''),
-    // These are frequently absent from casual raw-text extraction (the user
-    // rarely states an expiration date, credential ID, or verification link)
-    // — default to '' rather than require the LLM to fabricate or omit them,
-    // which would otherwise fail validation and silently drop the whole entry.
-    expiration_date: z.string().max(50).default(''),
-    credential_id: z.string().max(200).default(''),
-    link: z.string().max(2000).default(''),
-    description: z.string().max(5000).default(''),
-  }),
-);
+const CertificationShape = z.object({
+  name: z.string().min(1).max(200),
+  // Frequently absent/unknown from casual raw-text extraction — default to
+  // '' rather than require the LLM to fabricate or omit it, which would
+  // otherwise fail validation and silently drop the whole entry (same
+  // pattern as the fields below).
+  issuer: z.string().max(200).default(''),
+  // Frequently absent from casual raw-text extraction (the user rarely
+  // states an exact certification date) — default to '' like the fields
+  // below rather than require the LLM to fabricate or omit it, which
+  // would otherwise fail validation and silently drop the whole entry.
+  date: z.string().max(50).default(''),
+  // These are frequently absent from casual raw-text extraction (the user
+  // rarely states an expiration date, credential ID, or verification link)
+  // — default to '' rather than require the LLM to fabricate or omit them,
+  // which would otherwise fail validation and silently drop the whole entry.
+  expiration_date: z.string().max(50).default(''),
+  credential_id: z.string().max(200).default(''),
+  link: z.string().max(2000).default(''),
+  description: z.string().max(5000).default(''),
+});
+export const CertificationSchema = withNullKeysStripped(CertificationShape);
 
-export const AwardSchema = withNullKeysStripped(
-  z.object({
-    title: z.string().min(1).max(200),
-    // Frequently absent/unknown from casual raw-text extraction — default to
-    // '' rather than require the LLM to fabricate or omit them, which would
-    // otherwise fail validation and silently drop the whole entry (same
-    // pattern as CertificationSchema above).
-    issuer: z.string().max(200).default(''),
-    date: z.string().max(50).default(''),
-    description: z.string().max(5000).default(''),
-    related_skills: z.array(z.string()).max(20).optional(),
-  }),
-);
+const AwardShape = z.object({
+  title: z.string().min(1).max(200),
+  // Frequently absent/unknown from casual raw-text extraction — default to
+  // '' rather than require the LLM to fabricate or omit them, which would
+  // otherwise fail validation and silently drop the whole entry (same
+  // pattern as CertificationSchema above).
+  issuer: z.string().max(200).default(''),
+  date: z.string().max(50).default(''),
+  description: z.string().max(5000).default(''),
+  related_skills: z.array(z.string()).max(20).optional(),
+});
+export const AwardSchema = withNullKeysStripped(AwardShape);
 
-export const SummaryEntrySchema = withNullKeysStripped(
-  z.object({
-    target_role: z.string().min(1).max(200),
-    content: z.string().min(1).max(5000),
-  }),
-);
+const SummaryEntryShape = z.object({
+  target_role: z.string().min(1).max(200),
+  content: z.string().min(1).max(5000),
+});
+export const SummaryEntrySchema = withNullKeysStripped(SummaryEntryShape);
 
-export const PublicationEntrySchema = withNullKeysStripped(
-  z.object({
-    title: z.string().min(1).max(200),
-    venue: z.string().max(200).optional(),
-    date: z.string().max(50).default(''),
-    url: z.string().max(2000).optional(),
-    description: z.string().max(5000).optional(),
-  }),
-);
+const PublicationEntryShape = z.object({
+  title: z.string().min(1).max(200),
+  venue: z.string().max(200).optional(),
+  date: z.string().max(50).default(''),
+  url: z.string().max(2000).optional(),
+  description: z.string().max(5000).optional(),
+});
+export const PublicationEntrySchema = withNullKeysStripped(PublicationEntryShape);
 
-export const VolunteeringEntrySchema = withNullKeysStripped(
-  z.object({
-    organization: z.string().min(1).max(200),
-    role: z.string().min(1).max(200),
-    location: z.string().max(200).optional(),
-    // Frequently absent/unknown from casual raw-text extraction — relax to
-    // optional (same pattern as the sibling fields below) rather than
-    // require the LLM to fabricate or omit it, which would otherwise fail
-    // validation and silently drop the whole entry.
-    startDate: z.string().max(50).optional(),
-    endDate: z.string().max(50).optional(),
-    isCurrent: z.boolean().optional(),
-    description: z.string().max(5000).optional(),
-  }),
-);
+const VolunteeringEntryShape = z.object({
+  organization: z.string().min(1).max(200),
+  role: z.string().min(1).max(200),
+  location: z.string().max(200).optional(),
+  // Frequently absent/unknown from casual raw-text extraction — relax to
+  // optional (same pattern as the sibling fields below) rather than
+  // require the LLM to fabricate or omit it, which would otherwise fail
+  // validation and silently drop the whole entry.
+  startDate: z.string().max(50).optional(),
+  endDate: z.string().max(50).optional(),
+  isCurrent: z.boolean().optional(),
+  description: z.string().max(5000).optional(),
+});
+export const VolunteeringEntrySchema = withNullKeysStripped(VolunteeringEntryShape);
 
 // A single interest is a short freeform tag (e.g. "Competitive Programming")
 // — same bound as other short label fields (Award.title, Certification.name).
@@ -425,32 +434,620 @@ export const IngestBodySchema = z.object({
 // Onboarding "paste raw text" ingestion may surface multiple distinct career
 // facts (a job, a cert, a project) in one paste — the LLM returns an array of
 // typed entries rather than a single best-guess type.
+const IngestSkillsEntrySchema = withNullKeysStripped(SkillsSchema.partial());
+
 export const IngestEntrySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('experience'), entry: ExperienceEntrySchema }),
   z.object({ type: z.literal('project'), entry: ProjectEntrySchema }),
   z.object({ type: z.literal('education'), entry: EducationEntrySchema }),
   z.object({ type: z.literal('certification'), entry: CertificationSchema }),
   z.object({ type: z.literal('award'), entry: AwardSchema }),
-  z.object({ type: z.literal('skills'), entry: withNullKeysStripped(SkillsSchema.partial()) }),
+  z.object({ type: z.literal('skills'), entry: IngestSkillsEntrySchema }),
   z.object({ type: z.literal('summary'), entry: SummaryEntrySchema }),
   z.object({ type: z.literal('publication'), entry: PublicationEntrySchema }),
   z.object({ type: z.literal('volunteering'), entry: VolunteeringEntrySchema }),
   z.object({ type: z.literal('interest'), entry: InterestEntrySchema }),
 ]);
 
+// ── Onboarding-ingest field coercions ───────────────────────────────────────
+// The onboarding "paste raw text" flow (see `toIngestDraft` below) runs
+// against freellmapi's `model: "auto"` — a rotating pool of free-tier models
+// with heavy shape drift. These coercions absorb the common drift patterns
+// observed live so a well-extracted entry isn't dropped over a formatting
+// quirk. They're applied ONLY on the ingest path (layered on top of the
+// shared strict `*Shape` schemas above via `z.preprocess`, further below) —
+// never on the shared schemas themselves, since those also gate
+// `POST /profile/import` and manual profile-edit payloads, which must stay
+// at least as strict/untrusted as raw LLM output.
+
+/**
+ * Bullet/prose array fields (e.g. `raw_achievements`, `quantifiable_metrics`)
+ * sometimes come back as a single string with embedded newlines or bullet
+ * markers instead of a JSON array. Split on newlines, strip leading bullet
+ * markers, trim, and drop empty lines; non-string array items are stringified
+ * rather than dropped.
+ */
+function coerceBulletListValue(val: unknown): unknown {
+  if (Array.isArray(val)) {
+    return val.map((item) => (typeof item === 'string' ? item : JSON.stringify(item)));
+  }
+  if (typeof val === 'string') {
+    return val
+      .split('\n')
+      .map((line) => line.replace(/^\s*[-•*]\s*/, '').trim())
+      .filter(Boolean);
+  }
+  return val;
+}
+
+/**
+ * Tag-list fields (e.g. `technologies_used`, `core_competencies`, skills
+ * categories, `honors`) sometimes come back as a single comma/semicolon/
+ * newline-separated string instead of a JSON array.
+ */
+function coerceTagListValue(val: unknown): unknown {
+  if (Array.isArray(val)) {
+    return val.map((item) => (typeof item === 'string' ? item : JSON.stringify(item)));
+  }
+  if (typeof val === 'string') {
+    return val
+      .split(/[,;\n]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return val;
+}
+
+/**
+ * `isCurrent` frequently arrives as a string ("true"/"yes"/"present") rather
+ * than a JSON boolean. Coerces the common truthy/falsy string spellings
+ * (case-insensitive); leaves other values untouched so a still-invalid value
+ * surfaces as a validation failure rather than being silently swallowed.
+ */
+function coerceLooseBooleanValue(val: unknown): unknown {
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'string') {
+    const normalized = val.trim().toLowerCase();
+    if (['true', 'yes', 'present', 'current'].includes(normalized)) return true;
+    if (['false', 'no'].includes(normalized)) return false;
+  }
+  return val;
+}
+
+/** `gpa` occasionally arrives as a bare JSON number (e.g. `3.8`) rather than a string. */
+function coerceGpaValue(val: unknown): unknown {
+  return typeof val === 'number' ? String(val) : val;
+}
+
+/**
+ * A project link is occasionally a bare URL string ("hosted at https://...")
+ * rather than the documented `{ type, url }` object.
+ */
+function coerceProjectLinksValue(val: unknown): unknown {
+  if (!Array.isArray(val)) return val;
+  return val.map((item) => (typeof item === 'string' ? { type: '', url: item } : item));
+}
+
+/**
+ * An `interest` entry is documented as a bare string, but sometimes arrives
+ * as `{ name | title | interest | value: "..." }` instead.
+ */
+function coerceInterestValue(val: unknown): unknown {
+  if (val !== null && typeof val === 'object') {
+    const obj = val as Record<string, unknown>;
+    const candidate = obj.name ?? obj.title ?? obj.interest ?? obj.value;
+    if (typeof candidate === 'string') return candidate;
+  }
+  return val;
+}
+
+/**
+ * Unwraps a field schema (possibly `.optional()`/`.default()`-wrapped) down
+ * to its underlying `ZodArray`, if it is one. Used to read a field's declared
+ * max length directly off the shared shape schema rather than duplicating
+ * the bound in a second, driftable constant.
+ */
+function unwrapArraySchema(schema: z.ZodTypeAny): z.ZodArray<z.ZodTypeAny> | null {
+  if (schema instanceof z.ZodDefault || schema instanceof z.ZodOptional) {
+    return unwrapArraySchema(schema._def.innerType);
+  }
+  return schema instanceof z.ZodArray ? schema : null;
+}
+
+/** Reads the `.max(N)` bound off a shared shape's array field, if any. */
+function arrayMaxLength(schema: z.ZodTypeAny): number | undefined {
+  const arraySchema = unwrapArraySchema(schema);
+  return arraySchema?._def.maxLength?.value ?? undefined;
+}
+
+/**
+ * Applies `coerceFn` to `obj[key]` (only if the key is present) and, when the
+ * coerced result is an array, clamps it to `maxLen` (keeping the first N
+ * items) — so a well-extracted entry with e.g. 31 `raw_achievements` isn't
+ * dropped/flagged over 1 item past the shared schema's `.max(30)`, it's
+ * clamped and the rest silently trimmed, same as any other array-shortening
+ * edit a user could make themselves.
+ */
+function coerceAndClampArrayField(
+  obj: Record<string, unknown>,
+  key: string,
+  coerceFn: (val: unknown) => unknown,
+  maxLen: number | undefined,
+): void {
+  if (!(key in obj)) return;
+  const coerced = coerceFn(obj[key]);
+  obj[key] = Array.isArray(coerced) && maxLen !== undefined ? coerced.slice(0, maxLen) : coerced;
+}
+
+/** Shallow-copies `raw` if it's a plain object, otherwise returns it unchanged. */
+function shallowCopyIfObject(raw: unknown): Record<string, unknown> {
+  return typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+    ? { ...(raw as Record<string, unknown>) }
+    : {};
+}
+
+const CURRENT_ROLE_END_DATE_PATTERN = /^(present|current|now|ongoing|to date)$/i;
+
+/**
+ * The free-tier LLM sometimes reports a currently-held role's `endDate` as
+ * the literal word "Present"/"Current"/"Ongoing"/etc. rather than the empty
+ * string the schema documents for an open-ended role, or reports
+ * `isCurrent: true` while leaving `endDate` absent/null entirely. Either one
+ * otherwise flags a genuinely current role as incomplete over a field it has
+ * no real value for (observed live: "Mar 2022 - Present" flagged for a
+ * missing `endDate`). Mutates `obj` in place; assumes `isCurrent` has already
+ * been boolean-coerced by the caller.
+ */
+function coerceCurrentRoleDates(obj: Record<string, unknown>): void {
+  if (typeof obj.endDate === 'string' && CURRENT_ROLE_END_DATE_PATTERN.test(obj.endDate.trim())) {
+    obj.endDate = '';
+    obj.isCurrent = true;
+    return;
+  }
+  if (obj.isCurrent === true && (obj.endDate === undefined || obj.endDate === null)) {
+    obj.endDate = '';
+  }
+}
+
+function coerceExperienceIngestEntry(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  const obj = shallowCopyIfObject(raw);
+  coerceAndClampArrayField(
+    obj,
+    'core_competencies',
+    coerceTagListValue,
+    arrayMaxLength(ExperienceEntryShape.shape.core_competencies),
+  );
+  coerceAndClampArrayField(
+    obj,
+    'technologies_used',
+    coerceTagListValue,
+    arrayMaxLength(ExperienceEntryShape.shape.technologies_used),
+  );
+  coerceAndClampArrayField(
+    obj,
+    'raw_achievements',
+    coerceBulletListValue,
+    arrayMaxLength(ExperienceEntryShape.shape.raw_achievements),
+  );
+  coerceAndClampArrayField(
+    obj,
+    'quantifiable_metrics',
+    coerceBulletListValue,
+    arrayMaxLength(ExperienceEntryShape.shape.quantifiable_metrics),
+  );
+  // Omitted entirely on plenty of real pastes — default to `false` here
+  // (rather than in the shared schema, which requires it) so an entry isn't
+  // flagged incomplete over a field the model legitimately had nothing to
+  // report.
+  obj.isCurrent = 'isCurrent' in obj ? coerceLooseBooleanValue(obj.isCurrent) : false;
+  coerceCurrentRoleDates(obj);
+  return obj;
+}
+
+function coerceProjectIngestEntry(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  const obj = shallowCopyIfObject(raw);
+  coerceAndClampArrayField(
+    obj,
+    'links',
+    coerceProjectLinksValue,
+    arrayMaxLength(ProjectEntryShape.shape.links),
+  );
+  coerceAndClampArrayField(
+    obj,
+    'technologies_used',
+    coerceTagListValue,
+    arrayMaxLength(ProjectEntryShape.shape.technologies_used),
+  );
+  coerceAndClampArrayField(
+    obj,
+    'raw_achievements',
+    coerceBulletListValue,
+    arrayMaxLength(ProjectEntryShape.shape.raw_achievements),
+  );
+  coerceAndClampArrayField(
+    obj,
+    'quantifiable_metrics',
+    coerceBulletListValue,
+    arrayMaxLength(ProjectEntryShape.shape.quantifiable_metrics),
+  );
+  return obj;
+}
+
+function coerceEducationIngestEntry(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  const obj = shallowCopyIfObject(raw);
+  if ('gpa' in obj) obj.gpa = coerceGpaValue(obj.gpa);
+  coerceAndClampArrayField(
+    obj,
+    'honors',
+    coerceTagListValue,
+    arrayMaxLength(EducationEntryShape.shape.honors),
+  );
+  coerceAndClampArrayField(
+    obj,
+    'relevant_coursework',
+    coerceTagListValue,
+    arrayMaxLength(EducationEntryShape.shape.relevant_coursework),
+  );
+  coerceAndClampArrayField(
+    obj,
+    'extracurriculars',
+    coerceTagListValue,
+    arrayMaxLength(EducationEntryShape.shape.extracurriculars),
+  );
+  return obj;
+}
+
+function coerceAwardIngestEntry(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  const obj = shallowCopyIfObject(raw);
+  coerceAndClampArrayField(
+    obj,
+    'related_skills',
+    coerceTagListValue,
+    arrayMaxLength(AwardShape.shape.related_skills),
+  );
+  return obj;
+}
+
+function coerceVolunteeringIngestEntry(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  const obj = shallowCopyIfObject(raw);
+  if ('isCurrent' in obj) obj.isCurrent = coerceLooseBooleanValue(obj.isCurrent);
+  coerceCurrentRoleDates(obj);
+  return obj;
+}
+
+function coerceSkillsIngestEntry(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  const obj = shallowCopyIfObject(raw);
+  for (const key of [
+    'programming_languages',
+    'frameworks_and_libraries',
+    'infrastructure_and_tools',
+    'databases',
+    'soft_skills',
+  ] as const) {
+    coerceAndClampArrayField(obj, key, coerceTagListValue, arrayMaxLength(SkillsSchema.shape[key]));
+  }
+  return obj;
+}
+
+// ── Onboarding-ingest lenient drafts ────────────────────────────────────────
+// Strict `IngestEntrySchema` above stays the server-side gate for what can
+// actually be *saved* to a profile (`ConfirmIngestSchema` reuses it
+// unmodified). But at parse time, an entry that fails strict validation over
+// one bad/missing field (e.g. a missing `startDate`) should surface to the
+// user as an editable draft — not vanish silently. `toIngestDraft` below is
+// the lenient path: normalize the AI's top-level shape drift, apply the
+// per-type ingest-only coercions above, try strict validation, and on
+// failure fall back to a per-type "lenient" schema (every genuinely-required
+// field optional) with only the offending keys stripped, recording those
+// keys as `missingFields` so the review UI can prompt the user to fill them
+// in. An entry is only fully dropped when its type can't be recognized at
+// all or even the lenient parse fails outright.
+
+type KnownIngestType = IngestEntryDto['type'];
+
+const KNOWN_INGEST_TYPES = new Set<KnownIngestType>([
+  'experience',
+  'project',
+  'education',
+  'certification',
+  'award',
+  'skills',
+  'summary',
+  'publication',
+  'volunteering',
+  'interest',
+]);
+
+// Conservative synonym map for the free-tier LLM's common type-name drift
+// (casing/pluralization/near-synonyms) — deliberately narrow so an
+// ambiguous/unrecognized type is dropped rather than silently miscategorized.
+const INGEST_TYPE_SYNONYMS: Record<string, KnownIngestType> = {
+  job: 'experience',
+  work: 'experience',
+  employment: 'experience',
+  role: 'experience',
+  position: 'experience',
+  internship: 'experience',
+  degree: 'education',
+  school: 'education',
+  academic: 'education',
+  study: 'education',
+  cert: 'certification',
+  certificate: 'certification',
+  license: 'certification',
+  awards: 'award',
+  honor: 'award',
+  achievement: 'award',
+  hobby: 'interest',
+  hobbies: 'interest',
+  interests: 'interest',
+  volunteer: 'volunteering',
+  leadership: 'volunteering',
+  talk: 'publication',
+  speaking: 'publication',
+  article: 'publication',
+  publications: 'publication',
+  paper: 'publication',
+  profile_summary: 'summary',
+  bio: 'summary',
+  about: 'summary',
+  objective: 'summary',
+  skill: 'skills',
+  skillset: 'skills',
+  personal_project: 'project',
+  side_project: 'project',
+  projects: 'project',
+};
+
+/**
+ * Recovers `{ type, entry }` from an arbitrary AI-returned entry object,
+ * absorbing observed shape drift: type casing/synonyms, and `entry` nested
+ * under `data`/`value` or flattened onto the top-level object instead of
+ * under an `entry` key. Returns `null` when the object isn't recognizable at
+ * all (not an object, or `type` doesn't map to a known type).
+ */
+function normalizeIngestEntryShape(raw: unknown): { type: KnownIngestType; entry: unknown } | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+
+  if (typeof obj.type !== 'string') return null;
+  const normalizedTypeName = obj.type.trim().toLowerCase();
+  const type = INGEST_TYPE_SYNONYMS[normalizedTypeName] ?? (normalizedTypeName as KnownIngestType);
+  if (!KNOWN_INGEST_TYPES.has(type)) return null;
+
+  let entry: unknown = obj.entry ?? obj.data ?? obj.value;
+  if (entry === undefined) {
+    // Flattened: every key except "type" belongs to the entry itself.
+    const { type: _type, ...rest } = obj;
+    entry = rest;
+  }
+  return { type, entry };
+}
+
+/**
+ * Top-level keys of a per-type `*Shape` object schema that are actually
+ * required — i.e. neither `.optional()` nor `.default(...)`. Used to filter
+ * `toIngestDraft`'s `missingFields` down to fields the user genuinely needs
+ * to fill in when they're absent from the raw entry.
+ */
+function requiredKeysOf(shape: z.ZodObject<z.ZodRawShape>): Set<string> {
+  return new Set(
+    Object.entries(shape.shape)
+      .filter(([, fieldSchema]) => !(fieldSchema instanceof z.ZodOptional || fieldSchema instanceof z.ZodDefault))
+      .map(([key]) => key),
+  );
+}
+
+/**
+ * Builds a "lenient" version of a shared `*Shape` object schema: every
+ * genuinely-required field becomes optional, while fields that already carry
+ * a `.default(...)` keep that default (rather than `.partial()`, which wraps
+ * a `ZodDefault` in `ZodOptional` too and turns an absent defaulted field
+ * into `undefined` instead of its declared default, e.g. `[]`).
+ */
+function toLenientShape<Shape extends z.ZodRawShape>(shape: z.ZodObject<Shape>): z.ZodObject<z.ZodRawShape> {
+  const lenientShape: z.ZodRawShape = {};
+  for (const [key, fieldSchema] of Object.entries(shape.shape)) {
+    lenientShape[key] =
+      fieldSchema instanceof z.ZodOptional || fieldSchema instanceof z.ZodDefault
+        ? fieldSchema
+        : fieldSchema.optional();
+  }
+  return z.object(lenientShape);
+}
+
+/** `entry === undefined` is the natural "raw entry isn't an object" case. */
+function ingestPreprocess<T extends z.ZodTypeAny>(coerceFn: (raw: unknown) => unknown, schema: T): z.ZodType<z.output<T>> {
+  return withNullKeysStripped(z.preprocess(coerceFn, schema)) as unknown as z.ZodType<z.output<T>>;
+}
+
+const ENTRY_SCHEMA_BY_TYPE: Record<Exclude<KnownIngestType, 'interest'>, z.ZodTypeAny> = {
+  experience: ingestPreprocess(coerceExperienceIngestEntry, ExperienceEntryShape),
+  project: ingestPreprocess(coerceProjectIngestEntry, ProjectEntryShape),
+  education: ingestPreprocess(coerceEducationIngestEntry, EducationEntryShape),
+  certification: CertificationSchema,
+  award: ingestPreprocess(coerceAwardIngestEntry, AwardShape),
+  skills: ingestPreprocess(coerceSkillsIngestEntry, SkillsSchema.partial()),
+  summary: SummaryEntrySchema,
+  publication: PublicationEntrySchema,
+  volunteering: ingestPreprocess(coerceVolunteeringIngestEntry, VolunteeringEntryShape),
+};
+
+// `skills` is already fully-partial at the strict level (no required
+// fields), so its "lenient" schema is the same schema — there's nothing
+// further to relax.
+const LENIENT_ENTRY_SCHEMA_BY_TYPE: Record<Exclude<KnownIngestType, 'interest'>, z.ZodTypeAny> = {
+  experience: ingestPreprocess(coerceExperienceIngestEntry, toLenientShape(ExperienceEntryShape)),
+  project: ingestPreprocess(coerceProjectIngestEntry, toLenientShape(ProjectEntryShape)),
+  education: ingestPreprocess(coerceEducationIngestEntry, toLenientShape(EducationEntryShape)),
+  certification: withNullKeysStripped(toLenientShape(CertificationShape)),
+  award: ingestPreprocess(coerceAwardIngestEntry, toLenientShape(AwardShape)),
+  skills: ENTRY_SCHEMA_BY_TYPE.skills,
+  summary: withNullKeysStripped(toLenientShape(SummaryEntryShape)),
+  publication: withNullKeysStripped(toLenientShape(PublicationEntryShape)),
+  volunteering: ingestPreprocess(coerceVolunteeringIngestEntry, toLenientShape(VolunteeringEntryShape)),
+};
+
+const REQUIRED_KEYS_BY_TYPE: Record<Exclude<KnownIngestType, 'interest'>, Set<string>> = {
+  experience: requiredKeysOf(ExperienceEntryShape),
+  project: requiredKeysOf(ProjectEntryShape),
+  education: requiredKeysOf(EducationEntryShape),
+  certification: requiredKeysOf(CertificationShape),
+  award: requiredKeysOf(AwardShape),
+  // Already fully optional at the strict level — nothing is ever "required".
+  skills: new Set(),
+  summary: requiredKeysOf(SummaryEntryShape),
+  publication: requiredKeysOf(PublicationEntryShape),
+  volunteering: requiredKeysOf(VolunteeringEntryShape),
+};
+
+// Ingest-only interest schema — coerces the common `{ name | title | ... }`
+// object shape drift into the bare string the shared `InterestEntrySchema`
+// requires. Kept off the shared schema so `POST /profile/import` /
+// `mutateSectionEntry` reject that shape rather than silently accepting it.
+const IngestInterestEntrySchema = z.preprocess(coerceInterestValue, InterestEntrySchema);
+
+export const IngestDraftEntrySchema = z.object({
+  type: z.enum([
+    'experience',
+    'project',
+    'education',
+    'certification',
+    'award',
+    'skills',
+    'summary',
+    'publication',
+    'volunteering',
+    'interest',
+  ]),
+  entry: z.unknown(),
+  // Dotted top-level field names that failed strict validation and were
+  // stripped to let the rest of the entry survive as an editable draft, or
+  // were required and absent entirely. Never trust this list after the user
+  // edits the entry client-side — recompute against the strict schema
+  // instead (see review page).
+  missingFields: z.array(z.string()),
+});
+
+export type IngestDraftEntryDto = z.infer<typeof IngestDraftEntrySchema>;
+
+export interface IngestDroppedEntry {
+  type: string;
+  reason: string;
+  snippet: string;
+}
+
+function snippetOf(raw: unknown): string {
+  try {
+    return JSON.stringify(raw).slice(0, 300);
+  } catch {
+    return String(raw).slice(0, 300);
+  }
+}
+
+/**
+ * Converts one AI-returned raw entry into either a survivable
+ * `IngestDraftEntryDto` (complete or incomplete-but-editable) or a full drop
+ * reason. Never throws — every branch is a `safeParse`.
+ */
+export function toIngestDraft(raw: unknown): IngestDraftEntryDto | IngestDroppedEntry {
+  const snippet = snippetOf(raw);
+  const shaped = normalizeIngestEntryShape(raw);
+  if (!shaped) {
+    const typeGuess =
+      typeof raw === 'object' && raw !== null && 'type' in raw
+        ? String((raw as { type?: unknown }).type)
+        : 'unknown';
+    return { type: typeGuess, reason: 'unrecognized or missing "type"', snippet };
+  }
+  const { type, entry } = shaped;
+
+  if (type === 'interest') {
+    const parsed = IngestInterestEntrySchema.safeParse(entry);
+    if (parsed.success) {
+      return { type, entry: parsed.data, missingFields: [] };
+    }
+    // No sub-fields to partially recover for a bare-string entry — either
+    // it's a usable string or the whole item is incomplete.
+    return { type, entry: '', missingFields: ['value'] };
+  }
+
+  // A root-level Zod issue (path []) — e.g. the entry itself is a bare string
+  // or array rather than an object — leaves `badKeys` empty below, so the
+  // lenient parse would otherwise see `{}` and pass with no missingFields.
+  // Reject that case outright instead of silently inventing an empty entry.
+  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    return { type, reason: 'entry is not an object', snippet };
+  }
+
+  const strictSchema = ENTRY_SCHEMA_BY_TYPE[type];
+  const strictResult = strictSchema.safeParse(entry);
+  if (strictResult.success) {
+    return { type, entry: strictResult.data, missingFields: [] };
+  }
+
+  const lenientSchema = LENIENT_ENTRY_SCHEMA_BY_TYPE[type];
+  const badKeys = Array.from(
+    new Set(
+      strictResult.error.issues
+        .map((issue) => (issue.path.length > 0 ? String(issue.path[0]) : ''))
+        .filter(Boolean),
+    ),
+  );
+  const entryObj = entry as Record<string, unknown>;
+  const cleanedEntry = Object.fromEntries(
+    Object.entries(entryObj).filter(([key]) => !badKeys.includes(key)),
+  );
+  const lenientResult = lenientSchema.safeParse(cleanedEntry);
+  if (!lenientResult.success) {
+    return { type, reason: `failed lenient validation: ${lenientResult.error.message}`, snippet };
+  }
+  // A badKey is reported to the user when either (a) it was actually present
+  // in the raw entry and failed validation — a value that needs fixing,
+  // regardless of whether the field itself is required or optional — or (b)
+  // it's absent and the strict schema requires it. A badKey that's simply
+  // absent from an optional field needs no user action (it was already
+  // dropped/defaulted by `lenientSchema` above).
+  const requiredKeys = REQUIRED_KEYS_BY_TYPE[type];
+  const missingFields = badKeys.filter((key) => key in entryObj || requiredKeys.has(key));
+  // Backstop: `badKeys` is derived from *strict-schema* issues, which can
+  // miss a required field entirely absent from a shape whose Zod validation
+  // short-circuits before reaching it (or any other drift between the strict
+  // and lenient schemas). Guarantee the invariant callers rely on — a draft
+  // with `missingFields: []` always passes `IngestEntrySchema` — by also
+  // flagging any required key absent from the final lenient-parsed entry.
+  const finalEntry = lenientResult.data as Record<string, unknown>;
+  for (const key of requiredKeys) {
+    if (!(key in finalEntry) && !missingFields.includes(key)) {
+      missingFields.push(key);
+    }
+  }
+  return { type, entry: lenientResult.data, missingFields };
+}
+
 export const IngestResultSchema = z.object({
-  entries: z.array(IngestEntrySchema).min(1).max(100),
-  // Count of AI-extracted entries dropped for failing per-entry validation
-  // (see `parseCareerText`'s per-entry `safeParse` loop) — surfaced to the
-  // frontend so a partially-failed paste doesn't silently look fully parsed.
-  droppedCount: z.number().int().min(0).default(0),
+  entries: z.array(IngestDraftEntrySchema).min(1).max(100),
+  // AI-extracted entries dropped entirely — unrecognized type, or failed
+  // even lenient validation (see `toIngestDraft`). Surfaced to the frontend
+  // so a partially-failed paste doesn't silently look fully parsed.
+  droppedEntries: z
+    .array(z.object({ type: z.string(), reason: z.string(), snippet: z.string() }))
+    .default([]),
 });
 
 // Body of `POST /onboarding/ingest/confirm` — the user-reviewed (possibly
 // edited/pruned) set of entries from a prior parse-only ingest, persisted
-// only once the user explicitly confirms them. Re-validated here rather than
-// trusted from the earlier parse response, since the client may have edited
-// field values in the review step.
+// only once the user explicitly confirms them. Re-validated here (against
+// the STRICT per-type schemas, not the lenient draft ones) rather than
+// trusted from the earlier parse response — this is the server-side
+// guarantee that an incomplete draft entry can never actually be saved to a
+// profile, even if the client sends one anyway.
 export const ConfirmIngestSchema = z.object({
   entries: z.array(IngestEntrySchema).min(1).max(100),
 });

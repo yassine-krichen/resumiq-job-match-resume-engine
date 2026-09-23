@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { IngestEntryDto } from '@resumiq/schemas';
+import type { IngestDraftEntryDto } from '@resumiq/schemas';
 import { clearPendingEntries, loadPendingEntries, savePendingEntries } from './pending-entries';
 
-const experienceEntry: IngestEntryDto = {
+const experienceEntry: IngestDraftEntryDto = {
   type: 'experience',
+  missingFields: [],
   entry: {
     company: 'Acme Corp',
     company_industry: 'Software',
@@ -20,7 +21,7 @@ const experienceEntry: IngestEntryDto = {
   },
 };
 
-const interestEntry: IngestEntryDto = { type: 'interest', entry: 'Chess' };
+const interestEntry: IngestDraftEntryDto = { type: 'interest', missingFields: [], entry: 'Chess' };
 
 describe('pending-entries (onboarding sessionStorage handoff)', () => {
   beforeEach(() => {

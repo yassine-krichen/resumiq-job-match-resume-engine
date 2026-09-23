@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { OnboardingController } from './onboarding.controller';
-import { OnboardingService } from './onboarding.service';
+import { OnboardingService, IngestUserFacingError } from './onboarding.service';
 import { ProfileService } from '../profile/profile.service';
 import { AuthGuard } from '../auth/auth.guard';
 
@@ -70,15 +70,15 @@ describe('OnboardingController', () => {
     const certificationEntry = { name: 'AWS Certified Developer', issuer: 'AWS' };
     const projectEntry = { name: 'Side Project X' };
 
-    it('sends a "done" event with the parsed entries and droppedCount, and never persists anything', async () => {
+    it('sends a "done" event with the parsed entries and droppedEntries, and never persists anything', async () => {
       profileService.getProfile.mockResolvedValue(null);
       onboardingService.parseCareerText.mockResolvedValue({
         entries: [
-          { type: 'experience', entry: experienceEntry },
-          { type: 'certification', entry: certificationEntry },
-          { type: 'project', entry: projectEntry },
+          { type: 'experience', entry: experienceEntry, missingFields: [] },
+          { type: 'certification', entry: certificationEntry, missingFields: [] },
+          { type: 'project', entry: projectEntry, missingFields: [] },
         ],
-        droppedCount: 0,
+        droppedEntries: [],
       });
 
       const res = fakeResponse();
@@ -88,22 +88,25 @@ describe('OnboardingController', () => {
       const doneFrame = frames.find((f) => f.event === 'done');
       expect(doneFrame?.data).toEqual({
         parsed: [
-          { type: 'experience', entry: experienceEntry },
-          { type: 'certification', entry: certificationEntry },
-          { type: 'project', entry: projectEntry },
+          { type: 'experience', entry: experienceEntry, missingFields: [] },
+          { type: 'certification', entry: certificationEntry, missingFields: [] },
+          { type: 'project', entry: projectEntry, missingFields: [] },
         ],
-        droppedCount: 0,
+        droppedEntries: [],
       });
       expect(doneFrame?.data).not.toHaveProperty('profile');
       expect(profileService.mergeSections).not.toHaveBeenCalled();
       expect(res.ended).toBe(true);
     });
 
-    it('threads droppedCount from parseCareerText into the "done" event payload when some AI-extracted entries were dropped', async () => {
+    it('threads droppedEntries from parseCareerText into the "done" event payload when some AI-extracted entries were dropped', async () => {
       profileService.getProfile.mockResolvedValue(null);
       onboardingService.parseCareerText.mockResolvedValue({
-        entries: [{ type: 'experience', entry: experienceEntry }],
-        droppedCount: 2,
+        entries: [{ type: 'experience', entry: experienceEntry, missingFields: [] }],
+        droppedEntries: [
+          { type: 'unknown_type', reason: 'unrecognized or missing "type"', snippet: '{}' },
+          { type: 'award', reason: 'failed lenient validation', snippet: '{}' },
+        ],
       });
 
       const res = fakeResponse();
@@ -112,8 +115,11 @@ describe('OnboardingController', () => {
       const frames = parseSSEFrames(res.writes);
       const doneFrame = frames.find((f) => f.event === 'done');
       expect(doneFrame?.data).toEqual({
-        parsed: [{ type: 'experience', entry: experienceEntry }],
-        droppedCount: 2,
+        parsed: [{ type: 'experience', entry: experienceEntry, missingFields: [] }],
+        droppedEntries: [
+          { type: 'unknown_type', reason: 'unrecognized or missing "type"', snippet: '{}' },
+          { type: 'award', reason: 'failed lenient validation', snippet: '{}' },
+        ],
       });
     });
 
@@ -121,8 +127,8 @@ describe('OnboardingController', () => {
       const existingProfile = { skills: { programming_languages: ['TypeScript'] } };
       profileService.getProfile.mockResolvedValue(existingProfile);
       onboardingService.parseCareerText.mockResolvedValue({
-        entries: [{ type: 'experience', entry: experienceEntry }],
-        droppedCount: 0,
+        entries: [{ type: 'experience', entry: experienceEntry, missingFields: [] }],
+        droppedEntries: [],
       });
 
       const res = fakeResponse();
@@ -136,10 +142,12 @@ describe('OnboardingController', () => {
       );
     });
 
-    it('sends an "error" event and ends the stream when parsing fails, without persisting anything', async () => {
+    it('sends an "error" event with the user-facing message and ends the stream when parsing fails with IngestUserFacingError, without persisting anything', async () => {
       profileService.getProfile.mockResolvedValue(null);
       onboardingService.parseCareerText.mockRejectedValue(
-        new Error("Couldn't parse that text into your profile — try rephrasing or breaking it into shorter pieces."),
+        new IngestUserFacingError(
+          "Couldn't parse that text into your profile — try rephrasing or breaking it into shorter pieces.",
+        ),
       );
 
       const res = fakeResponse();
@@ -157,7 +165,7 @@ describe('OnboardingController', () => {
     it('sends the clean parse-timeout message as an "error" event when parseCareerText times out', async () => {
       profileService.getProfile.mockResolvedValue(null);
       onboardingService.parseCareerText.mockRejectedValue(
-        new Error('Taking longer than expected — try shortening the input or try again.'),
+        new IngestUserFacingError('Taking longer than expected — try shortening the input or try again.'),
       );
 
       const res = fakeResponse();
@@ -167,6 +175,22 @@ describe('OnboardingController', () => {
       const errorFrame = frames.find((f) => f.event === 'error');
       expect(errorFrame?.data).toEqual({
         message: 'Taking longer than expected — try shortening the input or try again.',
+      });
+      expect(profileService.mergeSections).not.toHaveBeenCalled();
+      expect(res.ended).toBe(true);
+    });
+
+    it('sends a generic error message and never leaks the raw error when parseCareerText throws a non-user-facing error', async () => {
+      profileService.getProfile.mockResolvedValue(null);
+      onboardingService.parseCareerText.mockRejectedValue(new Error('Prisma connection reset at 10.0.0.5'));
+
+      const res = fakeResponse();
+      await controller.ingestStream(REQ, res, { raw_text: 'some text' });
+
+      const frames = parseSSEFrames(res.writes);
+      const errorFrame = frames.find((f) => f.event === 'error');
+      expect(errorFrame?.data).toEqual({
+        message: 'Something went wrong while parsing your text. Please try again.',
       });
       expect(profileService.mergeSections).not.toHaveBeenCalled();
       expect(res.ended).toBe(true);

@@ -43,7 +43,11 @@ interface AddExperienceModalProps {
   submitting?: boolean;
   /** When provided, the modal opens pre-filled for editing this entry
    * instead of creating a new one. */
-  entry?: NewExperience;
+  // Partial rather than required: the onboarding-review flow passes
+  // possibly-incomplete AI-extracted drafts (see IngestDraftEntryDto) whose
+  // missing fields still need an editable input (resetForm falls back
+  // per-field to '').
+  entry?: Partial<NewExperience>;
   /** Renders a destructive "Delete" action in the footer — only relevant
    * (and only passed) in edit mode. */
   onDelete?: () => Promise<void>;
@@ -73,19 +77,23 @@ export function AddExperienceModal({
   const [deleting, setDeleting] = useState(false);
 
   function resetForm() {
+    // `entry` may be an incomplete onboarding-review draft with missing
+    // fields (see IngestDraftEntryDto) — fall back per-field, not just at
+    // the object level, so every input still renders (controlled) even when
+    // the AI extraction didn't populate that field.
     const base = entry ?? EMPTY_EXPERIENCE;
-    setCompany(base.company);
-    setCompanyIndustry(base.company_industry);
-    setRole(base.role);
-    setLocation(base.location);
-    setLocationType(base.location_type);
-    setStartDate(base.startDate);
-    setEndDate(base.endDate);
-    setIsCurrent(base.isCurrent);
-    setCoreCompetencies(joinLines(base.core_competencies));
-    setTechnologiesUsed(joinLines(base.technologies_used));
-    setRawAchievements(joinLines(base.raw_achievements));
-    setQuantifiableMetrics(joinLines(base.quantifiable_metrics));
+    setCompany(base.company ?? '');
+    setCompanyIndustry(base.company_industry ?? '');
+    setRole(base.role ?? '');
+    setLocation(base.location ?? '');
+    setLocationType(base.location_type ?? '');
+    setStartDate(base.startDate ?? '');
+    setEndDate(base.endDate ?? '');
+    setIsCurrent(base.isCurrent ?? false);
+    setCoreCompetencies(joinLines(base.core_competencies ?? []));
+    setTechnologiesUsed(joinLines(base.technologies_used ?? []));
+    setRawAchievements(joinLines(base.raw_achievements ?? []));
+    setQuantifiableMetrics(joinLines(base.quantifiable_metrics ?? []));
     setSubmitError('');
   }
 

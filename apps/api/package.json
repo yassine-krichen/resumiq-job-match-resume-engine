@@ -14,7 +14,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "prisma db seed",
-    "scan:jobs": "ts-node --transpile-only scripts/scan-and-ingest.ts"
+    "scan:jobs": "ts-node --transpile-only scripts/scan-and-ingest.ts",
+    "verify:ingest": "ts-node --transpile-only scripts/verify-ingest-survival.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

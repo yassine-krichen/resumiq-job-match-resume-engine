@@ -3,7 +3,7 @@ import { render, screen, within, fireEvent, waitFor } from '@testing-library/rea
 import OnboardingReviewPage from './page';
 import { apiFetch } from '@/lib/api';
 import { loadPendingEntries, savePendingEntries } from '../_lib/pending-entries';
-import type { IngestEntryDto, MasterDB } from '@resumiq/schemas';
+import type { IngestDraftEntryDto, MasterDB } from '@resumiq/schemas';
 
 vi.mock('@/lib/api', () => ({
   apiFetch: vi.fn(),
@@ -14,8 +14,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
 }));
 
-const experienceEntry1: IngestEntryDto = {
+const experienceEntry1: IngestDraftEntryDto = {
   type: 'experience',
+  missingFields: [],
   entry: {
     company: 'Acme Corp',
     company_industry: 'Software',
@@ -32,8 +33,9 @@ const experienceEntry1: IngestEntryDto = {
   },
 };
 
-const experienceEntry2: IngestEntryDto = {
+const experienceEntry2: IngestDraftEntryDto = {
   type: 'experience',
+  missingFields: [],
   entry: {
     company: 'Globex Corp',
     company_industry: 'Software',
@@ -50,8 +52,9 @@ const experienceEntry2: IngestEntryDto = {
   },
 };
 
-const certificationEntry: IngestEntryDto = {
+const certificationEntry: IngestDraftEntryDto = {
   type: 'certification',
+  missingFields: [],
   entry: {
     name: 'AWS Developer',
     issuer: 'AWS',
@@ -63,23 +66,27 @@ const certificationEntry: IngestEntryDto = {
   },
 };
 
-const skillsEntry: IngestEntryDto = {
+const skillsEntry: IngestDraftEntryDto = {
   type: 'skills',
+  missingFields: [],
   entry: { programming_languages: ['TypeScript', 'Python'], frameworks_and_libraries: ['React'] },
 };
 
-const summaryEntry: IngestEntryDto = {
+const summaryEntry: IngestDraftEntryDto = {
   type: 'summary',
+  missingFields: [],
   entry: { target_role: 'Backend Engineer', content: 'Backend engineer with 5 years of experience.' },
 };
 
-const publicationEntry: IngestEntryDto = {
+const publicationEntry: IngestDraftEntryDto = {
   type: 'publication',
+  missingFields: [],
   entry: { title: 'Scaling Postgres at 10x', venue: 'ReactConf 2024', date: '2024' },
 };
 
-const publicationEntryWithAllFields: IngestEntryDto = {
+const publicationEntryWithAllFields: IngestDraftEntryDto = {
   type: 'publication',
+  missingFields: [],
   entry: {
     title: 'Scaling Postgres at 10x',
     venue: 'ReactConf 2024',
@@ -89,13 +96,15 @@ const publicationEntryWithAllFields: IngestEntryDto = {
   },
 };
 
-const volunteeringEntry: IngestEntryDto = {
+const volunteeringEntry: IngestDraftEntryDto = {
   type: 'volunteering',
+  missingFields: [],
   entry: { organization: 'Code.org', role: 'Mentor', startDate: '2022', isCurrent: true },
 };
 
-const volunteeringEntryWithAllFields: IngestEntryDto = {
+const volunteeringEntryWithAllFields: IngestDraftEntryDto = {
   type: 'volunteering',
+  missingFields: [],
   entry: {
     organization: 'Code.org',
     role: 'Mentor',
@@ -106,8 +115,9 @@ const volunteeringEntryWithAllFields: IngestEntryDto = {
   },
 };
 
-const skillsEntryWithAllFields: IngestEntryDto = {
+const skillsEntryWithAllFields: IngestDraftEntryDto = {
   type: 'skills',
+  missingFields: [],
   entry: {
     programming_languages: ['TypeScript'],
     frameworks_and_libraries: ['React'],
@@ -117,8 +127,12 @@ const skillsEntryWithAllFields: IngestEntryDto = {
   },
 };
 
-const interestEntry1: IngestEntryDto = { type: 'interest', entry: 'Chess' };
-const interestEntry2: IngestEntryDto = { type: 'interest', entry: 'Marathon Running' };
+const interestEntry1: IngestDraftEntryDto = { type: 'interest', missingFields: [], entry: 'Chess' };
+const interestEntry2: IngestDraftEntryDto = {
+  type: 'interest',
+  missingFields: [],
+  entry: 'Marathon Running',
+};
 
 /** Scopes queries to the row/card containing the given title text, the same
  * way a user would locate "the button next to this entry" rather than
@@ -251,7 +265,7 @@ describe('OnboardingReviewPage', () => {
     expect(screen.getByText('Marathon Running')).toBeInTheDocument();
   });
 
-  it('persists the reviewed entries via the confirm endpoint, clears the pending handoff, and navigates to /profile on success', async () => {
+  it('persists only the complete entries via the confirm endpoint, clears the pending handoff, and navigates to /profile once nothing incomplete remains', async () => {
     savePendingEntries([certificationEntry, interestEntry1]);
     vi.mocked(apiFetch).mockResolvedValue(buildProfile());
 
@@ -263,7 +277,12 @@ describe('OnboardingReviewPage', () => {
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/profile'));
     expect(apiFetch).toHaveBeenCalledWith('/onboarding/ingest/confirm', {
       method: 'POST',
-      body: JSON.stringify({ entries: [certificationEntry, interestEntry1] }),
+      body: JSON.stringify({
+        entries: [
+          { type: certificationEntry.type, entry: certificationEntry.entry },
+          { type: interestEntry1.type, entry: interestEntry1.entry },
+        ],
+      }),
     });
     expect(loadPendingEntries()).toBeNull();
   });
@@ -376,5 +395,35 @@ describe('OnboardingReviewPage', () => {
     fireEvent.click(rowFor('Chess').getByRole('button', { name: /^remove$/i }));
 
     expect(screen.getByRole('button', { name: /^save to profile$/i })).toBeDisabled();
+  });
+
+  it('disables "Save to profile" and lists the field(s) to fill in when an AI-extracted entry is missing a required field', async () => {
+    savePendingEntries([
+      { type: 'certification', missingFields: ['name'], entry: { issuer: 'AWS' } },
+    ]);
+
+    render(<OnboardingReviewPage />);
+
+    expect(await screen.findByText(/incomplete — fill in: name/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^save to profile$/i })).toBeDisabled();
+  });
+
+  it('re-enables "Save to profile" once the user fills in the missing field via the reused edit modal', async () => {
+    savePendingEntries([
+      { type: 'certification', missingFields: ['name'], entry: { issuer: 'AWS' } },
+    ]);
+    vi.mocked(apiFetch).mockResolvedValue(buildProfile());
+
+    render(<OnboardingReviewPage />);
+    await screen.findByText(/incomplete — fill in: name/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'AWS Developer' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save changes$/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/incomplete — fill in: name/i)).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /^save to profile$/i })).not.toBeDisabled();
   });
 });

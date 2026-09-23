@@ -8,6 +8,7 @@ import {
   ExperienceEntrySchema,
   ExtractJobIntakeSchema,
   IngestBodySchema,
+  IngestEntrySchema,
   IngestResultSchema,
   InterestEntrySchema,
   JobDNASchema,
@@ -18,6 +19,7 @@ import {
   PublicationEntrySchema,
   SkillsSchema,
   SummaryEntrySchema,
+  toIngestDraft,
   UpdateEmailDraftSchema,
   UpdateGapReportSchema,
   UpdateResumeSelectionSchema,
@@ -311,6 +313,7 @@ describe('IngestResultSchema', () => {
     entries: [
       {
         type: 'experience',
+        missingFields: [],
         entry: {
           company: 'Acme Corp',
           company_industry: 'Software',
@@ -328,6 +331,7 @@ describe('IngestResultSchema', () => {
       },
       {
         type: 'certification',
+        missingFields: [],
         entry: {
           name: 'AWS Certified Developer',
           issuer: 'AWS',
@@ -348,17 +352,23 @@ describe('IngestResultSchema', () => {
   it('rejects an entry with a discriminant not in the allowed type union', () => {
     expect(() =>
       IngestResultSchema.parse({
-        entries: [{ type: 'not_a_real_type', entry: {} }],
+        entries: [{ type: 'not_a_real_type', missingFields: [], entry: {} }],
       }),
     ).toThrow();
   });
 
-  it('rejects an entry whose sub-entry is missing required fields for its type', () => {
+  // Unlike ConfirmIngestSchema (STRICT), a draft entry's sub-entry is
+  // intentionally `z.unknown()` here — an entry with missing/invalid
+  // required fields is exactly what `missingFields` is for (see
+  // `toIngestDraft`), not something this schema rejects outright.
+  it('accepts an entry whose sub-entry is missing required fields for its type, recording it via missingFields', () => {
     expect(() =>
       IngestResultSchema.parse({
-        entries: [{ type: 'experience', entry: { company: 'Acme Corp' } }],
+        entries: [
+          { type: 'experience', missingFields: ['role'], entry: { company: 'Acme Corp' } },
+        ],
       }),
-    ).toThrow();
+    ).not.toThrow();
   });
 
   it('rejects an empty entries array', () => {
@@ -366,13 +376,21 @@ describe('IngestResultSchema', () => {
   });
 
   it('accepts entries with exactly 100 items (the max)', () => {
-    const entries = Array.from({ length: 100 }, () => ({ type: 'interest', entry: 'Chess' }));
+    const entries = Array.from({ length: 100 }, () => ({
+      type: 'interest',
+      missingFields: [],
+      entry: 'Chess',
+    }));
 
     expect(() => IngestResultSchema.parse({ entries })).not.toThrow();
   });
 
   it('rejects entries with more than 100 items', () => {
-    const entries = Array.from({ length: 101 }, () => ({ type: 'interest', entry: 'Chess' }));
+    const entries = Array.from({ length: 101 }, () => ({
+      type: 'interest',
+      missingFields: [],
+      entry: 'Chess',
+    }));
 
     expect(() => IngestResultSchema.parse({ entries })).toThrow();
   });
@@ -397,6 +415,348 @@ describe('IngestBodySchema', () => {
     const tooLong = 'a'.repeat(20001);
 
     expect(() => IngestBodySchema.parse({ raw_text: tooLong })).toThrow();
+  });
+});
+
+describe('IngestEntrySchema (strict per-type gate used by ConfirmIngestSchema)', () => {
+  it('rejects an experience entry missing the required "company" field', () => {
+    expect(() =>
+      IngestEntrySchema.parse({
+        type: 'experience',
+        entry: {
+          role: 'Backend Engineer',
+          startDate: '',
+          endDate: '',
+          core_competencies: [],
+          technologies_used: [],
+          raw_achievements: [],
+          quantifiable_metrics: [],
+        },
+      }),
+    ).toThrow();
+  });
+});
+
+describe('toIngestDraft (onboarding-ingest lenient drafts)', () => {
+  const minimalExperience = {
+    company: 'Acme Corp',
+    role: 'Backend Engineer',
+    startDate: '',
+    endDate: '',
+    core_competencies: [],
+    technologies_used: [],
+    raw_achievements: [],
+    quantifiable_metrics: [],
+  };
+
+  const minimalEducation = {
+    institution: 'State University',
+    major: 'Computer Science',
+    startDate: '',
+    endDate: '',
+    gpa: '',
+    honors: [],
+    relevant_coursework: [],
+    extracurriculars: [],
+  };
+
+  const minimalProject = {
+    name: 'Side Project X',
+    links: [],
+    startDate: '',
+    endDate: '',
+    technologies_used: [],
+    raw_achievements: [],
+    quantifiable_metrics: [],
+  };
+
+  // What `minimalExperience` parses to once schema defaults (company_industry,
+  // location, location_type, isCurrent) are filled in — used where the test
+  // asserts full entry equality rather than a single field.
+  const fullExperienceOutput = {
+    ...minimalExperience,
+    company_industry: '',
+    location: '',
+    location_type: '',
+    isCurrent: false,
+  };
+
+  it.each([
+    ['job', 'experience'],
+    ['work', 'experience'],
+    ['Experience', 'experience'],
+    ['degree', 'education'],
+    ['side_project', 'project'],
+  ])('maps type synonym/casing "%s" to the canonical type "%s"', (rawType, canonicalType) => {
+    const entry =
+      canonicalType === 'experience'
+        ? minimalExperience
+        : canonicalType === 'education'
+          ? minimalEducation
+          : minimalProject;
+
+    const draft = toIngestDraft({ type: rawType, entry });
+
+    expect('type' in draft && draft.type).toBe(canonicalType);
+    expect('missingFields' in draft && draft.missingFields).toEqual([]);
+  });
+
+  it('drops an entry with an unrecognized type ("hobbyzz") rather than miscategorizing it', () => {
+    const draft = toIngestDraft({ type: 'hobbyzz', entry: { foo: 'bar' } });
+
+    expect(draft).toMatchObject({ type: 'hobbyzz', reason: 'unrecognized or missing "type"' });
+  });
+
+  it('recovers the entry from a "data" key instead of "entry"', () => {
+    const draft = toIngestDraft({ type: 'experience', data: minimalExperience });
+
+    expect('entry' in draft && draft.entry).toEqual(fullExperienceOutput);
+    expect('missingFields' in draft && draft.missingFields).toEqual([]);
+  });
+
+  it('recovers the entry from a flattened top-level object when no "entry"/"data"/"value" key is present', () => {
+    const draft = toIngestDraft({ type: 'experience', ...minimalExperience });
+
+    expect('entry' in draft && draft.entry).toEqual(fullExperienceOutput);
+    expect('missingFields' in draft && draft.missingFields).toEqual([]);
+  });
+
+  it('splits a "React, Node; Postgres" technologies_used string into 3 tag items', () => {
+    const draft = toIngestDraft({
+      type: 'experience',
+      entry: { ...minimalExperience, technologies_used: 'React, Node; Postgres' },
+    });
+
+    expect('entry' in draft && (draft.entry as { technologies_used: string[] }).technologies_used).toEqual([
+      'React',
+      'Node',
+      'Postgres',
+    ]);
+  });
+
+  it('splits a bullet-marker raw_achievements string into 2 items with markers stripped', () => {
+    const draft = toIngestDraft({
+      type: 'experience',
+      entry: { ...minimalExperience, raw_achievements: '- did X\n• did Y' },
+    });
+
+    expect('entry' in draft && (draft.entry as { raw_achievements: string[] }).raw_achievements).toEqual([
+      'did X',
+      'did Y',
+    ]);
+  });
+
+  it.each([
+    ['true', true],
+    ['Present', true],
+    ['no', false],
+  ])('coerces isCurrent string "%s" to boolean %s', (rawValue, expected) => {
+    const draft = toIngestDraft({
+      type: 'experience',
+      entry: { ...minimalExperience, isCurrent: rawValue },
+    });
+
+    expect('entry' in draft && (draft.entry as { isCurrent: boolean }).isCurrent).toBe(expected);
+  });
+
+  it('defaults isCurrent to false when omitted entirely', () => {
+    const draft = toIngestDraft({ type: 'experience', entry: minimalExperience });
+
+    expect('entry' in draft && (draft.entry as { isCurrent: boolean }).isCurrent).toBe(false);
+  });
+
+  it('coerces an experience endDate of "Present" into "" with isCurrent true, not a missing-field draft', () => {
+    const { endDate: _endDate, ...rest } = minimalExperience;
+    const draft = toIngestDraft({
+      type: 'experience',
+      entry: { ...rest, startDate: 'Mar 2022', endDate: 'Present' },
+    });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual([]);
+    expect('entry' in draft && (draft.entry as { endDate: string; isCurrent: boolean })).toMatchObject({
+      endDate: '',
+      isCurrent: true,
+    });
+  });
+
+  it('fills in endDate "" for an experience entry reporting isCurrent true with endDate omitted', () => {
+    const { endDate: _endDate, ...rest } = minimalExperience;
+    const draft = toIngestDraft({
+      type: 'experience',
+      entry: { ...rest, startDate: 'Mar 2022', isCurrent: true },
+    });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual([]);
+    expect('entry' in draft && (draft.entry as { endDate: string }).endDate).toBe('');
+  });
+
+  it('coerces a volunteering endDate of "ongoing" into "" with isCurrent true', () => {
+    const draft = toIngestDraft({
+      type: 'volunteering',
+      entry: { organization: 'Code.org', role: 'Mentor', endDate: 'ongoing' },
+    });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual([]);
+    expect('entry' in draft && (draft.entry as { endDate: string; isCurrent: boolean })).toMatchObject({
+      endDate: '',
+      isCurrent: true,
+    });
+  });
+
+  it('coerces a bare numeric gpa (3.8) into the string "3.8"', () => {
+    const draft = toIngestDraft({
+      type: 'education',
+      entry: { ...minimalEducation, gpa: 3.8 },
+    });
+
+    expect('entry' in draft && (draft.entry as { gpa: string }).gpa).toBe('3.8');
+  });
+
+  it('coerces a bare project link URL string into { type: "", url }', () => {
+    const draft = toIngestDraft({
+      type: 'project',
+      entry: { ...minimalProject, links: ['https://github.com/example/gitstat'] },
+    });
+
+    expect('entry' in draft && (draft.entry as { links: unknown[] }).links).toEqual([
+      { type: '', url: 'https://github.com/example/gitstat' },
+    ]);
+  });
+
+  it('coerces an interest entry shaped like { name: "Chess" } into the bare string "Chess"', () => {
+    const draft = toIngestDraft({ type: 'interest', entry: { name: 'Chess' } });
+
+    expect(draft).toEqual({ type: 'interest', entry: 'Chess', missingFields: [] });
+  });
+
+  it('recovers an experience entry missing "company" as an incomplete draft listing "company" in missingFields, preserving other fields', () => {
+    const { company: _company, ...withoutCompany } = minimalExperience;
+
+    const draft = toIngestDraft({ type: 'experience', entry: withoutCompany });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual(['company']);
+    expect('entry' in draft && (draft.entry as { role: string }).role).toBe('Backend Engineer');
+    expect('entry' in draft && (draft.entry as { company?: string }).company).toBeUndefined();
+  });
+
+  it('strips an invalid-typed startDate (object instead of string) and lists it in missingFields, preserving other fields', () => {
+    const draft = toIngestDraft({
+      type: 'experience',
+      entry: { ...minimalExperience, startDate: {} },
+    });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual(['startDate']);
+    expect('entry' in draft && (draft.entry as { company: string }).company).toBe('Acme Corp');
+    expect('entry' in draft && (draft.entry as { startDate?: unknown }).startDate).toBeUndefined();
+  });
+
+  it('returns an empty missingFields array for a fully valid entry', () => {
+    const draft = toIngestDraft({ type: 'experience', entry: minimalExperience });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual([]);
+  });
+
+  it('clamps a 31-item raw_achievements array to the declared max of 30 rather than dropping the entry', () => {
+    const raw_achievements = Array.from({ length: 31 }, (_, i) => `Achievement ${i}`);
+
+    const draft = toIngestDraft({
+      type: 'experience',
+      entry: { ...minimalExperience, raw_achievements },
+    });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual([]);
+    const resultAchievements =
+      'entry' in draft ? (draft.entry as { raw_achievements: string[] }).raw_achievements : undefined;
+    expect(resultAchievements).toHaveLength(30);
+    expect(resultAchievements).toEqual(raw_achievements.slice(0, 30));
+  });
+
+  it('lists an overlong optional publication "description" (>5,000 chars) in missingFields while keeping the rest of the entry', () => {
+    const draft = toIngestDraft({
+      type: 'publication',
+      entry: { title: 'Scaling Postgres at 10x', date: '2024', description: 'a'.repeat(5001) },
+    });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual(['description']);
+    expect('entry' in draft && (draft.entry as { title: string }).title).toBe('Scaling Postgres at 10x');
+    expect('entry' in draft && (draft.entry as { description?: string }).description).toBeUndefined();
+  });
+
+  it('defaults an absent optional list field (quantifiable_metrics) to [] without flagging it in missingFields', () => {
+    const { quantifiable_metrics: _qm, ...entryWithoutMetrics } = minimalExperience;
+
+    const draft = toIngestDraft({ type: 'experience', entry: entryWithoutMetrics });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual([]);
+    expect(
+      'entry' in draft && (draft.entry as { quantifiable_metrics: string[] }).quantifiable_metrics,
+    ).toEqual([]);
+  });
+
+  it('keeps an absent optional list field as [] (not undefined) even on the lenient fallback path (entry missing required "company")', () => {
+    const { company: _company, quantifiable_metrics: _qm, ...entry } = minimalExperience;
+
+    const draft = toIngestDraft({ type: 'experience', entry });
+
+    expect('missingFields' in draft && draft.missingFields).toEqual(['company']);
+    expect(
+      'entry' in draft && (draft.entry as { quantifiable_metrics: string[] }).quantifiable_metrics,
+    ).toEqual([]);
+  });
+
+  it.each([null, 42, 'just a string', ['array', 'not', 'object']])(
+    'drops a non-object raw entry (%p)',
+    (raw) => {
+      const draft = toIngestDraft(raw);
+
+      expect('reason' in draft).toBe(true);
+    },
+  );
+
+  it('drops a recognized-type entry whose "entry" value is a bare string rather than surfacing it as an empty draft', () => {
+    const draft = toIngestDraft({ type: 'experience', entry: 'random free text' });
+
+    expect(draft).toMatchObject({ type: 'experience', reason: 'entry is not an object' });
+    expect('missingFields' in draft).toBe(false);
+  });
+
+  it('drops a recognized-type entry whose "entry" value is an array rather than surfacing it as an empty draft', () => {
+    const draft = toIngestDraft({ type: 'experience', entry: [1, 2] });
+
+    expect(draft).toMatchObject({ type: 'experience', reason: 'entry is not an object' });
+    expect('missingFields' in draft).toBe(false);
+  });
+
+  // Invariant relied on by callers (e.g. the review UI treats `missingFields:
+  // []` as "safe to auto-confirm"): whenever `toIngestDraft` reports no
+  // missing fields, the resulting entry must actually pass the strict
+  // `IngestEntrySchema` it will later be re-validated against on confirm —
+  // and whenever it reports missing fields, that same strict re-validation
+  // must fail. Exercised here against a handful of messy real-world-shaped
+  // drafts, including ones that only survive via the lenient fallback path.
+  it.each([
+    { type: 'experience', entry: minimalExperience },
+    { type: 'experience', entry: (() => { const { company: _c, ...rest } = minimalExperience; return rest; })() },
+    { type: 'experience', entry: { ...minimalExperience, startDate: {} } },
+    { type: 'education', entry: minimalEducation },
+    { type: 'project', entry: minimalProject },
+    { type: 'publication', entry: { title: 'Scaling Postgres at 10x', date: '2024' } },
+    { type: 'publication', entry: {} },
+    { type: 'interest', entry: { name: 'Chess' } },
+  ])('keeps missingFields/strict-schema pass in sync for $type', ({ type, entry }) => {
+    const draft = toIngestDraft({ type, entry });
+
+    if (!('missingFields' in draft)) {
+      // Fully dropped — nothing to reconcile against the strict schema.
+      return;
+    }
+
+    const strictResult = IngestEntrySchema.safeParse({ type: draft.type, entry: draft.entry });
+    if (draft.missingFields.length === 0) {
+      expect(strictResult.success).toBe(true);
+    } else {
+      expect(strictResult.success).toBe(false);
+    }
   });
 });
 
@@ -929,8 +1289,20 @@ describe('InterestEntrySchema', () => {
     expect(() => InterestEntrySchema.parse(tooLong)).toThrow();
   });
 
-  it('rejects a non-string value (an object instead of a plain interest string)', () => {
+  // The onboarding-ingest `{ name | title | interest | value }` object
+  // shape-drift coercion lives only on the ingest path (`toIngestDraft` /
+  // its `IngestInterestEntrySchema`) now — this shared schema also gates
+  // `POST /profile/import` and manual profile edits, which must stay strict.
+  it('rejects an { name } object rather than coercing it — this shared schema is used by strict import/edit paths', () => {
     expect(() => InterestEntrySchema.parse({ name: 'Chess' })).toThrow();
+  });
+
+  it('rejects an object with none of the recognized name-like keys', () => {
+    expect(() => InterestEntrySchema.parse({ foo: 'Chess' })).toThrow();
+  });
+
+  it('rejects a bare number', () => {
+    expect(() => InterestEntrySchema.parse(42)).toThrow();
   });
 });
 
@@ -1051,6 +1423,53 @@ describe('MasterDBSchema', () => {
       MasterDBSchema.parse({ ...validMasterDB, certifications: boundary }),
     ).not.toThrow();
   });
+
+  // MasterDBSchema gates POST /profile/import and manual profile edits — it
+  // must stay strict and reject the same AI shape-drift patterns that the
+  // separate onboarding-ingest path (toIngestDraft) deliberately coerces.
+  it('rejects an experience entry with technologies_used as a comma-joined string instead of an array', () => {
+    const entry = {
+      ...(minimalEntryFactories.experience(0) as Record<string, unknown>),
+      technologies_used: 'React, Node',
+    };
+
+    expect(() => MasterDBSchema.parse({ ...validMasterDB, experience: [entry] })).toThrow();
+  });
+
+  it('rejects an experience entry missing the required isCurrent field', () => {
+    const { isCurrent: _isCurrent, ...entry } = minimalEntryFactories.experience(0) as Record<
+      string,
+      unknown
+    >;
+
+    expect(() => MasterDBSchema.parse({ ...validMasterDB, experience: [entry] })).toThrow();
+  });
+
+  it('rejects an education entry with gpa as a number instead of a string', () => {
+    const entry = {
+      ...(minimalEntryFactories.education(0) as Record<string, unknown>),
+      gpa: 3.8,
+    };
+
+    expect(() => MasterDBSchema.parse({ ...validMasterDB, education: [entry] })).toThrow();
+  });
+
+  it('accepts an experience entry with its optional list fields omitted entirely, defaulting them to []', () => {
+    const {
+      core_competencies: _cc,
+      technologies_used: _tu,
+      raw_achievements: _ra,
+      quantifiable_metrics: _qm,
+      ...entry
+    } = minimalEntryFactories.experience(0) as Record<string, unknown>;
+
+    const result = MasterDBSchema.parse({ ...validMasterDB, experience: [entry] });
+
+    expect(result.experience[0].core_competencies).toEqual([]);
+    expect(result.experience[0].technologies_used).toEqual([]);
+    expect(result.experience[0].raw_achievements).toEqual([]);
+    expect(result.experience[0].quantifiable_metrics).toEqual([]);
+  });
 });
 
 describe('ConfirmIngestSchema', () => {
@@ -1108,9 +1527,19 @@ describe('ConfirmIngestSchema', () => {
     ).toThrow();
   });
 
-  it('rejects an interest entry edited into a non-string value', () => {
+  // Unlike `toIngestDraft` (the parse-time lenient path), the confirm-persist
+  // gate is strict and does not coerce a `{ name: string }` shape-drift
+  // object into a bare string — by the time a user confirms, the review page
+  // already normalized/edited the entry into the documented shape.
+  it('rejects an interest entry shaped like { name: string } rather than silently coercing it', () => {
     expect(() =>
       ConfirmIngestSchema.parse({ entries: [{ type: 'interest', entry: { name: 'Chess' } }] }),
+    ).toThrow();
+  });
+
+  it('rejects an interest entry edited into a value with no recognizable name-like field', () => {
+    expect(() =>
+      ConfirmIngestSchema.parse({ entries: [{ type: 'interest', entry: { foo: 'Chess' } }] }),
     ).toThrow();
   });
 

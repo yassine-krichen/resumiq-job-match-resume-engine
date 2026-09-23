@@ -42,7 +42,11 @@ interface AddProjectModalProps {
   submitting?: boolean;
   /** When provided, the modal opens pre-filled for editing this entry
    * instead of creating a new one. */
-  entry?: NewProject;
+  // Partial rather than required: the onboarding-review flow passes
+  // possibly-incomplete AI-extracted drafts (see IngestDraftEntryDto) whose
+  // missing fields still need an editable input (resetForm falls back
+  // per-field to '').
+  entry?: Partial<NewProject>;
   /** Renders a destructive "Delete" action in the footer — only relevant
    * (and only passed) in edit mode. */
   onDelete?: () => Promise<void>;
@@ -67,14 +71,18 @@ export function AddProjectModal({
   const [deleting, setDeleting] = useState(false);
 
   function resetForm() {
+    // `entry` may be an incomplete onboarding-review draft with missing
+    // fields (see IngestDraftEntryDto) — fall back per-field, not just at
+    // the object level, so every input still renders (controlled) even when
+    // the AI extraction didn't populate that field.
     const base = entry ?? EMPTY_PROJECT;
-    setName(base.name);
-    setContext(base.context);
-    setStartDate(base.startDate);
-    setEndDate(base.endDate);
-    setTechnologiesUsed(joinLines(base.technologies_used));
-    setRawAchievements(joinLines(base.raw_achievements));
-    setQuantifiableMetrics(joinLines(base.quantifiable_metrics));
+    setName(base.name ?? '');
+    setContext(base.context ?? '');
+    setStartDate(base.startDate ?? '');
+    setEndDate(base.endDate ?? '');
+    setTechnologiesUsed(joinLines(base.technologies_used ?? []));
+    setRawAchievements(joinLines(base.raw_achievements ?? []));
+    setQuantifiableMetrics(joinLines(base.quantifiable_metrics ?? []));
     setSubmitError('');
   }
 

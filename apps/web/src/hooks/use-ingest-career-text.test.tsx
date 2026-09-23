@@ -51,7 +51,7 @@ describe('useIngestCareerText', () => {
     expect(result.current.progress).toBe('Parsing experience...');
   });
 
-  it('clears loading and populates parseSummary from parsed/droppedCount once the stream reports done', () => {
+  it('clears loading and populates parseSummary from parsed/droppedEntries once the stream reports done', () => {
     let options!: SSEOptions;
     vi.mocked(apiSSE).mockImplementation((_path, _body, opts) => {
       options = opts as SSEOptions;
@@ -60,10 +60,18 @@ describe('useIngestCareerText', () => {
     const { result } = renderHook(() => useIngestCareerText());
 
     act(() => result.current.ingest('some text'));
-    act(() => options.onDone({ parsed: [{ id: '1' }, { id: '2' }], droppedCount: 1 }));
+    act(() =>
+      options.onDone({
+        parsed: [{ id: '1' }, { id: '2' }],
+        droppedEntries: [{ type: 'award', reason: 'unrecognized type', snippet: '{}' }],
+      }),
+    );
 
     expect(result.current.loading).toBe(false);
     expect(result.current.parseSummary).toEqual({ parsed: 2, dropped: 1 });
+    expect(result.current.droppedEntries).toEqual([
+      { type: 'award', reason: 'unrecognized type', snippet: '{}' },
+    ]);
   });
 
   it('exposes the raw parsed entries from the done payload, for the review step to read before confirming', () => {
@@ -79,7 +87,7 @@ describe('useIngestCareerText', () => {
     ];
 
     act(() => result.current.ingest('some text'));
-    act(() => options.onDone({ parsed: parsedEntries, droppedCount: 0 }));
+    act(() => options.onDone({ parsed: parsedEntries, droppedEntries: [] }));
 
     expect(result.current.entries).toEqual(parsedEntries);
   });
@@ -93,7 +101,7 @@ describe('useIngestCareerText', () => {
     const { result } = renderHook(() => useIngestCareerText());
 
     act(() => result.current.ingest('first paste'));
-    act(() => options.onDone({ parsed: [{ type: 'interest', entry: 'Chess' }], droppedCount: 0 }));
+    act(() => options.onDone({ parsed: [{ type: 'interest', entry: 'Chess' }], droppedEntries: [] }));
     expect(result.current.entries).toHaveLength(1);
 
     act(() => result.current.ingest('second paste'));
@@ -115,7 +123,7 @@ describe('useIngestCareerText', () => {
     expect(result.current.entries).toEqual([]);
   });
 
-  it('defaults parseSummary to zero counts when the done payload omits parsed/droppedCount', () => {
+  it('defaults parseSummary to zero counts when the done payload omits parsed/droppedEntries', () => {
     let options!: SSEOptions;
     vi.mocked(apiSSE).mockImplementation((_path, _body, opts) => {
       options = opts as SSEOptions;
@@ -154,7 +162,7 @@ describe('useIngestCareerText', () => {
     const { result } = renderHook(() => useIngestCareerText());
 
     act(() => result.current.ingest('some text'));
-    act(() => options.onDone({ parsed: [{ id: '1' }], droppedCount: 0 }));
+    act(() => options.onDone({ parsed: [{ id: '1' }], droppedEntries: [] }));
     expect(result.current.parseSummary).toEqual({ parsed: 1, dropped: 0 });
 
     act(() => result.current.ingest('more text'));

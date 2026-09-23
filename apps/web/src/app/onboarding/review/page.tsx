@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
-import type { IngestEntryDto, MasterDB } from '@resumiq/schemas';
+import {
+  IngestEntrySchema,
+  type IngestDraftEntryDto,
+  type IngestEntryDto,
+  type MasterDB,
+} from '@resumiq/schemas';
 import { PageHeader } from '@/components/page-header';
 import { AddAchievementModal } from '@/app/profile/_components/add-achievement-modal';
 import { AddCertificationModal } from '@/app/profile/_components/add-certification-modal';
@@ -12,41 +17,75 @@ import { AddExperienceModal } from '@/app/profile/_components/add-experience-mod
 import { AddProjectModal } from '@/app/profile/_components/add-project-modal';
 import { clearPendingEntries, loadPendingEntries, savePendingEntries } from '../_lib/pending-entries';
 
+// Concrete per-type field shapes come from `IngestEntryDto` (the strict
+// schema's inferred type), not `IngestDraftEntryDto` — a draft's `entry` is
+// `unknown` at the type level since it may be missing required fields.
 type ExperienceEntry = Extract<IngestEntryDto, { type: 'experience' }>['entry'];
 type ProjectEntry = Extract<IngestEntryDto, { type: 'project' }>['entry'];
 type EducationEntry = Extract<IngestEntryDto, { type: 'education' }>['entry'];
 type CertificationEntry = Extract<IngestEntryDto, { type: 'certification' }>['entry'];
 type AwardEntry = Extract<IngestEntryDto, { type: 'award' }>['entry'];
-type SkillsEntry = Extract<IngestEntryDto, { type: 'skills' }>['entry'];
-type SummaryEntry = Extract<IngestEntryDto, { type: 'summary' }>['entry'];
-type PublicationEntry = Extract<IngestEntryDto, { type: 'publication' }>['entry'];
-type VolunteeringEntry = Extract<IngestEntryDto, { type: 'volunteering' }>['entry'];
-type InterestEntry = Extract<IngestEntryDto, { type: 'interest' }>['entry'];
-
-/** Pairs an entry with its position in the flat `entries` array, so editing
- * or removing an item within a type-grouped section updates the right slot. */
-type IndexedEntry<T extends IngestEntryDto['type']> = {
-  index: number;
-  entry: Extract<IngestEntryDto, { type: T }>['entry'];
+type SkillsEntry = {
+  programming_languages?: string[];
+  frameworks_and_libraries?: string[];
+  infrastructure_and_tools?: string[];
+  databases?: string[];
+  soft_skills?: string[];
+};
+type SummaryEntry = { target_role?: string; content?: string };
+type PublicationEntry = { title?: string; venue?: string; date?: string; url?: string; description?: string };
+type VolunteeringEntry = {
+  organization?: string;
+  role?: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent?: boolean;
+  description?: string;
 };
 
-function entriesOfType<T extends IngestEntryDto['type']>(
-  entries: IngestEntryDto[],
-  type: T,
-): Array<IndexedEntry<T>> {
-  const result: Array<IndexedEntry<T>> = [];
+/** Pairs a draft entry with its position in the flat `entries` array, so
+ * editing or removing an item within a type-grouped section updates the
+ * right slot. */
+type IndexedEntry = {
+  index: number;
+  entry: unknown;
+  missingFields: string[];
+};
+
+function entriesOfType(entries: IngestDraftEntryDto[], type: IngestDraftEntryDto['type']): IndexedEntry[] {
+  const result: IndexedEntry[] = [];
   entries.forEach((e, index) => {
     if (e.type === type) {
-      result.push({ index, entry: e.entry as IndexedEntry<T>['entry'] });
+      result.push({ index, entry: e.entry, missingFields: e.missingFields });
     }
   });
   return result;
 }
 
+/**
+ * Recomputes completeness against the STRICT per-type schema — never trust
+ * the `missingFields` a draft arrived with once the user has edited it, since
+ * the edit may have fixed (or newly broken) a field. Returns `[]` when the
+ * entry now fully validates.
+ */
+function recomputeMissingFields(type: IngestDraftEntryDto['type'], entryValue: unknown): string[] {
+  const result = IngestEntrySchema.safeParse({ type, entry: entryValue });
+  if (result.success) return [];
+  if (type === 'interest') return ['value'];
+  return Array.from(
+    new Set(
+      result.error.issues
+        .map((issue) => String(issue.path[1] ?? issue.path[0] ?? ''))
+        .filter(Boolean),
+    ),
+  );
+}
+
 export default function OnboardingReviewPage() {
   const router = useRouter();
   // `undefined` = not yet loaded from sessionStorage, `null` = nothing pending.
-  const [entries, setEntries] = useState<IngestEntryDto[] | null | undefined>(undefined);
+  const [entries, setEntries] = useState<IngestDraftEntryDto[] | null | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -67,9 +106,11 @@ export default function OnboardingReviewPage() {
     setEntries(pending && pending.length > 0 ? pending : null);
   }, []);
 
-  function replaceEntryAt(index: number, entry: IngestEntryDto['entry']): Promise<void> {
+  function replaceEntryAt(index: number, entryValue: unknown): Promise<void> {
     setEntries((prev) => {
-      const next = (prev ?? []).map((e, i) => (i === index ? ({ ...e, entry } as IngestEntryDto) : e));
+      const next = (prev ?? []).map((e, i) =>
+        i === index ? { ...e, entry: entryValue, missingFields: recomputeMissingFields(e.type, entryValue) } : e,
+      );
       // Keep the sessionStorage snapshot in sync with every edit — otherwise
       // a refresh before "Save to profile" re-reads the original, unedited
       // parse and silently discards the user's changes.
@@ -89,16 +130,29 @@ export default function OnboardingReviewPage() {
   }
 
   async function handleConfirm() {
-    if (!entries || entries.length === 0) return;
+    if (!entries) return;
+    const completeEntries = entries.filter((e) => e.missingFields.length === 0);
+    if (completeEntries.length === 0) return;
+
     setSaving(true);
     setError('');
     try {
       await apiFetch<MasterDB>('/onboarding/ingest/confirm', {
         method: 'POST',
-        body: JSON.stringify({ entries }),
+        body: JSON.stringify({
+          entries: completeEntries.map(({ type, entry }) => ({ type, entry })),
+        }),
       });
-      clearPendingEntries();
-      router.push('/profile');
+      const remaining = entries.filter((e) => e.missingFields.length > 0);
+      if (remaining.length === 0) {
+        clearPendingEntries();
+        router.push('/profile');
+      } else {
+        // Some entries are still incomplete — keep them pending so the user
+        // can come back and finish them rather than silently losing them.
+        savePendingEntries(remaining);
+        setEntries(remaining);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -139,6 +193,9 @@ export default function OnboardingReviewPage() {
   const volunteering = entriesOfType(entries, 'volunteering');
   const interests = entriesOfType(entries, 'interest');
 
+  const incompleteCount = entries.filter((e) => e.missingFields.length > 0).length;
+  const completeCount = entries.length - incompleteCount;
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
@@ -162,43 +219,66 @@ export default function OnboardingReviewPage() {
 
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
+        {incompleteCount > 0 && (
+          <div className="mb-6 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700">
+            {incompleteCount} incomplete entr{incompleteCount === 1 ? 'y' : 'ies'} won&apos;t be
+            added — complete the marked fields to include{' '}
+            {incompleteCount === 1 ? 'it' : 'them'}.
+          </div>
+        )}
+
         <div className="space-y-4">
           {experience.length > 0 && (
             <Section title="Experience" count={experience.length}>
-              {experience.map(({ entry, index }) => (
-                <ReviewRow key={index} title={`${entry.role} @ ${entry.company}`}>
-                  <AddExperienceModal
-                    entry={entry as ExperienceEntry}
-                    submitting={saving}
-                    onAdd={(updated) => replaceEntryAt(index, updated)}
-                    onDelete={() => removeEntryAt(index)}
-                  />
-                </ReviewRow>
-              ))}
+              {experience.map(({ entry, index, missingFields }) => {
+                const exp = entry as Partial<ExperienceEntry>;
+                return (
+                  <ReviewRow
+                    key={index}
+                    title={exp.role || exp.company ? `${exp.role ?? '(missing role)'} @ ${exp.company ?? '(missing company)'}` : 'New experience'}
+                    missingFields={missingFields}
+                  >
+                    <AddExperienceModal
+                      entry={exp}
+                      submitting={saving}
+                      onAdd={(updated) => replaceEntryAt(index, updated)}
+                      onDelete={() => removeEntryAt(index)}
+                    />
+                  </ReviewRow>
+                );
+              })}
             </Section>
           )}
 
           {projects.length > 0 && (
             <Section title="Projects" count={projects.length}>
-              {projects.map(({ entry, index }) => (
-                <ReviewRow key={index} title={(entry as ProjectEntry).name}>
-                  <AddProjectModal
-                    entry={entry as ProjectEntry}
-                    submitting={saving}
-                    onAdd={(updated) => replaceEntryAt(index, updated)}
-                    onDelete={() => removeEntryAt(index)}
-                  />
-                </ReviewRow>
-              ))}
+              {projects.map(({ entry, index, missingFields }) => {
+                const proj = entry as Partial<ProjectEntry>;
+                return (
+                  <ReviewRow key={index} title={proj.name || 'New project'} missingFields={missingFields}>
+                    <AddProjectModal
+                      entry={proj}
+                      submitting={saving}
+                      onAdd={(updated) => replaceEntryAt(index, updated)}
+                      onDelete={() => removeEntryAt(index)}
+                    />
+                  </ReviewRow>
+                );
+              })}
             </Section>
           )}
 
           {education.length > 0 && (
             <Section title="Education" count={education.length}>
-              {education.map(({ entry, index }) => {
-                const edu = entry as EducationEntry;
+              {education.map(({ entry, index, missingFields }) => {
+                const edu = entry as Partial<EducationEntry>;
                 return (
-                  <ReviewRow key={index} title={edu.degree_type ? `${edu.degree_type} in ${edu.major}` : edu.major} subtitle={edu.institution}>
+                  <ReviewRow
+                    key={index}
+                    title={edu.degree_type ? `${edu.degree_type} in ${edu.major ?? '(missing major)'}` : edu.major ?? 'New education'}
+                    subtitle={edu.institution}
+                    missingFields={missingFields}
+                  >
                     <AddEducationModal
                       entry={edu}
                       submitting={saving}
@@ -213,10 +293,10 @@ export default function OnboardingReviewPage() {
 
           {certifications.length > 0 && (
             <Section title="Certifications" count={certifications.length}>
-              {certifications.map(({ entry, index }) => {
-                const cert = entry as CertificationEntry;
+              {certifications.map(({ entry, index, missingFields }) => {
+                const cert = entry as Partial<CertificationEntry>;
                 return (
-                  <ReviewRow key={index} title={cert.name} subtitle={cert.issuer}>
+                  <ReviewRow key={index} title={cert.name || 'New certification'} subtitle={cert.issuer} missingFields={missingFields}>
                     <AddCertificationModal
                       entry={cert}
                       submitting={saving}
@@ -231,10 +311,10 @@ export default function OnboardingReviewPage() {
 
           {awards.length > 0 && (
             <Section title="Awards" count={awards.length}>
-              {awards.map(({ entry, index }) => {
-                const award = entry as AwardEntry;
+              {awards.map(({ entry, index, missingFields }) => {
+                const award = entry as Partial<AwardEntry>;
                 return (
-                  <ReviewRow key={index} title={award.title} subtitle={award.issuer}>
+                  <ReviewRow key={index} title={award.title || 'New award'} subtitle={award.issuer} missingFields={missingFields}>
                     <AddAchievementModal
                       entry={award}
                       submitting={saving}
@@ -247,17 +327,16 @@ export default function OnboardingReviewPage() {
             </Section>
           )}
 
-          {/* The remaining types (skills, summary, publication, volunteering,
-           * interest) don't have a manual-CRUD modal in the profile page yet
-           * (Phase 3a only built modals for array sections with an edit UI
-           * need — see use-profile-section.ts's ArraySectionKey). Rather than
-           * build new modal infrastructure for types that don't need it
-           * elsewhere yet, these render as plain review-only cards: view +
-           * remove, no inline edit. */}
+          {/* Skills/summary/publication/volunteering/interest don't have a
+           * manual-CRUD modal in the profile page yet (Phase 3a only built
+           * modals for array sections with an edit UI need — see
+           * use-profile-section.ts's ArraySectionKey). These render
+           * view + remove only, no inline edit — an incomplete entry of one
+           * of these types can only be removed, not fixed, from this page. */}
           {skills.length > 0 && (
             <Section title="Skills" count={skills.length}>
-              {skills.map(({ entry, index }) => (
-                <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
+              {skills.map(({ entry, index, missingFields }) => (
+                <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)} missingFields={missingFields}>
                   <SkillsSummary skills={entry as SkillsEntry} />
                 </PlainReviewCard>
               ))}
@@ -266,10 +345,10 @@ export default function OnboardingReviewPage() {
 
           {summaries.length > 0 && (
             <Section title="Summaries" count={summaries.length}>
-              {summaries.map(({ entry, index }) => {
+              {summaries.map(({ entry, index, missingFields }) => {
                 const summary = entry as SummaryEntry;
                 return (
-                  <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
+                  <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)} missingFields={missingFields}>
                     <p className="font-medium">{summary.target_role}</p>
                     <p className="mt-1 text-sm text-foreground">{summary.content}</p>
                   </PlainReviewCard>
@@ -280,10 +359,10 @@ export default function OnboardingReviewPage() {
 
           {publications.length > 0 && (
             <Section title="Publications & speaking" count={publications.length}>
-              {publications.map(({ entry, index }) => {
+              {publications.map(({ entry, index, missingFields }) => {
                 const pub = entry as PublicationEntry;
                 return (
-                  <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
+                  <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)} missingFields={missingFields}>
                     <p className="font-medium">{pub.title}</p>
                     <p className="text-sm text-muted-foreground">
                       {[pub.venue, pub.date].filter(Boolean).join(' · ')}
@@ -305,10 +384,10 @@ export default function OnboardingReviewPage() {
 
           {volunteering.length > 0 && (
             <Section title="Volunteering & leadership" count={volunteering.length}>
-              {volunteering.map(({ entry, index }) => {
+              {volunteering.map(({ entry, index, missingFields }) => {
                 const vol = entry as VolunteeringEntry;
                 return (
-                  <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
+                  <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)} missingFields={missingFields}>
                     <p className="font-medium">{vol.role} @ {vol.organization}</p>
                     <p className="text-sm text-muted-foreground">
                       {vol.startDate} – {vol.isCurrent ? 'Present' : (vol.endDate ?? '')}
@@ -327,9 +406,9 @@ export default function OnboardingReviewPage() {
 
           {interests.length > 0 && (
             <Section title="Interests" count={interests.length}>
-              {interests.map(({ entry, index }) => (
-                <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)}>
-                  <p className="text-sm text-foreground">{entry as InterestEntry}</p>
+              {interests.map(({ entry, index, missingFields }) => (
+                <PlainReviewCard key={index} onRemove={() => removeEntryAt(index)} missingFields={missingFields}>
+                  <p className="text-sm text-foreground">{(entry as string) || '(no value)'}</p>
                 </PlainReviewCard>
               ))}
             </Section>
@@ -337,9 +416,15 @@ export default function OnboardingReviewPage() {
         </div>
 
         <div className="mt-8 flex items-center justify-end gap-3">
+          {incompleteCount > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {completeCount} of {entries.length} ready to save
+            </p>
+          )}
           <button
             onClick={handleConfirm}
-            disabled={saving || entries.length === 0}
+            disabled={saving || completeCount === 0}
+            title={completeCount === 0 ? 'Complete at least one entry before saving' : undefined}
             className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save to profile'}
@@ -372,13 +457,24 @@ function Section({
   );
 }
 
+function IncompleteBadge({ missingFields }: { missingFields: string[] }) {
+  if (missingFields.length === 0) return null;
+  return (
+    <p className="mt-1 text-xs font-medium text-amber-700">
+      Incomplete — fill in: {missingFields.join(', ')}
+    </p>
+  );
+}
+
 function ReviewRow({
   title,
   subtitle,
+  missingFields,
   children,
 }: {
   title: string;
   subtitle?: string;
+  missingFields: string[];
   children: React.ReactNode;
 }) {
   return (
@@ -386,6 +482,7 @@ function ReviewRow({
       <div>
         <p className="font-medium">{title}</p>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        <IncompleteBadge missingFields={missingFields} />
       </div>
       {children}
     </div>
@@ -394,14 +491,19 @@ function ReviewRow({
 
 function PlainReviewCard({
   onRemove,
+  missingFields,
   children,
 }: {
   onRemove: () => void;
+  missingFields: string[];
   children: React.ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-muted p-4">
-      <div className="flex-1">{children}</div>
+      <div className="flex-1">
+        {children}
+        <IncompleteBadge missingFields={missingFields} />
+      </div>
       <button
         onClick={onRemove}
         className="shrink-0 text-sm text-muted-foreground hover:text-red-600"

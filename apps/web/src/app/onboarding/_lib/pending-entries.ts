@@ -1,4 +1,4 @@
-import type { IngestEntryDto } from '@resumiq/schemas';
+import type { IngestDraftEntryDto } from '@resumiq/schemas';
 
 // The AI parse and the review step live on separate routes (/onboarding and
 // /onboarding/review), so the parsed-but-not-yet-persisted entries need to
@@ -7,17 +7,17 @@ import type { IngestEntryDto } from '@resumiq/schemas';
 // short-lived handoff — it's tab-scoped and cleared once confirmed/rejected.
 const STORAGE_KEY = 'onboarding:pendingIngestEntries';
 
-export function savePendingEntries(entries: IngestEntryDto[]): void {
+export function savePendingEntries(entries: IngestDraftEntryDto[]): void {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
 /** Returns `null` if nothing is pending or the stored value is malformed. */
-export function loadPendingEntries(): IngestEntryDto[] | null {
+export function loadPendingEntries(): IngestDraftEntryDto[] | null {
   const raw = sessionStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as IngestEntryDto[]) : null;
+    return Array.isArray(parsed) ? (parsed as IngestDraftEntryDto[]) : null;
   } catch {
     return null;
   }

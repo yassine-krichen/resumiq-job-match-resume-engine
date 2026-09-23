@@ -43,7 +43,11 @@ interface AddEducationModalProps {
   submitting?: boolean;
   /** When provided, the modal opens pre-filled for editing this entry
    * instead of creating a new one. */
-  entry?: NewEducation;
+  // Partial rather than required: the onboarding-review flow passes
+  // possibly-incomplete AI-extracted drafts (see IngestDraftEntryDto) whose
+  // missing fields still need an editable input (resetForm falls back
+  // per-field to '').
+  entry?: Partial<NewEducation>;
   /** Renders a destructive "Delete" action in the footer — only relevant
    * (and only passed) in edit mode. */
   onDelete?: () => Promise<void>;
@@ -74,20 +78,24 @@ export function AddEducationModal({
   const [deleting, setDeleting] = useState(false);
 
   function resetForm() {
+    // `entry` may be an incomplete onboarding-review draft with missing
+    // fields (see IngestDraftEntryDto) — fall back per-field, not just at
+    // the object level, so every input still renders (controlled) even when
+    // the AI extraction didn't populate that field.
     const base = entry ?? EMPTY_EDUCATION;
-    setInstitution(base.institution);
-    setDegreeType(base.degree_type);
-    setMajor(base.major);
-    setMinor(base.minor);
-    setLocation(base.location);
-    setStartDate(base.startDate);
-    setEndDate(base.endDate);
-    setGpa(base.gpa);
-    setHonors(joinLines(base.honors));
-    setRelevantCoursework(joinLines(base.relevant_coursework));
-    setThesisOrCapstone(base.thesis_or_capstone);
-    setExtracurriculars(joinLines(base.extracurriculars));
-    setDescription(base.description);
+    setInstitution(base.institution ?? '');
+    setDegreeType(base.degree_type ?? '');
+    setMajor(base.major ?? '');
+    setMinor(base.minor ?? '');
+    setLocation(base.location ?? '');
+    setStartDate(base.startDate ?? '');
+    setEndDate(base.endDate ?? '');
+    setGpa(base.gpa ?? '');
+    setHonors(joinLines(base.honors ?? []));
+    setRelevantCoursework(joinLines(base.relevant_coursework ?? []));
+    setThesisOrCapstone(base.thesis_or_capstone ?? '');
+    setExtracurriculars(joinLines(base.extracurriculars ?? []));
+    setDescription(base.description ?? '');
     setSubmitError('');
   }
 
