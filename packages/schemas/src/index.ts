@@ -1192,3 +1192,5 @@ export type InterviewIntakeQuestionsDto = z.infer<typeof InterviewIntakeQuestion
 export type InterviewPrepReportDto = z.infer<typeof InterviewPrepReportSchema>;
 export type CompatibilityResultDto = z.infer<typeof CompatibilityResultSchema>;
 export type JobDNADto = z.infer<typeof JobDNASchema>;
+
+export * from './outreach';

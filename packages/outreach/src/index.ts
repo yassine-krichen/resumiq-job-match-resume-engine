@@ -1,0 +1,12 @@
+export * from './build-selection';
+export * from './bullet-guard';
+export * from './critic';
+export * from './dedupe';
+export * from './email-check';
+export * from './locale';
+export * from './mime';
+export * from './normalize-input';
+export * from './quote-verifier';
+export * from './send-scheduler';
+export * from './snapshot-text';
+export { countWords, extractNumbers, normalizeForMatch } from './text-utils';
