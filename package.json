@@ -5,7 +5,8 @@
   "description": "AI-tailored resume generation — career profile, job matching, and resume drafting. Turborepo monorepo: apps/api (NestJS), apps/web (Next.js), packages/ai-bridge, packages/schemas.",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "outreach"
   ],
   "scripts": {
     "dev": "turbo dev",

@@ -92,3 +92,67 @@ tasks:
     desc: Run a one-off job scan + ingest against the DB (needs DATABASE_URL from apps/api/.env only — no Redis/queue/worker required)
     cmds:
       - npx turbo run scan:jobs --filter=./apps/api
+
+  # Cold-outreach agent: a self-contained folder (outreach/), see outreach/README.md.
+  outreach:
+    desc: Open Claude Code inside outreach/ (then type /outreach <list>, /outreach --resume <runId>)
+    dir: outreach
+    interactive: true
+    cmds:
+      - claude
+
+  outreach:status:
+    desc: Outreach pipeline counts per run (needs OUTREACH_DATABASE_URL in outreach/.env)
+    dir: outreach
+    cmds:
+      - npm run outreach --silent -- status
+
+  outreach:track-resumes:
+    desc: Build the three fallback resumes (ai / swe / fullstack) from the data inventory into outreach/storage/tracks
+    dir: outreach
+    cmds:
+      - npm run outreach --silent -- track-resumes
+
+  outreach:review:
+    desc: Terminal UI to approve / edit / kill outreach drafts and open their PDF (interactive)
+    dir: outreach
+    interactive: true
+    cmds:
+      - npm run outreach --silent -- review
+
+  outreach:auth:
+    desc: One-time Gmail sign-in for outreach (opens a browser; token saved outside the repo)
+    dir: outreach
+    interactive: true
+    cmds:
+      - npm run outreach --silent -- auth
+
+  outreach:signature:
+    desc: Fetch the Gmail signature into outreach/signature.html (emails are refused without it)
+    dir: outreach
+    cmds:
+      - npm run outreach --silent -- signature
+
+  outreach:tick:
+    desc: Run one outreach tick now (sync replies, schedule, send what is due). The schedule runs this every 5 min
+    dir: outreach
+    cmds:
+      - npm run outreach --silent -- tick
+
+  outreach:prune:
+    desc: Erase contacts, dossiers, draft text, PDFs and run folders of dead outreach leads older than 180 days (add -- --dry-run to preview, -- --days N to change)
+    dir: outreach
+    cmds:
+      - npm run outreach --silent -- prune {{.CLI_ARGS}}
+
+  outreach:install-schedule:
+    desc: Windows Task Scheduler - run the outreach tick every 5 minutes (only while you are signed in)
+    dir: outreach
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-schedule.ps1
+
+  outreach:uninstall-schedule:
+    desc: Remove the outreach tick from Windows Task Scheduler
+    dir: outreach
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall-schedule.ps1

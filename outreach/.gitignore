@@ -1,0 +1,21 @@
+node_modules/
+dist/
+
+# Secrets and personal data: never published with the subtree
+.env
+.env.*
+!.env.example
+outreach.config.json
+signature.html
+signature.txt
+input/
+runs/
+logs/
+storage/
+
+# Generated Prisma client (rebuilt by `npm install` / `npm run prisma:generate`)
+src/generated/
+
+# PDFs are generated per candidate; only the ones under examples/ may be committed
+*.pdf
+!examples/**/*.pdf

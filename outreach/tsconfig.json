@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "declaration": false,
+    "rootDir": "./src",
+    "outDir": "./dist",
+    // Ink ships only an ESM "exports" map, which classic CommonJS resolution cannot see: point the types at
+    // its d.ts. It is loaded at runtime with a dynamic import (src/tui/esm-import.ts), never `require`d.
+    "paths": {
+      "ink": ["./node_modules/ink/build/index.d.ts", "../node_modules/ink/build/index.d.ts"]
+    },
+    "types": ["node", "jest"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

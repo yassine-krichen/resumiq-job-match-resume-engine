@@ -1,0 +1,73 @@
+{
+  "data_inventory_path": "./examples/data-inventory.example.json",
+
+  "hours_per_week": 20,
+  "start_date": "2026-10-12",
+  "summer_internship": { "available": true },
+
+  "availability": {
+    "en": {
+      "hours_line": "I can commit about 20 hours a week",
+      "start_line": "starting October 12",
+      "ask_line": "I can work part-time remotely now, or join you for a summer 2027 internship",
+      "overlap": {
+        "europe": "My working hours overlap fully with Paris and Berlin",
+        "us": "I am available 12:00-16:00 ET",
+        "other": "I can overlap with most of your working day"
+      }
+    },
+    "fr": {
+      "hours_line": "Je suis disponible environ 20 heures par semaine",
+      "start_line": "dès le 12 octobre",
+      "ask_line": "Je peux travailler à temps partiel à distance dès maintenant, ou vous rejoindre pour un stage d'été 2027",
+      "overlap": {
+        "europe": "Mes horaires coïncident avec ceux de Paris et de Berlin",
+        "us": "Je suis disponible de 12h00 à 16h00 ET",
+        "other": "Je peux couvrir la plupart de votre journée de travail"
+      }
+    }
+  },
+
+  "daily_cap": 30,
+  "daily_cap_week1": 20,
+  "gap_min_minutes": 4,
+  "gap_max_minutes": 11,
+  "send_window": { "start": "08:30", "end": "10:30" },
+  "follow_up_business_days": 5,
+  "sender_name": "Jane Doe",
+  "sender_email": "jane.doe@example.com",
+  "provider": "gmail",
+
+  "fallback_timezone": "America/New_York",
+  "draft_retry_limit": 2,
+
+  "tracks": {
+    "ai": {
+      "label": "AI / ML engineer",
+      "summary": "Software engineering student building applied AI systems: retrieval pipelines, evaluation harnesses and machine learning models that run like production services.",
+      "keywords": ["python", "llm", "rag", "retrieval", "pgvector", "embeddings", "scikit-learn", "pandas", "machine learning", "evaluation", "anomaly"],
+      "max_experiences": 1,
+      "max_projects": 3,
+      "bullets_per_entry": 3,
+      "skills_per_category": 8
+    },
+    "swe": {
+      "label": "Software engineer",
+      "summary": "Software engineering student focused on backend systems: typed APIs, databases, tests and containers, with internships shipping real code.",
+      "keywords": ["java", "spring boot", "go", "grpc", "docker", "postgresql", "integration tests", "rest", "latency", "indexes"],
+      "max_experiences": 1,
+      "max_projects": 3,
+      "bullets_per_entry": 3,
+      "skills_per_category": 8
+    },
+    "fullstack": {
+      "label": "Full-stack engineer",
+      "summary": "Full-stack engineering student who ships end to end: React and Next.js interfaces, typed NestJS APIs and PostgreSQL, deployed with continuous integration.",
+      "keywords": ["react", "next.js", "nestjs", "typescript", "angular", "dashboard", "full-stack", "prisma", "postgresql", "rest"],
+      "max_experiences": 1,
+      "max_projects": 3,
+      "bullets_per_entry": 3,
+      "skills_per_category": 8
+    }
+  }
+}

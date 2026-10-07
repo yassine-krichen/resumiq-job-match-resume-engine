@@ -1,0 +1,180 @@
+{
+  "personal_info": {
+    "name": "Jane Doe",
+    "location": "Lisbon, Portugal",
+    "phone": "+351 900 000 000",
+    "email": "jane.doe@example.com",
+    "work_authorization": [],
+    "clearances": [],
+    "links": [
+      { "platform": "GitHub", "url": "https://github.com/jane-doe-example" },
+      { "platform": "LinkedIn", "url": "https://www.linkedin.com/in/jane-doe-example" }
+    ]
+  },
+  "summaries": [
+    {
+      "target_role": "Software Engineer",
+      "content": "Software engineering student who ships full-stack products and applied AI features, with three internships behind her."
+    }
+  ],
+  "experience": [
+    {
+      "company": "Helios Data Labs",
+      "company_industry": "Applied AI",
+      "role": "AI Engineer Intern",
+      "location": "Lisbon, Portugal",
+      "location_type": "Hybrid",
+      "startDate": "Jun 2026",
+      "endDate": "Aug 2026",
+      "isCurrent": false,
+      "core_competencies": ["Retrieval", "Evaluation"],
+      "technologies_used": ["Python", "FastAPI", "PostgreSQL", "pgvector", "Docker"],
+      "raw_achievements": [
+        "Built a retrieval pipeline that answers support questions over 12,000 internal documents",
+        "Cut average answer latency from 4.2 s to 1.1 s with caching and batched embedding calls",
+        "Added an evaluation harness of 150 test questions that runs on every pull request"
+      ],
+      "quantifiable_metrics": ["12,000 documents", "4.2 s to 1.1 s latency", "150 evaluation questions"]
+    },
+    {
+      "company": "Brightline Systems",
+      "company_industry": "Logistics software",
+      "role": "Full Stack Developer Intern",
+      "location": "Porto, Portugal",
+      "location_type": "On-site",
+      "startDate": "Feb 2025",
+      "endDate": "Jun 2025",
+      "isCurrent": false,
+      "core_competencies": ["REST APIs", "Testing"],
+      "technologies_used": ["TypeScript", "React", "NestJS", "PostgreSQL"],
+      "raw_achievements": [
+        "Built an internal scheduling dashboard used daily by a 25-person operations team",
+        "Reduced dashboard load time by 60% by paginating queries and adding database indexes",
+        "Wrote 80 integration tests that caught two regressions before release"
+      ],
+      "quantifiable_metrics": ["25-person team", "60% faster load", "80 integration tests"]
+    },
+    {
+      "company": "Cedar Mobile Studio",
+      "company_industry": "Mobile apps",
+      "role": "Junior Developer Intern",
+      "location": "Lisbon, Portugal",
+      "location_type": "On-site",
+      "startDate": "Jan 2024",
+      "endDate": "Feb 2024",
+      "isCurrent": false,
+      "core_competencies": [],
+      "technologies_used": ["Java", "Spring Boot", "MySQL"],
+      "raw_achievements": [
+        "Implemented 6 REST endpoints for a loyalty-card feature in a Spring Boot backend",
+        "Fixed 14 reported bugs across the checkout flow during a three-week sprint"
+      ],
+      "quantifiable_metrics": ["6 endpoints", "14 bugs fixed"]
+    }
+  ],
+  "education": [
+    {
+      "institution": "Example Institute of Technology",
+      "degree_type": "Engineering Degree",
+      "major": "Computer Software Engineering",
+      "minor": "",
+      "location": "Lisbon, Portugal",
+      "startDate": "Sep 2023",
+      "endDate": "Jun 2028",
+      "gpa": "3.7/4.0",
+      "honors": [],
+      "relevant_coursework": ["Algorithms", "Databases", "Distributed Systems", "Machine Learning"],
+      "thesis_or_capstone": "",
+      "extracurriculars": [],
+      "description": ""
+    }
+  ],
+  "projects": [
+    {
+      "name": "DocuAsk",
+      "context": "Question answering over PDF collections with cited answers.",
+      "links": [{ "type": "GitHub", "url": "https://github.com/jane-doe-example/docuask" }],
+      "startDate": "Jan 2026",
+      "endDate": "Mar 2026",
+      "technologies_used": ["Python", "FastAPI", "pgvector", "OpenAI API", "Next.js"],
+      "raw_achievements": [
+        "Built a RAG assistant that answers questions over PDF collections and cites the source page",
+        "Chunked and embedded 3,500 pages of documentation into a pgvector index",
+        "Scored 87% on a hand-labelled set of 120 questions using an automated evaluation script"
+      ],
+      "quantifiable_metrics": ["3,500 pages", "87% accuracy", "120 evaluation questions"]
+    },
+    {
+      "name": "TrailTrack",
+      "context": "Full-stack hiking log with route statistics.",
+      "links": [{ "type": "GitHub", "url": "https://github.com/jane-doe-example/trailtrack" }],
+      "startDate": "Sep 2025",
+      "endDate": "Dec 2025",
+      "technologies_used": ["TypeScript", "Next.js", "NestJS", "PostgreSQL", "Prisma"],
+      "raw_achievements": [
+        "Built a full-stack hiking log with GPX import, route statistics and elevation charts",
+        "Designed a typed REST API with 18 endpoints and request validation on every route",
+        "Deployed to the cloud with a CI pipeline that runs 45 tests on every push"
+      ],
+      "quantifiable_metrics": ["18 endpoints", "45 tests"]
+    },
+    {
+      "name": "Queueless",
+      "context": "Appointment queue management for small clinics.",
+      "links": [{ "type": "GitHub", "url": "https://github.com/jane-doe-example/queueless" }],
+      "startDate": "Feb 2025",
+      "endDate": "May 2025",
+      "technologies_used": ["Java", "Spring Boot", "Angular", "PostgreSQL", "Docker"],
+      "raw_achievements": [
+        "Built an appointment queue for clinics with live position updates over WebSockets",
+        "Cut simulated waiting-room crowding by 30% in a pilot with 3 clinics",
+        "Containerised the stack with Docker so a new developer starts it with one command"
+      ],
+      "quantifiable_metrics": ["30% less crowding", "3 clinics"]
+    },
+    {
+      "name": "SignalWatch",
+      "context": "Anomaly detection on server metrics.",
+      "links": [{ "type": "GitHub", "url": "https://github.com/jane-doe-example/signalwatch" }],
+      "startDate": "Oct 2024",
+      "endDate": "Dec 2024",
+      "technologies_used": ["Python", "scikit-learn", "pandas", "Docker"],
+      "raw_achievements": [
+        "Trained an isolation-forest model that flags anomalies in server CPU and memory metrics",
+        "Reached 0.91 F1 on 6 months of labelled incident data from a public dataset",
+        "Packaged the detector as a Docker image that scores a metrics stream in real time"
+      ],
+      "quantifiable_metrics": ["0.91 F1", "6 months of data"]
+    },
+    {
+      "name": "MiniKV",
+      "context": "In-memory key-value store written for a systems course.",
+      "links": [{ "type": "GitHub", "url": "https://github.com/jane-doe-example/minikv" }],
+      "startDate": "Mar 2024",
+      "endDate": "May 2024",
+      "technologies_used": ["Go", "gRPC"],
+      "raw_achievements": [
+        "Wrote an in-memory key-value store in Go with TTL expiry and an append-only log for recovery",
+        "Served 50,000 requests per second on a laptop in a load test with 100 concurrent clients"
+      ],
+      "quantifiable_metrics": ["50,000 requests per second", "100 concurrent clients"]
+    }
+  ],
+  "skills": {
+    "programming_languages": ["Python", "TypeScript", "Java", "Go", "SQL"],
+    "frameworks_and_libraries": ["FastAPI", "NestJS", "Next.js", "React", "Angular", "Spring Boot", "scikit-learn", "pandas"],
+    "infrastructure_and_tools": ["Docker", "Git", "GitHub Actions", "gRPC"],
+    "databases": ["PostgreSQL", "pgvector", "MySQL", "Redis"],
+    "spoken_languages": [
+      { "language": "English", "fluency": "Fluent" },
+      { "language": "Portuguese", "fluency": "Native" },
+      { "language": "French", "fluency": "Intermediate" }
+    ],
+    "soft_skills": ["Ownership", "Written communication"]
+  },
+  "certifications": [],
+  "awards_and_honors": [],
+  "publications_and_speaking": [],
+  "volunteering_and_leadership": [],
+  "interests": []
+}

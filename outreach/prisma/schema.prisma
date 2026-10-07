@@ -1,0 +1,232 @@
+// Cold-outreach data model (docs/SPEC.md section 10). Single user, so no userId.
+//
+// OUTREACH_DATABASE_URL must carry `?schema=outreach`: every table, enum and
+// the _prisma_migrations bookkeeping table then live in the `outreach`
+// Postgres schema and never collide with another app's tables in the same
+// database. Migrations are applied by hand (`npm run db:deploy`), never by a
+// script of this repo.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("OUTREACH_DATABASE_URL")
+}
+
+enum CompanyStatus {
+  ingested
+  dossier_ready
+  awaiting_review
+  needs_manual
+  dropped
+  failed
+  approved
+  scheduled
+  sent
+  replied
+  bounced
+  killed
+}
+
+enum DraftStatus {
+  awaiting_review
+  approved
+  killed
+  superseded
+}
+
+enum ResumeKind {
+  tailored
+  track
+}
+
+enum Track {
+  ai
+  swe
+  fullstack
+}
+
+enum MxStatus {
+  ok
+  none
+  unknown
+  unchecked
+}
+
+/// How a sourced contact address was found (SPEC section 2); null for addresses from a list.
+enum EmailSource {
+  page_quote
+  pattern_guess
+  hunter
+}
+
+enum ContactConfidence {
+  normal
+  low
+}
+
+enum SendKind {
+  initial
+  follow_up
+}
+
+enum SendStatus {
+  scheduled
+  sending
+  sent
+  failed
+  cancelled
+  unknown
+}
+
+enum SuppressionKind {
+  email
+  domain
+}
+
+model OutreachCompany {
+  id            String        @id @default(cuid())
+  /// Free-form run label the agent was started with (`--run <id>`); not a table, so a run needs no setup.
+  runId         String
+  /// Folder name under runs/<runId>/companies/; derived from domainKey.
+  slug          String        @unique
+  name          String
+  /// Email domain, or the website host when the email is free-mail; null when neither is usable.
+  domain        String?
+  /// Dedupe key: domain, or the full email when only a free-mail address is known.
+  domainKey     String        @unique
+  website       String?
+  status        CompanyStatus @default(ingested)
+  statusReason  String?
+  /// Failed writer attempts for the current dossier; reset when a draft is stored.
+  draftAttempts Int           @default(0)
+  track         Track?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  contacts OutreachContact[]
+  dossiers OutreachDossier[]
+  drafts   OutreachDraft[]
+  events   OutreachEvent[]
+
+  @@index([runId, status])
+}
+
+model OutreachContact {
+  id                String             @id @default(cuid())
+  companyId         String
+  email             String
+  name              String?
+  role              String?
+  roleAccount       Boolean            @default(false)
+  mxStatus          MxStatus           @default(unchecked)
+  /// Set for sourced contacts only (phase 3).
+  emailSource       EmailSource?
+  /// `low` for a guessed address or a low-scored Hunter one; the review screen flags it.
+  contactConfidence ContactConfidence?
+  createdAt         DateTime           @default(now())
+  company           OutreachCompany    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([email])
+}
+
+model OutreachDossier {
+  id                 String          @id @default(cuid())
+  companyId          String
+  version            Int
+  /// The validated dossier with only the claims that passed quote verification.
+  data               Json
+  rejectedClaims     Json            @default("[]")
+  verifiedClaimCount Int
+  country            String
+  language           String
+  timezone           String
+  fitScore           Int
+  track              Track
+  createdAt          DateTime        @default(now())
+  company            OutreachCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, version])
+}
+
+model OutreachDraft {
+  id                String          @id @default(cuid())
+  companyId         String
+  version           Int
+  status            DraftStatus     @default(awaiting_review)
+  /// True when there is no verified hook: generic email plus a track resume.
+  generic           Boolean         @default(false)
+  language          String
+  subject           String
+  body              String
+  followUpBody      String
+  cta               String
+  hookClaimId       String?
+  /// Verified claim the follow-up rests on, when it states a fact about the company.
+  followUpClaimId   String?
+  anchorPhrase      String?
+  mentionedProjects String[]
+  tailoring         Json?
+  resumeKind        ResumeKind
+  track             Track?
+  /// Relative to the outreach/ folder, e.g. storage/<runId>/<slug>/resume-v1.pdf.
+  resumePdfPath     String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  company           OutreachCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sends             OutreachSend[]
+
+  @@unique([companyId, version])
+}
+
+model OutreachSend {
+  id                String        @id @default(cuid())
+  draftId           String
+  kind              SendKind
+  status            SendStatus    @default(scheduled)
+  scheduledAt       DateTime
+  sentAt            DateTime?
+  providerMessageId String?
+  providerThreadId  String?
+  error             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  draft             OutreachDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  /// One initial email and at most one follow-up per draft: the no-double-send guard.
+  @@unique([draftId, kind])
+  @@index([status, scheduledAt])
+}
+
+model OutreachEvent {
+  id        String           @id @default(cuid())
+  companyId String?
+  type      String
+  payload   Json             @default("{}")
+  createdAt DateTime         @default(now())
+  company   OutreachCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+}
+
+model OutreachSuppression {
+  id        String          @id @default(cuid())
+  kind      SuppressionKind
+  value     String
+  reason    String?
+  createdAt DateTime        @default(now())
+
+  @@unique([kind, value])
+}
+
+/// A named lease, so two ticks never run at once. Acquired with one conditional upsert and renewed before each
+/// send; an expired lease (a crashed tick) is taken over, so nothing is ever stuck behind a dead process.
+model OutreachLease {
+  name      String   @id
+  holder    String
+  expiresAt DateTime
+}

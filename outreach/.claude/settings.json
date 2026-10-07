@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm run outreach -- ingest:*)",
+      "Bash(npm run outreach -- prepare:*)",
+      "Bash(npm run outreach -- snapshot:*)",
+      "Bash(npm run outreach -- process:*)",
+      "Bash(npm run outreach -- pending:*)",
+      "Bash(npm run outreach -- track-resumes)",
+      "Bash(npm run outreach -- generic:*)",
+      "Bash(npm run outreach -- status)",
+      "Bash(npm run outreach -- summary:*)",
+      "Bash(npm run outreach -- new-run)",
+      "Bash(npm run outreach -- ingest-sourced:*)",
+      "Bash(npm run outreach -- hunter:*)",
+      "Bash(npm run outreach -- prepare-verify:*)",
+      "Read(./runs/**)",
+      "Read(./input/**)",
+      "Read(./prompts/**)",
+      "Read(./CLAUDE.md)",
+      "WebSearch",
+      "Edit(./runs/**/dossier.json)",
+      "Edit(./runs/**/tailoring.json)",
+      "Edit(./runs/**/draft.json)",
+      "Edit(./runs/**/sourcing/candidates.json)",
+      "Edit(./runs/**/verify.json)",
+      "Edit(./input/**)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./src/**)",
+      "Edit(./prisma/**)",
+      "Edit(./.claude/**)",
+      "Edit(./outreach.config.json)",
+      "Edit(./runs/**/snapshots/**)",
+      "Edit(./runs/**/dossier.verified.json)",
+      "Edit(./runs/**/candidate.json)",
+      "Edit(./runs/**/critic.json)",
+      "Edit(./runs/**/verify-input.json)",
+      "Edit(./runs/**/verify-report.json)",
+      "Edit(./runs/**/verify-errors.json)",
+      "Edit(./runs/**/sourcing/hunter/**)",
+      "Edit(./runs/**/sourcing/ingest-sourced.json)",
+      "Bash(npm run outreach -- prune:*)",
+      "Bash(node:*)",
+      "Bash(npx:*)",
+      "Bash(powershell:*)",
+      "Bash(pwsh:*)",
+      "Bash(cmd:*)",
+      "Bash(Invoke-WebRequest:*)",
+      "Bash(iwr:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(git:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(npm run db:*)",
+      "PowerShell"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}
