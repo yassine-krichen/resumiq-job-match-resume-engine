@@ -12,9 +12,8 @@ Hunter: run `auth`, `signature` and a test `tick` to your own addresses first, a
 `--limit` before a big one.
 
 This folder is self-contained: it is published on its own (`git subtree push --prefix=outreach`) and imports
-nothing from the rest of the repository. Commands below are run inside `outreach/` as
-`npm run outreach -- <command>`; from the monorepo root the same things are `task job-match-resume-engine:outreach`
-(opens Claude Code here), `...:outreach:status` and `...:outreach:track-resumes`.
+nothing from the rest of the repository. Commands below are run in the project folder as
+`npm run outreach -- <command>`.
 
 ---
 
@@ -22,7 +21,7 @@ nothing from the rest of the repository. Commands below are run inside `outreach
 
 ```mermaid
 flowchart TD
-    A["You: drop uni list in outreach/input/<br/>(PDF, CSV or pasted text)"] --> B["task job-match-resume-engine:outreach<br/>(or: cd outreach && claude)<br/>then type: /outreach input/list.pdf"]
+    A["You: drop uni list in input/<br/>(PDF, CSV or pasted text)"] --> B["claude (in the project folder)<br/>then type: /outreach input/list.pdf"]
 
     A2["Or: /outreach --source '&lt;criteria&gt;' --limit N"] --> S1["0 · Source (agent)<br/>WebSearch + snapshots, small remote-friendly companies,<br/>decision-maker contact; optional Hunter lookup<br/>writes sourcing/candidates.json"]
     S1 --> S2["0b · ingest-sourced (script)<br/>quoted address must be inside a saved page, Hunter address must be in the<br/>saved Hunter file, guessed address needs MX and is flagged low confidence<br/>dedupe vs DB + suppression list"]
@@ -62,7 +61,7 @@ flowchart TD
 ```
 
 **Your hands-on time:** drop list → `/outreach <file>` → later `outreach:review` → approve. Everything
-else is automatic. Check progress with `npm run outreach -- status` (monorepo: `task job-match-resume-engine:outreach:status`).
+else is automatic. Check progress with `npm run outreach -- status`.
 
 ---
 
@@ -273,7 +272,7 @@ action (a short call). Dates/duration of the mandatory internship go in config.
 
 ## 9. Review UI (terminal)
 
-`npm run outreach:review` (or `npm run outreach -- review`; monorepo: `task outreach:review`), built with **Ink**
+`npm run outreach:review` (or `npm run outreach -- review`), built with **Ink**
 (React for the terminal, same library Claude Code uses), styled like Charm apps (rounded borders, muted palette,
 key hints bar, alternate screen). Not Charm/Bubble Tea itself: that is Go, and the review screen must re-run the
 TypeScript critic on edits and share the zod schemas, so staying in TypeScript avoids a second language and

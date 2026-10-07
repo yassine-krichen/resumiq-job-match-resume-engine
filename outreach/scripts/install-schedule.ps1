@@ -80,4 +80,4 @@ finally {
 
 Write-Host "Installed '$TaskName': every $EveryMinutes minutes while $userId is signed in."
 Write-Host "Check: schtasks /Query /TN $TaskName /V /FO LIST    Run now: schtasks /Run /TN $TaskName"
-Write-Host "Remove: task outreach:uninstall-schedule"
+Write-Host "Remove: scripts/uninstall-schedule.ps1"
