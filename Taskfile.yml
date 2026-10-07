@@ -145,6 +145,14 @@ tasks:
     cmds:
       - npm run outreach --silent -- prune {{.CLI_ARGS}}
 
+  outreach:publish:
+    desc: Push the outreach/ folder history to the standalone private repo yassine-krichen/cold-outreach-job-agent
+    cmds:
+      # The standalone repo lives on the second GitHub account; switch for the push, then back.
+      - gh auth switch --user yassine-krichen
+      - defer: gh auth switch --user Yassinekrn
+      - git subtree push --prefix=outreach https://github.com/yassine-krichen/cold-outreach-job-agent.git main
+
   outreach:install-schedule:
     desc: Windows Task Scheduler - run the outreach tick every 5 minutes (only while you are signed in)
     dir: outreach
