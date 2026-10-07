@@ -86,7 +86,7 @@ export function nextSendSlot(input: NextSlotInput): Date {
   const minGapMs = options.gapMinMinutes * 60_000;
   const existingMs = existingSlots.map((slot) => slot.getTime());
 
-  let candidate = DateTime.fromJSDate(input.notBefore, { zone: recipientZone });
+  let candidate: DateTime = DateTime.fromJSDate(input.notBefore, { zone: recipientZone });
 
   for (let i = 0; i < MAX_ITERATIONS; i += 1) {
     candidate = alignToWindow(candidate, options.window);
