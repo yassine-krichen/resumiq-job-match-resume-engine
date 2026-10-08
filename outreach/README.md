@@ -57,38 +57,38 @@ The non-obvious part is how little the agents are trusted. Every fact about a co
 
 ## Demo
 
-![Review screen](docs/demo/review.png)
+![Review screen](docs/demo/review.svg)
 _The review screen after a run: pipeline counts on top, one row per company with fit, language and flags, the email and its source quote in the detail pane._
 
-![Run summary](docs/demo/summary.png)
+![Run summary](docs/demo/summary.svg)
 _The end-of-run summary: how many companies were drafted, dropped on fit, held for a decision, or fell back to a generic email._
 
 ## How It Works
 
 ```mermaid
 graph TD
-  L[Company list: PDF, CSV or text] --> O[/outreach orchestrator/]
-  C[--source criteria] --> SRC[outreach-sourcer agent]
-  SRC --snapshot + candidates.json--> IS[ingest-sourced script]
-  O --normalized.json--> IN[ingest script]
-  IN --dedupe, MX, insert--> DB[(Postgres schema outreach)]
-  IS --verified contacts--> DB
-  O --waves of 5--> R[outreach-researcher agent]
-  R --npm run outreach -- snapshot--> SN[snapshot script: SSRF guard, manifest]
-  R --dossier.json--> PD[process --stage dossier]
-  SN --saved pages--> PD
-  PD --quote verify, fit gate--> DB
-  PD --dossier.verified.json--> W[outreach-writer agent, no web]
-  W --tailoring.json + draft.json--> PR[process --stage draft]
-  PR --bullet guard, critic, LaTeX via tectonic--> DB
-  PR --critic.json, max 2 retries--> W
-  DB --prepare-verify--> V[outreach-verifier agent]
-  V --verify.json--> PV[process --stage verify]
-  PV --verified or needs_manual--> DB
-  DB --> TUI[review TUI: approve, edit, kill]
-  TUI --approved--> DB
-  T[tick every 5 min] --lease, schedule, send--> G[Gmail API]
-  G --threads.get: replies, bounces--> T
+  L["Company list: PDF, CSV or text"] --> O["/outreach orchestrator"]
+  C["source criteria"] --> SRC["outreach-sourcer agent"]
+  SRC -->|"snapshots + candidates.json"| IS["ingest-sourced script"]
+  O -->|"normalized.json"| IN["ingest script"]
+  IN -->|"dedupe, MX, insert"| DB[("Postgres schema outreach")]
+  IS -->|"verified contacts"| DB
+  O -->|"waves of 5"| R["outreach-researcher agent"]
+  R -->|"snapshot command"| SN["snapshot script: SSRF guard, manifest"]
+  R -->|"dossier.json"| PD["process: dossier stage"]
+  SN -->|"saved pages"| PD
+  PD -->|"quote verify, fit gate"| DB
+  PD -->|"dossier.verified.json"| W["outreach-writer agent, no web"]
+  W -->|"tailoring.json + draft.json"| PR["process: draft stage"]
+  PR -->|"bullet guard, critic, LaTeX"| DB
+  PR -->|"critic.json, max 2 retries"| W
+  DB -->|"prepare-verify"| V["outreach-verifier agent"]
+  V -->|"verify.json"| PV["process: verify stage"]
+  PV -->|"verified or needs_manual"| DB
+  DB --> TUI["review TUI: approve, edit, kill"]
+  TUI -->|"approved"| DB
+  T["tick every 5 min"] -->|"lease, schedule, send"| G["Gmail API"]
+  G -->|"replies, bounces"| T
   T --> DB
 ```
 
@@ -99,12 +99,12 @@ sequenceDiagram
   participant DB as Postgres
   participant G as Gmail API
   TS->>T: every 5 minutes
-  T->>DB: acquire lease (INSERT ... ON CONFLICT ... WHERE expiresAt < now())
+  T->>DB: acquire lease (conditional upsert)
   T->>G: threads.get for sent threads
-  T->>DB: replies cancel follow-ups, "stop" adds suppression, bounces recorded
+  T->>DB: replies cancel follow-ups, stop replies suppressed, bounces recorded
   T->>DB: schedule approved drafts (recipient 08:30-10:30, cap, gap)
   T->>G: checkAccess (token refresh before any claim)
-  T->>DB: renew lease, claimSend (scheduled -> sending, compare-and-set)
+  T->>DB: renew lease, claim send (compare-and-set)
   T->>G: messages.send (MIME, signature, PDF, threading headers)
   T->>G: messages.get (read back the real Message-ID)
   T->>DB: completeSend (sent), retried 3x with backoff
@@ -261,11 +261,3 @@ MIT © 2026 Yassine Krichen
 
 Built by [Yassine Krichen](https://github.com/yassine-krichen) · Tunis, 2026
 
----
-
-## Before You Publish
-
-- [ ] Add `docs/cover.png`. Prompt: "cold-outreach-job-agent: a terminal review screen listing companies with fit scores and a drafted email beside it. Dark UI, high contrast, professional software screenshot aesthetic. Wide banner format, 1400×600px. No people. No text overlays."
-- [ ] Add `docs/demo/review.png` and `docs/demo/summary.png` from a real run with the example inventory.
-- [ ] Run one `tick` against the real database and one test send to your own address before installing the schedule: the lease SQL and the Prisma store have only run against the in-memory test store.
-- [ ] Add npm scripts `schedule:install` and `schedule:uninstall` wrapping the PowerShell scripts, so the scheduler command is as short as the others.
