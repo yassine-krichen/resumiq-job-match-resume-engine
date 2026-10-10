@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { loadHunterApiKey } from '../config/env';
+import { isPlaybookAgent } from '../playbooks/playbook';
+import type { PlaybookAgent } from '../playbooks/playbook';
 import { writeCandidateBrief } from '../services/candidate-brief.service';
 import { checkEmail } from '../core/email-check';
 import { parseRowsFromText } from '../core/normalize-input';
@@ -20,9 +22,11 @@ import { RunLayout, defaultRunId, isSnapshotDir } from '../services/run-layout';
 import { snapshotUrl } from '../services/snapshot.service';
 import { pendingVerifySlugs, prepareVerify, processVerify } from '../services/verify-stage.service';
 
+import { costCommand } from './cost-command';
 import { createContext, createRenderer, loadConfigAndInventory, openStore } from './context';
 import type { Context } from './context';
-import { authCommand, reviewCommand, signatureCommand, tickCommand } from './send-commands';
+import { learnCommand, playbookCommand } from './playbook-commands';
+import { authCommand, previewCommand, reviewCommand, signatureCommand, testSendCommand, tickCommand } from './send-commands';
 
 const USAGE = `Usage: npm run outreach -- <command> [options]
 
@@ -39,11 +43,16 @@ const USAGE = `Usage: npm run outreach -- <command> [options]
   generic --run <id>                              generic email + track resume for unfinished companies
   status                                          pipeline counts for every run
   summary --run <id>                              end-of-run report
+  cost --run <id> [--json] | --all                what the agents used, in API-equivalent USD: per company, orchestrator overhead, run total, averages
+  preview --run <id> [--slug s] [--json]          write the exact initial + follow-up messages as storage/<run>/<slug>/*.eml (no Gmail, changes nothing)
+  learn --agent <name> --situation "<text>" --fix "<text>"  record a workaround in playbooks/<name>.md (validated; what agents run)
   prune [--days 180] [--dry-run]                  owner only: erase contacts, dossiers, draft text, PDFs and run folders of dead leads (killed / dropped / sent without reply) older than N days
   review                                          terminal UI: approve / edit / kill drafts, open the PDF (interactive)
   auth                                            one-time Gmail sign-in (browser); saves the token outside the repo
   signature                                       fetch your Gmail signature into signature.html (every email needs it)
   tick                                            sync replies, schedule, send what is due (what the 5-minute task runs)
+  test-send --run <id> --to <address> [--slug s] [--limit N]  owner only: send the real first email of N drafts (default 1) to YOUR address, subject-marked [TEST], changes no status
+  playbook --agent <name> [--remove <n>]          owner only: list or prune what agents learned
 `;
 
 class UsageError extends Error {}
@@ -54,6 +63,11 @@ function print(value: unknown): void {
 
 function requireRun(value: string | undefined): RunLayout['runId'] {
   if (!value) throw new UsageError('--run <id> is required');
+  return value;
+}
+
+function requirePlaybookAgent(value: string | undefined): PlaybookAgent {
+  if (!value || !isPlaybookAgent(value)) throw new UsageError('--agent must be researcher, writer, sourcer or verifier');
   return value;
 }
 
@@ -83,6 +97,14 @@ async function runCommand(command: string, argv: string[], context: Context): Pr
       limit: { type: 'string' },
       days: { type: 'string' },
       'dry-run': { type: 'boolean' },
+      json: { type: 'boolean' },
+      all: { type: 'boolean' },
+      slug: { type: 'string' },
+      to: { type: 'string' },
+      agent: { type: 'string' },
+      situation: { type: 'string' },
+      fix: { type: 'string' },
+      remove: { type: 'string' },
     },
   });
 
@@ -216,6 +238,33 @@ async function runCommand(command: string, argv: string[], context: Context): Pr
       print(await withStore((store) => summaryText(store, runId, sourced)));
       return;
     }
+
+    case 'cost': {
+      if (!values.all && !values.run) throw new UsageError('cost needs --run <id> or --all');
+      print(await costCommand(context, { runId: values.run, all: values.all === true, json: values.json === true }));
+      return;
+    }
+
+    case 'preview':
+      print(await previewCommand(context, { runId: requireRun(values.run), slug: values.slug, json: values.json === true }));
+      return;
+
+    case 'learn':
+      print(await learnCommand(context, { agent: requirePlaybookAgent(values.agent), situation: values.situation, fix: values.fix }));
+      return;
+
+    case 'playbook':
+      print(await playbookCommand(context, { agent: requirePlaybookAgent(values.agent), remove: parseWholeNumber(values.remove, '--remove') }));
+      return;
+
+    case 'test-send':
+      await testSendCommand(context, {
+        runId: requireRun(values.run),
+        to: values.to,
+        slug: values.slug,
+        limit: parseWholeNumber(values.limit, '--limit') ?? 1,
+      });
+      return;
 
     case 'review':
       await reviewCommand(context);

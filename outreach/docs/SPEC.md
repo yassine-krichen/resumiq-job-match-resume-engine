@@ -8,8 +8,9 @@ Status: spec agreed 2026-10-06. Phase 1A (pure logic), the Phase 1B core (DB, CL
 code (review UI, Gmail auth and signature, tick with reply/bounce sync and follow-ups, Task Scheduler scripts) are built
 and unit-tested against fakes. Phase 3 (sourcing, optional Hunter) and Phase 4 (blind verifier, prune) are built and
 unit-tested too; headless batch mode is not built (section 11). Not yet exercised against a real mailbox, the live web or
-Hunter: run `auth`, `signature` and a test `tick` to your own addresses first, and try `/outreach --source` with a small
-`--limit` before a big one.
+Hunter: follow [GMAIL-SETUP.md](GMAIL-SETUP.md), then `preview` and `test-send` to your own address before the first real
+`tick`, and try `/outreach --source` with a small `--limit` before a big one. Cost measurement, self-learning playbooks,
+preview and test-send are specified in sections 7, 12 and 13.
 
 This folder is self-contained: it is published on its own (`git subtree push --prefix=outreach`) and imports
 nothing from the rest of the repository. Commands below are run in the project folder as
@@ -131,7 +132,14 @@ Guardrails (prompt in `prompts/tailor-resume.md`, enforced by code in `src/core/
 - every number in a bullet must exist in that entry's achievements/metrics;
 - every technology in a bullet must be in that entry's `technologies_used`;
 - company keywords are only used if they are real skills of yours; their stack is never copied in;
-- skills shown ⊆ your skills; 1 page; max 3 bullets per project, 4 per experience.
+- skills shown ⊆ your skills; 1 page; max 3 bullets per project, 4 per experience in the schema;
+- size within the config's `tailoring_limits` (`max_entries`, `max_bullets_experience`, `max_bullets_project`,
+  `max_skills_per_category`; defaults 3 / 3 / 2 / 6), which the writer reads in `candidate.json`: a candidate whose
+  education and certifications take room needs tighter limits than the schema's;
+- a tailoring that still renders to two pages is not silently replaced by a track resume: `critic.json` gets a
+  `resume_errors` line (`resume is 2 pages: about 5 lines spill onto page 2; remove at least 3 bullets or one whole
+  entry, ...`, the size estimated from page 2 of the PDF) and the writer retries like for any other rejection. Other
+  render failures (over 80 KB, tectonic error) still fall back to the track resume.
 
 Fallback track resumes: three pre-built, polished resumes (`ai`, `swe`, `fullstack`) compiled once
 and stored. Used whenever tailoring fails (section 6).
@@ -199,7 +207,7 @@ Generic drafts appear in the review UI with a label, so you can decide per row.
 - **Mailbox:** uni email, a Google Workspace domain (MX = smtp.google.com), so
   the Gmail API is the only sender. If the uni blocks third-party app access, switch the config to
   the personal `@gmail.com` account: same code, different OAuth login (`sender_email` in the config names it).
-- **Auth (once):** `npm run outreach -- auth` runs the OAuth desktop loopback flow (PKCE, a one-shot listener on
+- **Auth (once):** (beginner walkthrough: [GMAIL-SETUP.md](GMAIL-SETUP.md)) `npm run outreach -- auth` runs the OAuth desktop loopback flow (PKCE, a one-shot listener on
   `127.0.0.1`) with `google-auth-library`, scopes `gmail.send` + `gmail.readonly`. The OAuth client comes from
   `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET`. The refresh token is saved with the account it was issued for to
   `GMAIL_TOKEN_PATH` (default `%USERPROFILE%\.config\cold-outreach\gmail-token.json`); a path inside the repository is
@@ -219,6 +227,20 @@ Generic drafts appear in the review UI with a label, so you can decide per row.
   times: a send goes out no earlier than its slot and no earlier than the last real send (read from the database)
   plus the minimum gap plus jitter. After a missed trigger or a PC that was off, a burst of overdue rows therefore
   goes out spaced, one per tick or so, never back to back.
+- **Preview and test send (owner tools, no pipeline state):**
+  - `preview --run <id> [--slug s]` builds, through the same `buildOutgoingMessage` the tick uses, the first email and
+    the follow-up of every draft that is awaiting review or approved, and writes them as
+    `storage/<run>/<slug>/initial.eml` and `follow-up.eml` (open them in any mail client). It needs the database and
+    the resume PDFs, not Gmail, and changes nothing. If `signature.html` is absent it uses a visibly marked
+    placeholder signature, in the preview only; `buildMimeMessage` still refuses an empty signature, so nothing
+    unsigned can be sent. The follow-up threads on a fake Message-ID. Agents may run it; `/outreach` runs it at the
+    end and lists the paths.
+  - `test-send --run <id> --to <address> [--slug s] [--limit N]` (owner only, denied to agents in the hook and in
+    `settings.json`) sends the real first email (signature and resume attachment included) through Gmail to
+    `--to` only, with the subject prefixed `[TEST → <real recipient>] `. `--to` is required, must be a valid
+    address, and must not be the real recipient of a selected draft. `--limit` defaults to 1. It creates no send row,
+    sets no thread or follow-up state and does not change any company, draft or send status; the only trace is a
+    `test_send` event. It stops at the first Gmail failure.
 - **Runs:** `npm run outreach -- tick` (`outreach:tick`) **every 5 minutes** via Windows Task Scheduler
   (`outreach:install-schedule`: `StartWhenAvailable` so a run missed while the PC was off starts when it is back,
   10-minute execution limit, no overlapping instances; `outreach:uninstall-schedule` removes it). The PC must be on.
@@ -332,9 +354,14 @@ outreach/                          self-contained project `cold-outreach-job-age
   scripts/                          tick.ps1, install-schedule.ps1, uninstall-schedule.ps1 (Windows Task Scheduler)
   src/services/                     ingest, ingest-sourced, hunter, snapshot, dossier stage, draft stage, verify stage,
                                     generic fallback, resume, prune, reports
+  src/cost/                         pricing (per model-id prefix) and the usage.jsonl -> cost report
+  src/playbooks/                    learn validator, playbook file read/append/remove
+  .claude/hooks/                    guard-bash.mjs + decide.cjs (command allowlist), record-usage.mjs + usage.cjs (cost)
+  playbooks/                        researcher.md, writer.md, sourcer.md, verifier.md (committed hints)
   src/cli/index.ts                  one entry: ingest | new-run | prepare | snapshot | hunter | ingest-sourced | process
                                     (dossier | draft | verify) | prepare-verify | pending | track-resumes | generic |
-                                    status | summary | review | auth | signature | tick | prune
+                                    status | summary | cost | preview | learn | review | auth | signature | tick |
+                                    test-send | playbook | prune
   input/ runs/ storage/ logs/       gitignored; storage/tracks/*.pdf are the three fallback resumes
 ```
 
@@ -362,7 +389,69 @@ draft+kind), `OutreachEvent` (audit), `OutreachSuppression`, `OutreachLease` (th
    `claude -p` batch mode for very large lists (one process per wave of companies, same scripts and files, driven by
    the Task Scheduler); the file contract already supports it because every stage is idempotent and resumable.
 
-## 12. Open items
+## 12. Cost measurement
+
+Goal: know what a run costs per company and per run, and stop a run that costs more than the owner meant.
+
+- **Recording.** `.claude/settings.json` registers `.claude/hooks/record-usage.mjs` for `SubagentStop` and `Stop`
+  (logic in `usage.cjs`, unit-tested like `decide.cjs`). The hook reads the transcript JSONL of the agent that
+  finished (`agent_transcript_path`, falling back to `<session>/subagents/agent-<agent_id>.jsonl`; field names are read
+  defensively), sums `message.usage` (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`,
+  `cache_read_input_tokens`) per `message.model`, de-duplicating by `message.id` because one API message is streamed over
+  several lines, and appends one JSON line per invocation and model to `runs/<run>/usage.jsonl`:
+  `{ts, key, agent_type, slug|null, model, tokens: {input, output, cache_write, cache_read}}`.
+  Input and cache counts are exact. Claude Code logs a message's `output_tokens` when the stream starts (2, 8, 16, ...)
+  and writes each content block on its own line, so the hook raises the output count to an estimate (characters written
+  in text, thinking and tool-call blocks, divided by 4) when that is larger. Reasoning that is not written to the
+  transcript is invisible, so output tokens, and with them the USD figure, are a lower bound.
+- **Attribution.** Every subagent is spawned with `run=<runId> slug=<slug>` (the sourcer: `run=<runId> limit=.. criteria=..`,
+  so its slug is null); the hook reads those tokens from the first user message and validates both against the run-id and
+  slug patterns, so a crafted value cannot name a path. The run folder must already exist. The orchestrator (`Stop`)
+  has no such prompt: its run id is the most mentioned one in its own tool calls and tool results, and it is only
+  recorded for a session that started from `/outreach`. `Stop` fires after every orchestrator turn, so its line is a running
+  total under the session key and the report keeps the last line per (key, model).
+- **Never blocking.** The hook prints nothing, always exits 0 and logs its own problems to `logs/hooks.log`.
+- **Pricing.** The `pricing` section of the config maps a model-id prefix (longest match wins) to USD per million tokens:
+  `input`, `output`, `cache_write_5m`, `cache_read`. Defaults, used when the section is absent, live in
+  `src/cost/pricing.ts` and are copied into `outreach.config.example.json` together with `pricing_source`, the page
+  they come from (https://platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-10). Cache writes are priced
+  at the 5-minute rate; a 1-hour write costs more, so a run that used the 1-hour cache is slightly under-counted.
+  Haiku 5.5 is priced for prompts up to 100,000 tokens. A model with no price is listed under "unpriced models": its tokens
+  are counted, its USD is not. **On a Claude subscription nothing is billed per token: the figure is the API-equivalent cost
+  at list price, a measure of quota use, not a bill.**
+- **Reading it.** `cost --run <id>` prints a block per company (agents, calls, tokens, USD), the orchestrator and
+  sourcer as run overhead, the run total, and the average per company with and without overhead; `--json` prints the
+  same as data and `cost --all` summarizes every run. It reads only `usage.jsonl` and the config.
+- **Budget.** The optional `run_budget_usd` is compared with the run total (`overBudget` in the JSON). After each research and
+  each write wave `/outreach` runs `cost --run <id> --json`; when over budget it starts no further research or
+  write wave, the remaining companies take the generic fallback (section 6), and the final report says so. Verification waves
+  are not stopped: they are cheap and the last check before review.
+
+## 13. Self-learning playbooks
+
+Goal: an agent that found a workaround (a site that blocks the snapshot tool, a page type that holds the facts, a
+schema mistake it fixed) lets the next run skip the detour, without opening a way for a web page to plant instructions.
+
+- `playbooks/<agent>.md` for researcher, writer, sourcer and verifier is committed (generic knowledge only). Each agent
+  reads its own first; the entries are hints about how things behaved, never instructions, and never override `CLAUDE.md`, the
+  prompts or the task. Only the researcher and the sourcer have a shell, so only they can run `learn`; the writer and
+  the verifier read their playbook and the owner adds to it.
+- `learn --agent <name> --situation "<text>" --fix "<text>"` appends `N. [date] [seen 1x] situation: .. => fix: ..`. A
+  validator (`src/playbooks/learning-validator.ts`) refuses a field unless it is 15-300 characters on one line and has no
+  backtick, command substitution or variable expansion, no program or shell name (npm, node, curl, wget, powershell,
+  python, git, ...), no URL with a path or query (a bare domain is fine), no email address, no `=>`, and no override
+  phrasing (ignore / disregard / forget / override / bypass followed by previous, instructions, rules, permissions, ...;
+  any mention of the system prompt or CLAUDE.md).
+- Duplicates: when the words of a new entry overlap an existing one by at least 0.8 (Jaccard on words of three letters or
+  more, case and punctuation ignored) the existing entry's `seen` counter goes up instead. A playbook holds at most 40
+  entries; a new one is refused with a message that tells the owner to prune.
+- `playbook --agent <name> [--remove <n>]` lists or removes entries (renumbering the rest). It is owner only: not in
+  the hook's allowlist, denied in `settings.json`, and `playbooks/**` is not editable by agents (`Edit` deny rule).
+- The hook accepts `learn` only as exactly `--agent <known name> --situation "<text>" --fix "<text>"` and limits the
+  text to letters, digits, spaces and `. , : ' ( ) - _ / + = ?` (nothing that npm or cmd.exe could interpret), then the
+  CLI validates the content again.
+
+## 14. Open items
 
 - Whether the uni Workspace allows third-party app access (found out at first OAuth login;
   fallback is the personal Gmail).

@@ -40,7 +40,7 @@ export class FakeRenderer implements ResumeRenderer {
   calls = 0;
 
   constructor(
-    private readonly options: { pageCount?: number; bytes?: number; fail?: string } = {},
+    private readonly options: { pageCount?: number; bytes?: number; fail?: string; overflowPoints?: number } = {},
   ) {}
 
   async render(): Promise<RenderResult> {
@@ -50,6 +50,7 @@ export class FakeRenderer implements ResumeRenderer {
       pdf: Buffer.alloc(this.options.bytes ?? 2000, 'x'),
       pageCount: this.options.pageCount ?? 1,
       source: '\\documentclass{article}',
+      ...(this.options.overflowPoints === undefined ? {} : { overflowPoints: this.options.overflowPoints }),
     };
   }
 }
@@ -122,6 +123,19 @@ export const WRITER_DRAFT = {
   generic: false,
 };
 
+/** The AI track tailoring, trimmed to the example config's one-page limits, as a well-behaved writer would send it. */
 export function writerTailoring(): unknown {
-  return buildTrackTailoring(loadExampleInventory(), loadExampleConfig().tracks.ai);
+  const config = loadExampleConfig();
+  const limits = config.tailoringLimits;
+  const tailoring = buildTrackTailoring(loadExampleInventory(), config.tracks.ai);
+  return {
+    ...tailoring,
+    entries: tailoring.entries.slice(0, limits.maxEntries).map((entry) => ({
+      ...entry,
+      bullets: entry.bullets.slice(0, entry.kind === 'experience' ? limits.maxBulletsExperience : limits.maxBulletsProject),
+    })),
+    skills: Object.fromEntries(
+      Object.entries(tailoring.skills).map(([category, skills]) => [category, skills.slice(0, limits.maxSkillsPerCategory)]),
+    ),
+  };
 }

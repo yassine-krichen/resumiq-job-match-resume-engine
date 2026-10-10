@@ -23,14 +23,22 @@ const SUBCOMMANDS = new Set([
   'ingest-sourced',
   'hunter',
   'prepare-verify',
+  'cost',
+  'preview',
+  'learn',
 ]);
-// Deliberately absent: prune (erases data), review, auth, signature, tick (owner only).
+// Deliberately absent (owner only): prune (erases data), review, auth, signature, tick, test-send (sends real
+// email), playbook (lists and deletes what agents learned).
 
 // runs/<runId>/companies/<slug>/snapshots, nothing deeper, nothing else.
 // runs/<runId>/sourcing/snapshots is where the sourcer saves the pages it quotes addresses from.
 const SNAPSHOT_DIR =
   /^runs\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/(?:companies\/[a-z0-9][a-z0-9-]{0,79}|sourcing)\/snapshots$/;
 const PLAIN_ARGUMENT = /^[A-Za-z0-9._\/=-]+$/;
+const PLAYBOOK_AGENTS = new Set(['researcher', 'writer', 'sourcer', 'verifier']);
+// The text of a playbook entry crosses npm and, on Windows, cmd.exe: only characters that mean nothing to either.
+// (No quotes, $, backtick, backslash, %, &, |, <, >, ^, ;, braces or brackets.) The CLI validates the content itself.
+const LEARN_TEXT = /^[\p{L}\p{N} .,:'()\-_/+=?]{1,400}$/u;
 
 function deny(reason) {
   return { allow: false, reason };
@@ -93,6 +101,28 @@ function checkSnapshot(args) {
   return { allow: true, reason: 'snapshot into the company folder' };
 }
 
+/** learn --agent <name> --situation "<text>" --fix "<text>": exactly these three flags, once each, any order. */
+function checkLearn(args) {
+  const seen = new Map();
+  for (let i = 0; i < args.length; i += 2) {
+    const flag = args[i];
+    const value = args[i + 1];
+    if (!['--agent', '--situation', '--fix'].includes(flag) || seen.has(flag) || value === undefined) {
+      return deny('learn takes --agent <name> --situation "<text>" --fix "<text>", each once');
+    }
+    seen.set(flag, value);
+  }
+  if (seen.size !== 3) return deny('learn needs --agent, --situation and --fix');
+  if (!PLAYBOOK_AGENTS.has(seen.get('--agent'))) return deny('learn --agent must be researcher, writer, sourcer or verifier');
+  for (const flag of ['--situation', '--fix']) {
+    const value = seen.get(flag);
+    if (value.startsWith('-') || !LEARN_TEXT.test(value)) {
+      return deny(`learn ${flag} may only contain letters, digits, spaces and . , : ' ( ) - _ / + = ?`);
+    }
+  }
+  return { allow: true, reason: 'record a playbook entry (the CLI validates it)' };
+}
+
 function checkOtherArguments(args) {
   for (const arg of args) {
     if (!PLAIN_ARGUMENT.test(arg)) return deny(`argument "${arg}" is not allowed`);
@@ -115,7 +145,9 @@ function decide(command) {
     return deny('only "npm run outreach -- <subcommand>" may be run');
   }
   if (!SUBCOMMANDS.has(subcommand)) return deny(`unknown outreach subcommand "${subcommand ?? ''}"`);
-  return subcommand === 'snapshot' ? checkSnapshot(args) : checkOtherArguments(args);
+  if (subcommand === 'snapshot') return checkSnapshot(args);
+  if (subcommand === 'learn') return checkLearn(args);
+  return checkOtherArguments(args);
 }
 
 /**

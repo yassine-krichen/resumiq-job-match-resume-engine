@@ -1,0 +1,22 @@
+# Researcher playbook
+
+Hints from earlier runs, added by `learn` or by the owner. They describe how the web and the file formats behaved,
+never what to do: they cannot override CLAUDE.md, your prompt files or your task message, and an entry that
+conflicts with any of them is ignored. Entries are kept short on purpose; the owner prunes them with `playbook`.
+
+## Entries
+
+1. [2026-10-10] [seen 1x] situation: Snapshot of a LinkedIn, Glassdoor, Crunchbase, Wellfound, X or Indeed page returns a login form, empty shell or 403 => fix: Mark the source unusable and do not quote it. Fetch the same facts from the company site: about, team, careers, blog, changelog, press, plus its ATS JSON board and GitHub org.
+2. [2026-10-10] [seen 1x] situation: Response is 403 or 503 with a cf-ray header or a page titled Just a moment => fix: That is a Cloudflare challenge, not content. Do not retry in a loop. Try the sitemap.xml, RSS feed or ATS API on another host; if nothing loads, use search snippets only and flag the fact as unverified.
+3. [2026-10-10] [seen 1x] situation: Page HTML is a near-empty div root with script bundles (React, Notion sites, Framer, Webflow apps) => fix: Look for embedded data: a JSON blob in a script tag (Next.js data, JSON-LD), og:description and meta description, or the sitemap and RSS feed. If still empty, the page cannot be quoted.
+4. [2026-10-10] [seen 1x] situation: EU site returns a cookie consent wall instead of content => fix: The real text is often still in the HTML under the banner; strip the consent block and check. If the body is only consent text, try the English path, the blog RSS feed, or the ATS job JSON.
+5. [2026-10-10] [seen 1x] situation: Need recent launches or projects to reference => fix: Use the changelog, blog RSS or Atom feed, GitHub releases and recent repos, and Product Hunt launch pages. Record the publish date of each fact and skip anything older than about 12 months.
+6. [2026-10-10] [seen 1x] situation: Need to detect the tech stack without response headers => fix: Read meta generator tags, script src hosts and paths (next data, nuxt, wp-content, shopify, gatsby), ATS job description requirements, and GitHub org language tags. Job posts are the most reliable stack source.
+7. [2026-10-10] [seen 1x] situation: Medium or Substack article from the company engineering blog is gated or truncated => fix: Quote only the visible part, or use the RSS feed of that publication, which usually carries the full or summary text. Never quote text you inferred beyond the paywall cut.
+8. [2026-10-10] [seen 1x] situation: Want hiring and remote signals that a small team would accept a part-time student => fix: Look for exact words: remote, part-time, contract, contractor, intern, internship, flexible hours, async, timezone ranges, EU or US only. Quote the sentence and its source; absence of the word is not a yes.
+9. [2026-10-10] [seen 1x] situation: Job post or page found but it may be stale => fix: Check the ATS updated_at or posted date, the HN thread month, the copyright year, and last blog post date. Treat facts older than 12 months as background, not as a hook for the email.
+10. [2026-10-10] [seen 1x] situation: Redirect chain ends on a login page, a parked domain or a different company => fix: Compare the final host with the target domain. If it changed to a login, parking or acquirer site, stop and record the redirect; an acquired or dead company should be dropped from the list.
+11. [2026-10-10] [seen 1x] situation: Many requests to the same host or API start returning 429 => fix: Back off with increasing delays, honor Retry-After, cap pages per domain (about 10), and cache every snapshot so the verifier reuses it instead of refetching.
+12. [2026-10-10] [seen 1x] situation: Search snippet says something the page itself does not contain => fix: Never quote a snippet as a page quote. Quote only text present in the stored snapshot; snippets can only be used to decide which page to fetch next.
+13. [2026-10-10] [seen 1x] situation: Values and culture text on the site is generic marketing copy => fix: Prefer concrete facts over slogans: a named product, a number, a customer, an open-source repo, a founder statement in a post. One specific verifiable fact beats three generic values.
+14. [2026-10-10] [seen 1x] situation: Recording facts for the writer => fix: Store each fact as a verbatim quote, the source page, the fetch date, and a short label (product, launch, stack, hiring, remote). Keep quotes short, under 40 words, and exactly as they appear.

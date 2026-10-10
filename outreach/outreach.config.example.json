@@ -41,6 +41,30 @@
   "fallback_timezone": "America/New_York",
   "draft_retry_limit": 2,
 
+  "tailoring_limits": {
+    "max_entries": 3,
+    "max_bullets_experience": 3,
+    "max_bullets_project": 2,
+    "max_skills_per_category": 6
+  },
+
+  "run_budget_usd": 25,
+  "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing (Claude API pricing page, checked 2026-10-10). USD per million tokens; on a Claude subscription this is the API-equivalent cost, a measure of quota use, not a bill.",
+  "pricing": {
+    "claude-fable-5-1": { "input": 10, "output": 50, "cache_write_5m": 12.5, "cache_read": 0.25 },
+    "claude-fable-5": { "input": 10, "output": 50, "cache_write_5m": 12.5, "cache_read": 1 },
+    "claude-opus-5-5": { "input": 4, "output": 20, "cache_write_5m": 5, "cache_read": 0.2 },
+    "claude-opus-5": { "input": 5, "output": 25, "cache_write_5m": 6.25, "cache_read": 0.5 },
+    "claude-opus-4": { "input": 5, "output": 25, "cache_write_5m": 6.25, "cache_read": 0.5 },
+    "claude-opus-4-1": { "input": 15, "output": 75, "cache_write_5m": 18.75, "cache_read": 1.5 },
+    "claude-opus-4-2025": { "input": 15, "output": 75, "cache_write_5m": 18.75, "cache_read": 1.5 },
+    "claude-sonnet-5-5": { "input": 2, "output": 10, "cache_write_5m": 2.5, "cache_read": 0.1 },
+    "claude-sonnet-5": { "input": 2, "output": 10, "cache_write_5m": 2.5, "cache_read": 0.2 },
+    "claude-sonnet-4": { "input": 3, "output": 15, "cache_write_5m": 3.75, "cache_read": 0.3 },
+    "claude-haiku-5-5": { "input": 0.1, "output": 0.5, "cache_write_5m": 0.125, "cache_read": 0.01 },
+    "claude-haiku-4-5": { "input": 1, "output": 5, "cache_write_5m": 1.25, "cache_read": 0.1 }
+  },
+
   "tracks": {
     "ai": {
       "label": "AI / ML engineer",

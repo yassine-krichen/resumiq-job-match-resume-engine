@@ -1,0 +1,4 @@
+# Claude Code skips agent files whose frontmatter has CRLF line endings; keep LF everywhere.
+* text=auto eol=lf
+*.pdf binary
+*.png binary

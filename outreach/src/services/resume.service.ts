@@ -22,6 +22,34 @@ export interface ResumeRenderer {
 
 export class ResumeRenderError extends Error {}
 
+/** A bullet takes about two lines of the skeleton's 11.96pt pitch. */
+const POINTS_PER_BULLET = 24;
+const POINTS_PER_LINE = 11.96;
+
+/** How many bullets to cut to get the spill back onto page one; two when the overflow could not be measured. */
+export function bulletsToRemove(overflowPoints: number | undefined): number {
+  return overflowPoints === undefined ? 2 : Math.max(1, Math.ceil(overflowPoints / POINTS_PER_BULLET));
+}
+
+/** The resume rendered fine but ran onto more than one page: the writer can fix that by cutting content. */
+export class ResumeTooLongError extends ResumeRenderError {
+  /** What to tell the writer in critic.json. */
+  readonly advice: string;
+
+  constructor(
+    readonly pageCount: number,
+    readonly overflowPoints: number | undefined,
+  ) {
+    super(`resume is ${pageCount} pages, expected 1`);
+    const bullets = bulletsToRemove(overflowPoints);
+    const spill =
+      overflowPoints === undefined ? '' : ` about ${Math.max(1, Math.round(overflowPoints / POINTS_PER_LINE))} lines spill onto page 2;`;
+    this.advice =
+      `resume is ${pageCount} pages:${spill} remove at least ${bullets} bullets or one whole entry, ` +
+      'and keep every bullet to one line';
+  }
+}
+
 /** Renders a tailoring and checks it is sendable: exactly one page and under 80 KB. */
 export async function renderTailoring(
   tailoring: OutreachTailoring,
@@ -34,6 +62,7 @@ export async function renderTailoring(
   } catch (error) {
     throw new ResumeRenderError(`render failed: ${(error as Error).message}`);
   }
+  if (result.pageCount > 1) throw new ResumeTooLongError(result.pageCount, result.overflowPoints);
   if (result.pageCount !== 1) throw new ResumeRenderError(`resume is ${result.pageCount} pages, expected 1`);
   if (result.pdf.length >= MAX_RESUME_BYTES) {
     throw new ResumeRenderError(`resume is ${result.pdf.length} bytes, expected under ${MAX_RESUME_BYTES}`);

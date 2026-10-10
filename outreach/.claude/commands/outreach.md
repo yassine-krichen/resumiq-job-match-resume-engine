@@ -40,7 +40,7 @@ Arguments: `$ARGUMENTS`
 - **`--source`:** the run id comes first, because the sourcer saves its evidence inside the run.
   1. `npm run outreach -- new-run` prints `{ "runId": ... }`. Keep it.
   2. Spawn ONE `outreach-sourcer` subagent with the task `run=<runId> limit=<N> criteria=<the criteria text>`
-     (`N` from `--limit`, default 20, at most 40). It writes `runs/<runId>/sourcing/candidates.json` and may call
+     (`N` from `--limit`, default 20, at most 40; `run=<runId>` stays first so the cost hook can attribute it). It writes `runs/<runId>/sourcing/candidates.json` and may call
      the optional Hunter lookup itself (a no-op without a key). It returns `sourced <n>` or `fail: ...`; on
      `fail`, stop and show the reason.
   3. `npm run outreach -- ingest-sourced --run <runId> --limit <N>`. The script checks every address (a quoted
@@ -58,8 +58,10 @@ Arguments: `$ARGUMENTS`
 
 1. `npm run outreach -- pending --run <runId> --stage research` gives `slugs`.
 2. Work in waves of 5: spawn up to 5 `outreach-researcher` subagents IN THE BACKGROUND in one message, each with
-   the task `run=<runId> slug=<slug>`, then wait for all five before starting the next wave. Each returns
+   the task `run=<runId> slug=<slug>` (exactly this form: the cost hook reads `run=` and `slug=` from it, so every
+   spawn of every agent carries both), then wait for all five before starting the next wave. Each returns
    `<slug> ok` or `<slug> fail: ...`; record only that.
+   After each wave run the budget check (see "Budget" below) before starting the next one.
 3. `npm run outreach -- process --run <runId> --stage dossier`. For slugs with outcome `invalid` or `missing`:
    run one more wave of researchers for just those (an `invalid` one reads `dossier-errors.json`), then process
    the dossiers again. Anything still unresolved is handled by the generic fallback in step 5.
@@ -68,7 +70,8 @@ Arguments: `$ARGUMENTS`
 
 1. `npm run outreach -- pending --run <runId> --stage write` gives `slugs` (researched companies with at least
    one verified claim).
-2. Waves of 5 `outreach-writer` subagents in the background, task `run=<runId> slug=<slug>`.
+2. Waves of 5 `outreach-writer` subagents in the background, task `run=<runId> slug=<slug>`. Run the budget check
+   after each wave.
 3. `npm run outreach -- process --run <runId> --stage draft`. Outcomes: `awaiting_review` (done),
    `generic_draft` (script fell back), `retry` (critic rejected it; `critic.json` holds the feedback),
    `missing` (writer produced no files).
@@ -90,7 +93,8 @@ rest on. Companies it flags are marked `needs_manual` and wait for the owner in 
 
 1. `npm run outreach -- prepare-verify --run <runId>` writes each draft's `verify-input.json` and prints
    `slugs` (drafts not verified yet). If `slugs` is empty, go to step 7.
-2. Waves of up to 8 `outreach-verifier` subagents in the background, task `run=<runId> slug=<slug>`. Each
+2. Waves of up to 8 `outreach-verifier` subagents in the background, task `run=<runId> slug=<slug>` (verifiers are
+   cheap and the last safety check: they are not stopped by the budget). Each
    returns `<slug> ok` or `<slug> fail: ...`; record only that.
 3. `npm run outreach -- process --run <runId> --stage verify`. Outcomes: `verified` (stays awaiting review),
    `needs_manual` (an unsupported factual sentence, or no usable verdicts twice; the reason is stored),
@@ -101,10 +105,29 @@ rest on. Companies it flags are marked `needs_manual` and wait for the owner in 
 
 ## 7. Summary
 
-`npm run outreach -- summary --run <runId>` and show it to the user as the final answer, plus: how to
-continue (`/outreach --resume <runId>`), that everything is waiting for human review and nothing was sent,
-and that companies under "Needs your decision" (including those the verifier flagged) show as `?` rows in
-`outreach:review`, where the owner edits, approves anyway or kills them.
+1. `npm run outreach -- preview --run <runId>` writes the exact first email and follow-up of every draft as
+   `.eml` files under `storage/<runId>/<slug>/` (no Gmail needed). Keep the list of paths it prints.
+2. `npm run outreach -- cost --run <runId>` prints what the run used (API-equivalent USD per company, the
+   orchestrator overhead, the run total and the average per company with and without overhead).
+3. `npm run outreach -- summary --run <runId>`.
+
+Show the user, as the final answer: the summary, the cost table, the list of `.eml` paths (they can be opened
+in a mail client to see exactly what would be sent; the owner's Gmail signature appears only once
+`signature` has been run, otherwise a marked placeholder shows), whether the budget stopped any wave (and which
+companies got the generic fallback because of it), how to continue (`/outreach --resume <runId>`), that
+everything is waiting for human review and nothing was sent, and that companies under "Needs your decision"
+(including those the verifier flagged) show as `?` rows in `outreach:review`, where the owner edits, approves
+anyway or kills them. If `cost` or `preview` fails, say so and show the summary anyway.
+
+## Budget
+
+The config may set `run_budget_usd`. After each research wave and each write wave run
+`npm run outreach -- cost --run <runId> --json` and read only `overBudget`, `totalUsd` and `budgetUsd` from its
+output. If `overBudget` is `true`, do not start another research or write wave: every company that has not been
+researched or written yet is left to the generic fallback (step 5), and the final answer says that the budget
+stopped the run, with the total and the budget. If the budget is not set, `overBudget` is always `false`. If the
+cost command fails or reports no usage, carry on as if it were within budget and mention it at the end. The
+figures are API-equivalent USD (on a Claude subscription a measure of quota use, not a bill).
 
 ## Resume (`--resume <runId>`)
 
@@ -114,8 +137,10 @@ that are not verified yet).
 
 ## Rules
 
-- Never run a command that is not listed here. Never edit files other than `input/normalized.json`.
+- Never run a command that is not listed here (`cost` and `preview` are, as above). Never edit files other than
+  `input/normalized.json`. Never run `learn`, `playbook` or `test-send` yourself.
 - If a script fails with an error (not a per-company outcome), stop and show the error verbatim, then say
   `/outreach --resume <runId>` continues after it is fixed.
-- Subagent prompts contain only `run=<runId> slug=<slug>` (and, for the sourcer, `limit` and the criteria). Do
-  not paste page text, dossier content or email text into prompts or into your own replies.
+- Subagent prompts contain only `run=<runId> slug=<slug>` (and, for the sourcer, `limit` and the criteria). Never
+  leave out `run=` (every agent) or `slug=` (every company agent): the usage hook attributes cost to the run
+  and the company from them. Do not paste page text, dossier content or email text into prompts or into your own replies.

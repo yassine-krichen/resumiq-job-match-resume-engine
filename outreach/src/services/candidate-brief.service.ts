@@ -23,6 +23,13 @@ export function buildCandidateBrief(config: AppConfig, db: MasterDB): Record<str
       summer_internship: config.outreach.summer_internship,
       lines: config.outreach.availability,
     },
+    // The one-page budget of tailoring.json; the guard rejects anything over it and a 2-page render is sent back.
+    tailoring_limits: {
+      max_entries: config.tailoringLimits.maxEntries,
+      max_bullets_experience: config.tailoringLimits.maxBulletsExperience,
+      max_bullets_project: config.tailoringLimits.maxBulletsProject,
+      max_skills_per_category: config.tailoringLimits.maxSkillsPerCategory,
+    },
     tracks: Object.fromEntries(Object.entries(config.tracks).map(([track, rules]) => [track, rules.label])),
     critic_rules: {
       subject_max_chars: MAX_SUBJECT_LENGTH,

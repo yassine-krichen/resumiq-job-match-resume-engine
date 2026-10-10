@@ -13,7 +13,8 @@ export type BulletViolationRule =
   | 'invented_number'
   | 'technology_not_in_source'
   | 'foreign_technology'
-  | 'skill_not_in_profile';
+  | 'skill_not_in_profile'
+  | 'exceeds_limit';
 
 export interface BulletViolation {
   rule: BulletViolationRule;
@@ -27,7 +28,17 @@ export interface BulletGuardResult {
   violations: BulletViolation[];
 }
 
+/** The one-page budget of a tailored resume (config `tailoring_limits`). */
+export interface TailoringLimits {
+  maxEntries: number;
+  maxBulletsExperience: number;
+  maxBulletsProject: number;
+  maxSkillsPerCategory: number;
+}
+
 export interface GuardOptions {
+  /** Size limits so the resume still renders on one page; absent means only the schema's own bounds apply. */
+  limits?: TailoringLimits;
   /** Technology names that belong to the company (the dossier's tech_stack); naming one in the resume is a failure unless the profile really has it. */
   foreignTerms?: readonly string[];
 }
@@ -287,6 +298,15 @@ export function guardTailoring(tailoring: OutreachTailoring, db: MasterDB, optio
   const violations: BulletViolation[] = [];
   const matchers = buildAllMatchers(db, options);
   const selected: SourceEntry[] = [];
+  const { limits } = options;
+
+  if (limits && tailoring.entries.length > limits.maxEntries) {
+    violations.push({
+      rule: 'exceeds_limit',
+      where: 'entries',
+      detail: `${tailoring.entries.length} entries, at most ${limits.maxEntries} fit on one page: drop ${tailoring.entries.length - limits.maxEntries}`,
+    });
+  }
 
   for (const entry of tailoring.entries) {
     const source = findSourceEntry(db, entry.kind, entry.name);
@@ -300,6 +320,14 @@ export function guardTailoring(tailoring: OutreachTailoring, db: MasterDB, optio
     }
     selected.push(source);
     const name = entryName(source);
+    const maxBullets = limits && (entry.kind === 'experience' ? limits.maxBulletsExperience : limits.maxBulletsProject);
+    if (maxBullets !== undefined && entry.bullets.length > maxBullets) {
+      violations.push({
+        rule: 'exceeds_limit',
+        where: `${entry.kind} "${name}"`,
+        detail: `${entry.bullets.length} bullets, at most ${maxBullets} fit on one page: drop ${entry.bullets.length - maxBullets}`,
+      });
+    }
     const context = {
       allowedNumbers: factNumbers([source]),
       allowedTech: new Set(source.technologies_used.map(canonicalTech)),
@@ -334,6 +362,13 @@ export function guardTailoring(tailoring: OutreachTailoring, db: MasterDB, optio
 
   const knownSkills = new Set(userSkillList(db).map(canonicalTech));
   for (const [category, skills] of Object.entries(tailoring.skills)) {
+    if (limits && skills.length > limits.maxSkillsPerCategory) {
+      violations.push({
+        rule: 'exceeds_limit',
+        where: `skills.${category}`,
+        detail: `${skills.length} skills, at most ${limits.maxSkillsPerCategory} fit on one page: drop ${skills.length - limits.maxSkillsPerCategory}`,
+      });
+    }
     for (const skill of skills) {
       if (!knownSkills.has(canonicalTech(skill))) {
         violations.push({

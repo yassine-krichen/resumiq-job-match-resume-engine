@@ -38,6 +38,28 @@ describe('parseAppConfig', () => {
     expect(() => parseAppConfig(text, ROOT)).toThrow(/max_experiences \+ max_projects/);
   });
 
+  it('reads the tailoring limits of the example and falls back to the same values when the section is absent', () => {
+    const expected = { maxEntries: 3, maxBulletsExperience: 3, maxBulletsProject: 2, maxSkillsPerCategory: 6 };
+    expect(parseAppConfig(exampleText, ROOT).tailoringLimits).toEqual(expected);
+    expect(parseAppConfig(exampleWith((config) => delete config.tailoring_limits), ROOT).tailoringLimits).toEqual(expected);
+  });
+
+  it('applies partial tailoring limits over the defaults and rejects values outside the schema bounds', () => {
+    const partial = exampleWith((config) => {
+      config.tailoring_limits = { max_entries: 4, max_skills_per_category: 8 };
+    });
+    expect(parseAppConfig(partial, ROOT).tailoringLimits).toEqual({
+      maxEntries: 4,
+      maxBulletsExperience: 3,
+      maxBulletsProject: 2,
+      maxSkillsPerCategory: 8,
+    });
+    const tooMany = exampleWith((config) => {
+      config.tailoring_limits = { max_entries: 5 };
+    });
+    expect(() => parseAppConfig(tooMany, ROOT)).toThrow(/tailoring_limits\.max_entries/);
+  });
+
   it('rejects text that is not JSON', () => {
     expect(() => parseAppConfig('{ nope', ROOT)).toThrow(/not valid JSON/);
   });

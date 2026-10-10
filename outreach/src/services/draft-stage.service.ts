@@ -12,7 +12,7 @@ import type { OutreachDraft, OutreachTailoring } from '../schemas/outreach';
 import { createGenericDraft } from './generic-draft.service';
 import type { GenericDraftDeps } from './generic-draft.service';
 import { readJsonFile, relativeToRoot, trackResumePath, writeJsonAtomic } from './run-layout';
-import { ResumeRenderError, renderTailoring, writeResumeFiles } from './resume.service';
+import { ResumeRenderError, ResumeTooLongError, renderTailoring, writeResumeFiles } from './resume.service';
 import type { ResumeRenderer } from './resume.service';
 
 export type DraftOutcome =
@@ -35,6 +35,8 @@ interface Rejection {
   schema_errors: string[];
   bullet_violations: BulletViolation[];
   critic_failures: CriticFailure[];
+  /** The tailoring was fine but its resume did not fit one page; says how much to cut. */
+  resume_errors: string[];
 }
 
 function zodLines(error: { issues: Array<{ path: Array<string | number>; message: string }> }): string[] {
@@ -87,23 +89,33 @@ export async function processDrafts(deps: DraftStageDeps): Promise<DraftStageRep
       continue;
     }
 
-    const rejection = await evaluate(deps, company, dossier.data, tailoringRead, draftRead);
-    if ('rejection' in rejection) {
+    let evaluated = await evaluate(deps, company, dossier.data, tailoringRead, draftRead);
+    let pdf: ResumeChoice | null = null;
+    if (!('rejection' in evaluated)) {
+      const rendered = await resumeFor(deps, company, dossier.data.fit.track, evaluated.tailoring);
+      if (rendered.tooLong) {
+        evaluated = { rejection: { schema_errors: [], bullet_violations: [], critic_failures: [], resume_errors: [rendered.tooLong.advice] } };
+      } else {
+        pdf = rendered;
+      }
+    }
+
+    if ('rejection' in evaluated) {
       const attempts = company.draftAttempts + 1;
-      await writeJsonAtomic(layout.companyFile(company.slug, 'critic'), { attempt: attempts, ...rejection.rejection });
+      await writeJsonAtomic(layout.companyFile(company.slug, 'critic'), { attempt: attempts, ...evaluated.rejection });
       await store.updateCompany(company.id, { draftAttempts: attempts });
       await store.recordEvent(company.id, 'draft.rejected', { attempt: attempts });
       if (attempts > config.draftRetryLimit) {
         const generic = await createGenericDraft(deps, company, `writer failed ${attempts} times`);
         push(generic.outcome, generic.outcome === 'failed' ? generic.detail : undefined);
       } else {
-        push('retry', summarize(rejection.rejection));
+        push('retry', summarize(evaluated.rejection));
       }
       continue;
     }
 
-    const { tailoring, draft } = rejection;
-    const pdf = await resumeFor(deps, company, dossier.data.fit.track, tailoring);
+    const { tailoring, draft } = evaluated;
+    if (pdf === null) throw new Error('unreachable: an accepted draft always has a resume');
     await store.storeDraft(company.id, {
       generic: false,
       language: dossier.data.language,
@@ -130,6 +142,7 @@ function summarize(rejection: Rejection): string {
     ...rejection.schema_errors,
     ...rejection.bullet_violations.map((violation) => `${violation.rule}: ${violation.where}`),
     ...rejection.critic_failures.map((failure) => failure.rule),
+    ...rejection.resume_errors,
   ]
     .slice(0, 6)
     .join('; ');
@@ -163,7 +176,7 @@ async function evaluate(
   if (draft?.generic) schemaErrors.push('draft.json generic: must be false for a researched company');
 
   const bulletViolations = tailoring
-    ? guardTailoring(tailoring, deps.db, { foreignTerms: dossier.tech_stack }).violations
+    ? guardTailoring(tailoring, deps.db, { foreignTerms: dossier.tech_stack, limits: deps.config.tailoringLimits }).violations
     : [];
   const criticFailures = draft
     ? critiqueDraft({
@@ -178,18 +191,28 @@ async function evaluate(
     : [];
 
   if (schemaErrors.length > 0 || bulletViolations.length > 0 || criticFailures.length > 0 || !tailoring || !draft) {
-    return { rejection: { schema_errors: schemaErrors, bullet_violations: bulletViolations, critic_failures: criticFailures } };
+    return {
+      rejection: { schema_errors: schemaErrors, bullet_violations: bulletViolations, critic_failures: criticFailures, resume_errors: [] },
+    };
   }
   return { tailoring, draft };
 }
 
-// Prefer the tailored resume; if it will not render to one small page, the track resume of the company's best-fit track.
+interface ResumeChoice {
+  kind: 'tailored' | 'track';
+  path: string;
+  reason: string;
+  tooLong?: undefined;
+}
+
+// Prefer the tailored resume. One that runs onto a second page goes back to the writer (cut content); any other
+// render failure falls back to the track resume of the company's best-fit track.
 async function resumeFor(
   deps: DraftStageDeps,
   company: CompanyRecord,
   track: 'ai' | 'swe' | 'fullstack',
   tailoring: OutreachTailoring,
-): Promise<{ kind: 'tailored' | 'track'; path: string; reason: string }> {
+): Promise<ResumeChoice | { tooLong: ResumeTooLongError }> {
   const { layout, renderer, db, store } = deps;
   try {
     const result = await renderTailoring(tailoring, db, renderer);
@@ -198,6 +221,7 @@ async function resumeFor(
     await writeResumeFiles(pdfPath, result);
     return { kind: 'tailored', path: relativeToRoot(layout.paths, pdfPath), reason: '' };
   } catch (error) {
+    if (error instanceof ResumeTooLongError) return { tooLong: error };
     if (!(error instanceof ResumeRenderError)) throw error;
     await store.recordEvent(company.id, 'resume.fell_back_to_track', { track, reason: error.message });
     return {

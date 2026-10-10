@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import { PDFDocument } from 'pdf-lib';
 
+import { measureOverflowPoints } from './pdf-overflow';
 import { render as buildLatexDocument } from './renderer';
 import { LATEX_SKELETON } from './skeleton';
 import type { AISelection, MasterDB } from './types';
@@ -17,6 +18,8 @@ export interface RenderResult {
   pageCount: number;
   /** The exact .tex source that produced `pdf`, kept so a PDF is reproducible. */
   source: string;
+  /** Depth in points of the text that spilled onto page 2 and later; absent for one page or when it could not be measured. */
+  overflowPoints?: number;
 }
 
 /**
@@ -53,9 +56,11 @@ export class LatexRenderer {
       await this.compile(texPath, workDir);
 
       const pdf = await readFile(join(workDir, 'resume.pdf'));
-      const pageCount = (await PDFDocument.load(pdf)).getPageCount();
+      const document = await PDFDocument.load(pdf);
+      const pageCount = document.getPageCount();
+      const overflowPoints = pageCount > 1 ? await measureOverflowPoints(document) : undefined;
 
-      return { pdf, pageCount, source: tex };
+      return { pdf, pageCount, source: tex, ...(overflowPoints === undefined ? {} : { overflowPoints }) };
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }

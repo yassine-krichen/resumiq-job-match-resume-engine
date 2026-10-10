@@ -39,13 +39,22 @@ The non-obvious part is how little the agents are trusted. Every fact about a co
 - **Quote verification** — each claim stores a URL, a snapshot id and a 20 to 300 character quote; the verifier normalises Unicode and whitespace, then requires an exact substring of the saved page fetched from that same URL.
 - **Bullet guard** — rewritten resume bullets and the summary may only contain numbers from the cited entry's achievements and technologies from its `technologies_used`, with an alias table (Postgres/PostgreSQL, K8s/Kubernetes) and a list of about 80 common technologies to catch a copied company stack.
 - **Email critic** — word bands per language, banned phrases in English and French, exactly one call to action, a hook phrase that appears verbatim and rests on a verified claim, the availability lines, a number allowlist, a language check on body and follow-up separately.
+- **One-page budget** — `tailoring_limits` in the config caps entries, bullets per entry and skills per category. A tailoring over the caps is rejected, and one that still renders to two pages goes back to the writer with a measured instruction ("remove at least 3 bullets or one whole entry") instead of silently becoming a track resume.
 - **Blind verifier** — a Haiku agent sees only the email sentences and the verified sources, rebuilt from the database so an agent cannot tamper with its input; any unsupported factual sentence sends the company to `needs_manual`.
+
+### Cost and learning
+
+- **Cost per company and per run** — a `SubagentStop`/`Stop` hook reads each agent's transcript, sums its token usage per model and appends it to `runs/<run>/usage.jsonl`. `cost --run ID` prices it from the `pricing` table in the config and prints a table per company (agent by agent), the orchestrator overhead, the run total and the average per company with and without overhead. On a Claude subscription this is the API-equivalent cost, a measure of quota use, not a bill.
+- **Run budget** — set `run_budget_usd` and the orchestrator stops starting research and write waves once the run passes it; the remaining companies take the generic fallback, and the final report says so.
+- **Self-learning playbooks** — `playbooks/<agent>.md` holds short hints from earlier runs (blocked sites, useful page patterns, schema mistakes). Agents read their playbook first and add an entry with `learn` when they find a workaround. Because a hostile page could try to plant a "learning", every entry passes a validator first: 15 to 300 characters on one line, no backticks, command substitution, program names, URLs with a path, email addresses or override phrasing; near-duplicates only bump a counter, and a playbook holds at most 40 entries. Entries are hints that never override `CLAUDE.md`; the owner lists and prunes them with `playbook`.
 
 ### Sending
 
 - **Terminal review** — an Ink screen with approve, approve-all (skips unverified drafts and low-confidence contacts), edit in your editor with the critic re-run on save, kill, open PDF, retry a failed send, and a filter.
 - **Recipient-local scheduling** — sends land on the recipient's next business day between 08:30 and 10:30 local time, 4 to 11 minutes apart measured from the last real send, under a daily cap that ramps from 20 to 30.
 - **Threaded follow-up** — one follow-up five business days later in the same Gmail thread; a reply cancels it, a "stop" reply in English or French adds the address to a permanent suppression list, a bounce is recorded.
+- **Preview before anything is sent** — `preview --run ID` writes the exact first email and follow-up of every draft as `.eml` files under `storage/<run>/<slug>/` (no Gmail needed, nothing changes in the database). Without a cached signature the preview carries a visibly marked placeholder; the real builder still refuses to send unsigned.
+- **Test send to yourself** — `test-send --run ID --to you@example.com` sends the real message, attachment included, through Gmail to your address only, with `[TEST → real recipient]` in the subject. It touches no draft, company or send status and refuses your own contact's address.
 - **Mandatory signature** — the MIME builder appends the signature fetched from your Gmail settings to every message and refuses to build one without it.
 - **No double sends** — one send row per draft and kind under a unique constraint, a compare-and-set claim before the API call, and an `unknown` state that is never retried automatically.
 
@@ -53,7 +62,8 @@ The non-obvious part is how little the agents are trusted. Every fact about a co
 
 - **Bash guard hook** — a PreToolUse hook rejects every shell command that is not an allowlisted `npm run outreach -- <subcommand>`, and blocks chaining, redirects, substitutions and paths outside the run folder.
 - **SSRF-guarded snapshots** — the snapshot fetcher classifies every resolved address by bytes (including IPv4-mapped and NAT64 IPv6), pins the connection to the checked IP through an undici dispatcher, and re-checks every redirect hop.
-- **Owner-only commands** — `review`, `auth`, `signature`, `tick` and `prune` are denied to agents by both the hook and the permission rules.
+- **Owner-only commands** — `review`, `auth`, `signature`, `tick`, `test-send`, `playbook` and `prune` are denied to agents by both the hook and the permission rules. `learn` is allowed only in one exact shape, with a restricted character set, and its content is validated again by the CLI.
+- **Never blocking** — the usage hook always exits 0 and logs its own problems to `logs/hooks.log`, so cost bookkeeping can never stop a run.
 
 ## Demo
 
@@ -113,7 +123,7 @@ sequenceDiagram
 
 ### Key Decisions
 
-- **Agents judge, scripts verify**: deterministic TypeScript for every check and write over letting the model validate its own output, because a script cannot hallucinate, costs no tokens, and has 890 unit tests behind it. The agents' context stays small too: each returns one line, and the orchestrator reads script JSON, never pages or drafts.
+- **Agents judge, scripts verify**: deterministic TypeScript for every check and write over letting the model validate its own output, because a script cannot hallucinate, costs no tokens, and has over 1,100 unit tests behind it. The agents' context stays small too: each returns one line, and the orchestrator reads script JSON, never pages or drafts.
 - **Quotes against saved snapshots over trusting a fetch tool**: model-facing fetch tools return processed text, so a quote cannot be checked against them. The snapshot script saves the raw page text with its URL in a manifest, and the verifier only resolves ids listed there.
 - **Writer without web access**: a second agent that sees only `dossier.verified.json` over one agent that researches and writes, because the writer then has no way to introduce a fact that skipped verification.
 - **Lease row over a long advisory-lock transaction**: a 6-minute lease renewed before each send, with a 5-minute trigger, over holding a Postgres advisory lock through a 30-minute tick, because a pooled serverless connection (Neon through PgBouncer) can drop an idle transaction and silently release the lock.
@@ -132,7 +142,7 @@ sequenceDiagram
 | Gmail API (fetch) + google-auth-library | Send, read threads, fetch signature | Desktop OAuth with PKCE; no `googleapis` package for three REST calls |
 | undici | Pinned-DNS fetch for snapshots | Lets the SSRF check and the connection use the same resolved address |
 | luxon | Recipient time zones, business days | DST-correct scheduling across Europe and the Americas |
-| Jest | 890 unit tests | No database, network or LaTeX needed to run them |
+| Jest | 1,100+ unit tests | No database, network or LaTeX needed to run them |
 
 ## Getting Started
 
@@ -142,7 +152,7 @@ sequenceDiagram
 - [Claude Code](https://claude.com/claude-code)
 - A Postgres database (a free Neon project works)
 - [tectonic](https://tectonic-typesetting.github.io/) on `PATH`, or its path in `TECTONIC_PATH`
-- A Google Cloud project with the Gmail API enabled and an OAuth client of type "Desktop app" (only needed to send)
+- A Google Cloud project with the Gmail API enabled and an OAuth client of type "Desktop app" (only needed to send; the step-by-step guide is [docs/GMAIL-SETUP.md](docs/GMAIL-SETUP.md))
 - Windows for the bundled scheduler scripts; on macOS or Linux, run `npm run outreach:tick` from cron every 5 minutes
 
 ### Clone
@@ -191,13 +201,19 @@ claude
 
 Other forms: `/outreach --resume RUN_ID`, `/outreach input/companies.csv --generic`, `/outreach --source "remote-friendly AI startups in France, 5-50 people" --limit 20`.
 
+After the run, `npm run outreach -- cost --run RUN_ID` shows what it used and `npm run outreach -- preview --run RUN_ID` writes the emails as `.eml` files you can open in a mail client.
+
 ### Review and send
+
+Set up Gmail once by following [docs/GMAIL-SETUP.md](docs/GMAIL-SETUP.md), then:
 
 ```bash
 npm run outreach:review      # a approve, A approve all, e edit, k kill, o open PDF, r retry, / filter
 npm run outreach -- auth       # once: browser sign-in, token saved outside the repo
 npm run outreach -- signature  # once, and again after changing your Gmail signature
-npm run outreach:tick        # one tick now; send a few to your own addresses first
+npm run outreach -- preview --run RUN_ID                       # the exact emails as .eml files, no Gmail needed
+npm run outreach -- test-send --run RUN_ID --to you@example.com  # the real first email, to your own address only
+npm run outreach:tick        # sends what is due, for real
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-schedule.ps1   # Windows: tick every 5 minutes
 ```
 
@@ -223,7 +239,7 @@ npm run build        # compile to dist/
 | `GMAIL_TOKEN_PATH` | No | `%USERPROFILE%\.config\cold-outreach\gmail-token.json` | Refresh token location; must be outside the repo |
 | `HUNTER_API_KEY` | No | — | Enables `hunter <domain>` contact lookups during sourcing |
 
-`outreach.config.json` holds everything else: `data_inventory_path`, availability lines in English and French, `summer_internship`, `daily_cap_week1`, `daily_cap`, send window and gaps, `follow_up_business_days`, `sender_email`, `sender_name`, `draft_retry_limit` and the three track definitions.
+`outreach.config.json` holds everything else: `data_inventory_path`, availability lines in English and French, `summer_internship`, `daily_cap_week1`, `daily_cap`, send window and gaps, `follow_up_business_days`, `sender_email`, `sender_name`, `draft_retry_limit`, `tailoring_limits` (the one-page budget of a tailored resume), the three track definitions, and for cost tracking `pricing` (USD per million tokens per model id prefix, with `pricing_source` naming where the prices come from) and the optional `run_budget_usd`.
 
 ## Usage
 
@@ -238,6 +254,14 @@ npm run build        # compile to dist/
 `generic --run ID` — writes a generic email and attaches a track resume for every unfinished company in the run.
 
 `status` / `summary --run ID` — pipeline counts per run, and the end-of-run report.
+
+`cost --run ID [--json]` / `cost --all` — API-equivalent cost of a run (or of every run): per company with an agent breakdown, orchestrator overhead, run total, average per company with and without overhead, and whether the run is over `run_budget_usd`.
+
+`preview --run ID [--slug S]` — writes `initial.eml` and `follow-up.eml` for every draft awaiting review or approved into `storage/<run>/<slug>/`.
+
+`test-send --run ID --to ADDRESS [--slug S] [--limit N]` — owner only. Sends the real first email of N drafts (default 1) to your address, subject-marked `[TEST → recipient]`; changes no status and records a `test_send` event.
+
+`learn --agent NAME --situation "..." --fix "..."` / `playbook --agent NAME [--remove N]` — add a validated hint to an agent's playbook (what agents run), and list or prune a playbook (owner only).
 
 `prune [--days 180] [--dry-run]` — erases contacts, dossiers, draft text, PDFs and run folders of dead leads older than N days (at least 30), keeping a domain tombstone so the company is never contacted again.
 

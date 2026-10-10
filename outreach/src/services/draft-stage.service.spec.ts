@@ -170,17 +170,48 @@ describe('processDrafts', () => {
     expect(draft).toMatchObject({ generic: true, resumeKind: 'track', resumePdfPath: 'storage/tracks/ai.pdf' });
   });
 
-  it('uses the track resume when the tailored one is not a single page', async () => {
-    const { store, layout, deps } = await setup(new FakeRenderer({ pageCount: 2 }));
+  it('sends a two-page tailored resume back to the writer with a precise instruction in critic.json', async () => {
+    const { store, layout, deps } = await setup(new FakeRenderer({ pageCount: 2, overflowPoints: 60 }));
     await writeWriterFiles(layout);
 
     const report = await processDrafts(deps);
 
-    expect(report.results[0]).toMatchObject({ outcome: 'awaiting_review' });
+    expect(report.results[0].outcome).toBe('retry');
     expect(report.results[0].detail).toContain('2 pages');
-    const draft = await store.getLatestDraft((await store.listCompanies())[0].id);
-    expect(draft).toMatchObject({ generic: false, resumeKind: 'track', resumePdfPath: 'storage/tracks/ai.pdf' });
-    expect(store.events.map((event) => event.type)).toContain('resume.fell_back_to_track');
+    const critic = JSON.parse(readFileSync(layout.companyFile(slug, 'critic'), 'utf-8'));
+    expect(critic).toMatchObject({ attempt: 1, schema_errors: [], bullet_violations: [], critic_failures: [] });
+    expect(critic.resume_errors).toEqual([expect.stringMatching(/^resume is 2 pages: about 5 lines spill onto page 2; remove at least 3 bullets or one whole entry/)]);
+    expect(store.drafts).toHaveLength(0);
+    expect((await store.listCompanies())[0]).toMatchObject({ status: 'dossier_ready', draftAttempts: 1 });
+  });
+
+  it('falls back to a generic draft when the resume keeps overflowing past the retry limit', async () => {
+    const { store, layout, deps } = await setup(new FakeRenderer({ pageCount: 2 }));
+    await writeWriterFiles(layout);
+
+    const outcomes: string[] = [];
+    for (let run = 0; run <= config.draftRetryLimit; run += 1) {
+      outcomes.push((await processDrafts(deps)).results[0].outcome);
+    }
+
+    expect(outcomes).toEqual(['retry', 'retry', 'generic_draft']);
+    expect((await store.getLatestDraft((await store.listCompanies())[0].id))).toMatchObject({ generic: true, resumeKind: 'track' });
+  });
+
+  it('rejects a tailoring that exceeds the configured one-page limits before rendering it', async () => {
+    const { layout, deps, renderer } = await setup();
+    const tailoring = writerTailoring() as { entries: Array<{ kind: string; name: string; bullets: unknown[] }> };
+    const project = tailoring.entries.find((entry) => entry.kind === 'project');
+    project?.bullets.push(project.bullets[0]);
+    await writeCompanyFile(layout, slug, 'tailoring', tailoring);
+    await writeCompanyFile(layout, slug, 'draft', WRITER_DRAFT);
+
+    const report = await processDrafts(deps);
+
+    expect(report.results[0].outcome).toBe('retry');
+    const critic = JSON.parse(readFileSync(layout.companyFile(slug, 'critic'), 'utf-8'));
+    expect(critic.bullet_violations.map((violation: { rule: string }) => violation.rule)).toContain('exceeds_limit');
+    expect(renderer.calls).toBe(0);
   });
 
   it('uses the track resume when the PDF is 80 KB or more or the render throws', async () => {

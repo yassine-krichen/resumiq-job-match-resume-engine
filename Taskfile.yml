@@ -139,6 +139,30 @@ tasks:
     cmds:
       - npm run outreach --silent -- tick
 
+  outreach:cost:
+    desc: What an outreach run used, in API-equivalent USD per company and in total (-- --run <id> [--json], or -- --all)
+    dir: outreach
+    cmds:
+      - npm run outreach --silent -- cost {{.CLI_ARGS}}
+
+  outreach:preview:
+    desc: Write the exact first email and follow-up of a run's drafts as .eml files in outreach/storage/<run>/<slug>/ (-- --run <id> [--slug s]); no Gmail needed
+    dir: outreach
+    cmds:
+      - npm run outreach --silent -- preview {{.CLI_ARGS}}
+
+  outreach:test-send:
+    desc: Send the real first email of a run's drafts to YOUR address only, subject-marked [TEST], no status change (-- --run <id> --to you@example.com [--slug s] [--limit N])
+    dir: outreach
+    cmds:
+      - npm run outreach --silent -- test-send {{.CLI_ARGS}}
+
+  outreach:playbook:
+    desc: List or prune what the outreach agents learned (-- --agent researcher|writer|sourcer|verifier [--remove N])
+    dir: outreach
+    cmds:
+      - npm run outreach --silent -- playbook {{.CLI_ARGS}}
+
   outreach:prune:
     desc: Erase contacts, dossiers, draft text, PDFs and run folders of dead outreach leads older than 180 days (add -- --dry-run to preview, -- --days N to change)
     dir: outreach

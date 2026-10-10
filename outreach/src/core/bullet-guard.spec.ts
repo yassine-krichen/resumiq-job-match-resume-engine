@@ -277,3 +277,61 @@ describe('guardTailoring', () => {
     });
   });
 });
+
+describe('tailoring limits (one-page budget)', () => {
+  const limits = { maxEntries: 2, maxBulletsExperience: 1, maxBulletsProject: 1, maxSkillsPerCategory: 1 };
+  const okBullet = 'Replaced an email-and-file workflow for a 40-person team with a Spring Boot and Angular app.';
+
+  it('passes a tailoring that sits exactly on every limit', () => {
+    const tailoring = tailoringWithBullet(okBullet, {
+      skills: { programming_languages: ['TypeScript'], frameworks_and_libraries: [], infrastructure_and_tools: [], databases: [] },
+    });
+
+    expect(rules(tailoring, masterDb, { limits })).toEqual([]);
+  });
+
+  it('rejects more entries than max_entries and says how many may stay', () => {
+    const tailoring = tailoringWithBullet(okBullet);
+    tailoring.entries.push({
+      kind: 'project',
+      name: 'Resume Engine',
+      bullets: [{ text: 'Built an AI resume tailoring pipeline with 3 LLM agents.', source_entry: 'Resume Engine' }],
+    });
+
+    const violations = guardTailoring(tailoring, masterDb, { limits }).violations;
+
+    expect(violations).toEqual([
+      expect.objectContaining({ rule: 'exceeds_limit', where: 'entries', detail: expect.stringContaining('at most 2') }),
+    ]);
+  });
+
+  it('rejects too many bullets under a project and under an experience', () => {
+    const tailoring = tailoringWithBullet(okBullet);
+    tailoring.entries[0].bullets.push({ text: 'Migrated 12,000 historical cases into structured tickets.', source_entry: 'TickIT' });
+    tailoring.entries[1].bullets.push({ text: 'Built an internal dashboard in Java.', source_entry: 'Acme Corp' });
+
+    const violations = guardTailoring(tailoring, masterDb, { limits }).violations;
+
+    expect(violations.map((violation) => [violation.rule, violation.where])).toEqual([
+      ['exceeds_limit', 'project "TickIT"'],
+      ['exceeds_limit', 'experience "Acme Corp"'],
+    ]);
+  });
+
+  it('rejects a skills category longer than max_skills_per_category', () => {
+    const tailoring = tailoringWithBullet(okBullet, {
+      skills: { programming_languages: ['TypeScript', 'Java'], frameworks_and_libraries: [], infrastructure_and_tools: [], databases: [] },
+    });
+
+    expect(guardTailoring(tailoring, masterDb, { limits }).violations).toEqual([
+      expect.objectContaining({ rule: 'exceeds_limit', where: 'skills.programming_languages' }),
+    ]);
+  });
+
+  it('applies no limit when none is given', () => {
+    const tailoring = tailoringWithBullet(okBullet);
+    tailoring.entries[0].bullets.push({ text: 'Migrated 12,000 historical cases into structured tickets.', source_entry: 'TickIT' });
+
+    expect(rules(tailoring)).toEqual([]);
+  });
+});

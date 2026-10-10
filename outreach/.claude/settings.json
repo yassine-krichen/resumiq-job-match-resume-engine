@@ -15,9 +15,13 @@
       "Bash(npm run outreach -- ingest-sourced:*)",
       "Bash(npm run outreach -- hunter:*)",
       "Bash(npm run outreach -- prepare-verify:*)",
+      "Bash(npm run outreach -- cost:*)",
+      "Bash(npm run outreach -- preview:*)",
+      "Bash(npm run outreach -- learn:*)",
       "Read(./runs/**)",
       "Read(./input/**)",
       "Read(./prompts/**)",
+      "Read(./playbooks/**)",
       "Read(./CLAUDE.md)",
       "WebSearch",
       "Edit(./runs/**/dossier.json)",
@@ -33,6 +37,7 @@
       "Edit(./src/**)",
       "Edit(./prisma/**)",
       "Edit(./.claude/**)",
+      "Edit(./playbooks/**)",
       "Edit(./outreach.config.json)",
       "Edit(./runs/**/snapshots/**)",
       "Edit(./runs/**/dossier.verified.json)",
@@ -44,6 +49,8 @@
       "Edit(./runs/**/sourcing/hunter/**)",
       "Edit(./runs/**/sourcing/ingest-sourced.json)",
       "Bash(npm run outreach -- prune:*)",
+      "Bash(npm run outreach -- playbook:*)",
+      "Bash(npm run outreach -- test-send:*)",
       "Bash(node:*)",
       "Bash(npx:*)",
       "Bash(powershell:*)",
@@ -68,6 +75,28 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.mjs\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/record-usage.mjs\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/record-usage.mjs\"",
+            "timeout": 20
           }
         ]
       }

@@ -3,6 +3,9 @@ import { dirname, resolve } from 'node:path';
 
 import { z } from 'zod';
 
+import type { TailoringLimits } from '../core/bullet-guard';
+import { DEFAULT_PRICING, PricingSchema } from '../cost/pricing';
+import type { Pricing } from '../cost/pricing';
 import { OutreachConfigSchema, OutreachTrackSchema, TimezoneSchema } from '../schemas/outreach';
 import type { OutreachConfig, OutreachTrack } from '../schemas/outreach';
 
@@ -35,6 +38,18 @@ export const TrackRulesSchema = z
     }
   });
 
+// How much a tailored resume may hold so it still fits one page. The schema's own bounds (4 entries, 4/3 bullets)
+// are the hard ceiling; a candidate with education and certifications needs tighter ones. The writer gets these
+// in candidate.json and the guard rejects a tailoring over them.
+export const TailoringLimitsSchema = z
+  .object({
+    max_entries: z.number().int().min(2).max(4).default(3),
+    max_bullets_experience: z.number().int().min(1).max(4).default(3),
+    max_bullets_project: z.number().int().min(1).max(3).default(2),
+    max_skills_per_category: z.number().int().min(3).max(12).default(6),
+  })
+  .default({});
+
 const ExtrasSchema = z.object({
   // Relative paths resolve against the folder holding the config file.
   data_inventory_path: z.string().trim().min(1),
@@ -43,6 +58,12 @@ const ExtrasSchema = z.object({
   fallback_timezone: TimezoneSchema.default('America/New_York'),
   // Writer retries allowed per company before the generic fallback (SPEC diagram: max 2 retries).
   draft_retry_limit: z.number().int().min(0).max(5).default(2),
+  tailoring_limits: TailoringLimitsSchema,
+  // Price per model id prefix (USD per MTok); see src/cost/pricing.ts. `pricing_source` is a free-text note.
+  pricing: PricingSchema.default(DEFAULT_PRICING),
+  pricing_source: z.string().trim().max(400).optional(),
+  // The /outreach command stops starting research/write waves once the run's API-equivalent cost passes this.
+  run_budget_usd: z.number().positive().max(10_000).optional(),
 });
 
 export type TrackRules = z.infer<typeof TrackRulesSchema>;
@@ -54,6 +75,11 @@ export interface AppConfig {
   dataInventoryPath: string;
   fallbackTimezone: string;
   draftRetryLimit: number;
+  tailoringLimits: TailoringLimits;
+  pricing: Pricing;
+  pricingSource?: string;
+  /** Soft per-run spend limit in API-equivalent USD; absent means no limit. */
+  runBudgetUsd?: number;
 }
 
 export class ConfigError extends Error {}
@@ -88,6 +114,15 @@ export function parseAppConfig(text: string, configDir: string): AppConfig {
     dataInventoryPath: resolve(configDir, extras.data.data_inventory_path),
     fallbackTimezone: extras.data.fallback_timezone,
     draftRetryLimit: extras.data.draft_retry_limit,
+    tailoringLimits: {
+      maxEntries: extras.data.tailoring_limits.max_entries,
+      maxBulletsExperience: extras.data.tailoring_limits.max_bullets_experience,
+      maxBulletsProject: extras.data.tailoring_limits.max_bullets_project,
+      maxSkillsPerCategory: extras.data.tailoring_limits.max_skills_per_category,
+    },
+    pricing: extras.data.pricing,
+    ...(extras.data.pricing_source === undefined ? {} : { pricingSource: extras.data.pricing_source }),
+    ...(extras.data.run_budget_usd === undefined ? {} : { runBudgetUsd: extras.data.run_budget_usd }),
   };
 }
 
