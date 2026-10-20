@@ -4,7 +4,7 @@
   "private": true,
   "description": "Next.js frontend — auth, career profile, onboarding UI.",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
