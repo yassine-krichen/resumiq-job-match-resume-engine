@@ -13,6 +13,7 @@ import {
   generateEmail,
   generateInterviewIntakeQuestions,
   generateTechnicalInterviewPrep,
+  LlmValidationError,
   parseJobIntake,
   selectAndDraft,
 } from '@resumiq/ai-bridge';
@@ -30,6 +31,7 @@ jest.mock('@resumiq/ai-bridge', () => ({
   generateTechnicalInterviewPrep: jest.fn(),
   generateBehavioralInterviewPrep: jest.fn(),
   parseJobIntake: jest.fn(),
+  LlmValidationError: class LlmValidationError extends Error {},
 }));
 
 const analyzeJobMock = analyzeJob as jest.Mock;
@@ -169,6 +171,16 @@ describe('ApplicationsService', () => {
         salary_range: null,
         company_info_summary: null,
       });
+
+      await expect(service.extractJobIntake('some pasted job posting text')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('LLM output that stays malformed after the repair retry', () => {
+    it('maps LlmValidationError from generateJSON to a retryable BadRequestException', async () => {
+      parseJobIntakeMock.mockRejectedValue(new LlmValidationError('bad', 'items invalid', '{}'));
 
       await expect(service.extractJobIntake('some pasted job posting text')).rejects.toThrow(
         BadRequestException,

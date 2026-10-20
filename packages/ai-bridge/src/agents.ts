@@ -1,3 +1,14 @@
+import {
+  CompatibilityResultSchema,
+  InterviewIntakeQuestionsSchema,
+  InterviewPrepReportSchema,
+  JobDNASchema,
+  JobIntakeResultSchema,
+  UpdateEmailDraftSchema,
+  UpdateGapReportSchema,
+  UpdateResumeSelectionSchema,
+} from '@resumiq/schemas';
+
 import { generateJSON } from './llm';
 import type {
   AISelection,
@@ -582,19 +593,36 @@ Return JSON matching this exact schema:
 
 // ── Exported Functions ──────────────────────────────────────────────────────
 
+const TechnicalInterviewPrepSchema = InterviewPrepReportSchema.pick({
+  technical_topics: true,
+  gaps_to_address: true,
+});
+const BehavioralInterviewPrepSchema = InterviewPrepReportSchema.pick({
+  behavioral_questions: true,
+  talking_points: true,
+});
+
 export async function checkCompatibility(
   jobDNA: JobDNA,
   db: MasterDB,
 ): Promise<CompatibilityResult> {
-  return generateJSON<CompatibilityResult>(COMPAT_SYSTEM, compatUser(jobDNA, db));
+  return generateJSON<CompatibilityResult>(
+    COMPAT_SYSTEM,
+    compatUser(jobDNA, db),
+    CompatibilityResultSchema,
+  );
 }
 
 export async function analyzeJob(jd: string, companyInfo: string): Promise<JobDNA> {
-  return generateJSON<JobDNA>(AGENT1_SYSTEM, agent1User(jd, companyInfo));
+  return generateJSON<JobDNA>(AGENT1_SYSTEM, agent1User(jd, companyInfo), JobDNASchema);
 }
 
 export async function parseJobIntake(pastedText: string): Promise<JobIntake> {
-  return generateJSON<JobIntake>(JOB_INTAKE_SYSTEM, jobIntakeUser(pastedText));
+  return generateJSON<JobIntake>(
+    JOB_INTAKE_SYSTEM,
+    jobIntakeUser(pastedText),
+    JobIntakeResultSchema,
+  );
 }
 
 export async function selectAndDraft(
@@ -602,7 +630,11 @@ export async function selectAndDraft(
   db: MasterDB,
   pages: 1 | 2 = 2,
 ): Promise<AISelection> {
-  return generateJSON<AISelection>(AGENT2_SYSTEM, agent2User(jobDNA, db, pages));
+  return generateJSON<AISelection>(
+    AGENT2_SYSTEM,
+    agent2User(jobDNA, db, pages),
+    UpdateResumeSelectionSchema,
+  );
 }
 
 export async function critiqueAndRevise(
@@ -610,11 +642,15 @@ export async function critiqueAndRevise(
   jobDNA: JobDNA,
   db: MasterDB,
 ): Promise<AISelection> {
-  return generateJSON<AISelection>(CRITIQUE_SYSTEM, critiqueUser(draft, jobDNA, db));
+  return generateJSON<AISelection>(
+    CRITIQUE_SYSTEM,
+    critiqueUser(draft, jobDNA, db),
+    UpdateResumeSelectionSchema,
+  );
 }
 
 export async function generateGapReport(jobDNA: JobDNA, db: MasterDB): Promise<GapReport> {
-  return generateJSON<GapReport>(GAP_SYSTEM, gapUser(jobDNA, db));
+  return generateJSON<GapReport>(GAP_SYSTEM, gapUser(jobDNA, db), UpdateGapReportSchema);
 }
 
 export async function generateEmail(
@@ -622,7 +658,11 @@ export async function generateEmail(
   companyInfo: string,
   selection: AISelection,
 ): Promise<EmailDraft> {
-  return generateJSON<EmailDraft>(EMAIL_SYSTEM, emailUser(jobDNA, companyInfo, selection));
+  return generateJSON<EmailDraft>(
+    EMAIL_SYSTEM,
+    emailUser(jobDNA, companyInfo, selection),
+    UpdateEmailDraftSchema,
+  );
 }
 
 export async function generateInterviewIntakeQuestions(
@@ -633,6 +673,7 @@ export async function generateInterviewIntakeQuestions(
   return generateJSON<InterviewIntakeQuestions>(
     INTERVIEW_INTAKE_SYSTEM,
     interviewIntakeUser(jobDNA, companyInfoText, selection),
+    InterviewIntakeQuestionsSchema,
   );
 }
 
@@ -645,6 +686,7 @@ export async function generateTechnicalInterviewPrep(
   return generateJSON<TechnicalInterviewPrep>(
     TECHNICAL_PREP_SYSTEM,
     technicalPrepUser(jobDNA, db, selection, intakeAnswers),
+    TechnicalInterviewPrepSchema,
   );
 }
 
@@ -658,5 +700,6 @@ export async function generateBehavioralInterviewPrep(
   return generateJSON<BehavioralInterviewPrep>(
     BEHAVIORAL_PREP_SYSTEM,
     behavioralPrepUser(jobDNA, companyInfoText, db, selection, intakeAnswers),
+    BehavioralInterviewPrepSchema,
   );
 }

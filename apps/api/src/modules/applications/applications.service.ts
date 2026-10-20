@@ -8,6 +8,7 @@ import {
   generateEmail,
   generateInterviewIntakeQuestions,
   generateTechnicalInterviewPrep,
+  LlmValidationError,
   parseJobIntake,
   selectAndDraft,
 } from '@resumiq/ai-bridge';
@@ -158,6 +159,22 @@ export interface DashboardSummary {
   savedGapReports: Prisma.ApplicationGetPayload<{ include: { job: true } }>[];
 }
 
+/**
+ * `generateJSON` throws LlmValidationError when the model's output is still
+ * malformed after its one repair retry. Surface that as a retryable 400 (same
+ * as the pre-existing safeParse gates) instead of an opaque 500.
+ */
+async function retryableOnBadShape<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    if (err instanceof LlmValidationError) {
+      throw new BadRequestException('AI generated an invalid response — please retry');
+    }
+    throw err;
+  }
+}
+
 @Injectable()
 export class ApplicationsService {
   private readonly logger = new Logger(ApplicationsService.name);
@@ -175,7 +192,7 @@ export class ApplicationsService {
    * `analyzeAndDraft` runs. No profile lookup, no DB writes.
    */
   async extractJobIntake(rawText: string): Promise<JobIntakeResultDto> {
-    const raw = await parseJobIntake(rawText);
+    const raw = await retryableOnBadShape(() => parseJobIntake(rawText));
     const parsed = JobIntakeResultSchema.safeParse(raw);
     if (!parsed.success) {
       throw new BadRequestException('Could not parse the pasted text — please try again.');
@@ -201,7 +218,7 @@ export class ApplicationsService {
     }
 
     onProgress('Extracting job details...');
-    const rawJobDNA = await analyzeJob(dto.raw_jd, dto.company_info ?? '');
+    const rawJobDNA = await retryableOnBadShape(() => analyzeJob(dto.raw_jd, dto.company_info ?? ''));
     const parsedJobDNA = JobDNASchema.safeParse(rawJobDNA);
     if (!parsedJobDNA.success) {
       this.logger.warn(`analyzeJob returned an invalid shape: ${parsedJobDNA.error.message}`);
@@ -282,7 +299,7 @@ export class ApplicationsService {
     }
 
     onProgress('Comparing against your Career Inventory...');
-    const rawCompat = await checkCompatibility(jobDNA, db);
+    const rawCompat = await retryableOnBadShape(() => checkCompatibility(jobDNA, db));
     const parsedCompat = CompatibilityResultSchema.safeParse(rawCompat);
     if (!parsedCompat.success) {
       this.logger.warn(
@@ -335,10 +352,10 @@ export class ApplicationsService {
     }
 
     onProgress('Selecting best content from your Inventory for this role...');
-    const draft = await selectAndDraft(jobDNA, db, pages);
+    const draft = await retryableOnBadShape(() => selectAndDraft(jobDNA, db, pages));
 
     onProgress('Drafting tailored resume bullets...');
-    const rawSelection = await critiqueAndRevise(draft, jobDNA, db);
+    const rawSelection = await retryableOnBadShape(() => critiqueAndRevise(draft, jobDNA, db));
 
     // The LLM's JSON output is parsed with no runtime shape guarantees —
     // validate it through the same schema the user-edit path enforces
@@ -603,7 +620,7 @@ export class ApplicationsService {
     onProgress("Drafting cold email in company's tone & values...");
     const jobDNA = application.job.parsedJd as unknown as JobDNA;
     const companyInfo = formatCompanyInfoForPrompt(application.job.companyInfo);
-    const rawEmailDraft = await generateEmail(jobDNA, companyInfo, selection);
+    const rawEmailDraft = await retryableOnBadShape(() => generateEmail(jobDNA, companyInfo, selection));
     const parsedEmailDraft = UpdateEmailDraftSchema.safeParse(rawEmailDraft);
     if (!parsedEmailDraft.success) {
       this.logger.warn(
@@ -670,7 +687,7 @@ export class ApplicationsService {
     const companyInfoText = formatCompanyInfoForPrompt(application.job.companyInfo);
 
     const weakTopics = Array.from(new Set(jobDNA.mandatory_technical_skills));
-    const rawQuestions = await generateInterviewIntakeQuestions(jobDNA, companyInfoText, selection);
+    const rawQuestions = await retryableOnBadShape(() => generateInterviewIntakeQuestions(jobDNA, companyInfoText, selection));
 
     // The LLM's JSON output is parsed with no runtime shape guarantees —
     // validate it before persisting, same defensive pattern as
@@ -765,16 +782,16 @@ export class ApplicationsService {
     const answers = state.intake.answers;
 
     onProgress('Analyzing likely technical topics...');
-    const technical = await generateTechnicalInterviewPrep(jobDNA, db, selection, answers);
+    const technical = await retryableOnBadShape(() => generateTechnicalInterviewPrep(jobDNA, db, selection, answers));
 
     onProgress('Analyzing likely behavioral questions...');
-    const behavioral = await generateBehavioralInterviewPrep(
+    const behavioral = await retryableOnBadShape(() => generateBehavioralInterviewPrep(
       jobDNA,
       companyInfoText,
       db,
       selection,
       answers,
-    );
+    ));
 
     // The LLM's JSON output is parsed with no runtime shape guarantees —
     // validate the merged synthesis result before persisting, same gate

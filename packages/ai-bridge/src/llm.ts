@@ -1,8 +1,6 @@
 // ── Provider types ──────────────────────────────────────────────────────────
 
-type Provider =
-  | { kind: 'freellmapi' }
-  | { kind: 'bridge'; provider: 'claude' | 'chatgpt' };
+type Provider = { kind: 'freellmapi' } | { kind: 'bridge'; provider: 'claude' | 'chatgpt' };
 
 function selectProvider(): Provider {
   if (process.env.USE_LLM_BRIDGE === 'true') {
@@ -107,7 +105,7 @@ async function callFreellmapi(system: string, user: string): Promise<string> {
 
 // ── JSON extraction ─────────────────────────────────────────────────────────
 
-function extractJSON<T>(text: string): T {
+export function extractJSON<T>(text: string): T {
   const trimmed = text.trim();
 
   try {
@@ -137,17 +135,109 @@ function extractJSON<T>(text: string): T {
   throw new Error(`Could not parse JSON from LLM response:\n${text.slice(0, 600)}`);
 }
 
+// ── Validation + repair ─────────────────────────────────────────────────────
+
+/** Structural subset of a Zod schema — keeps this package free of a direct
+ * `zod` import while accepting any `z.ZodType` (including coercing ones). */
+export interface JsonSchemaLike<T> {
+  safeParse(
+    value: unknown,
+  ): { success: true; data: T } | { success: false; error: { message: string } };
+}
+
+/**
+ * Thrown by `generateJSON` when the model's output is still not valid after
+ * the single repair retry. Callers should catch it and show a retryable
+ * message rather than letting a malformed shape reach persistence/rendering.
+ */
+export class LlmValidationError extends Error {
+  constructor(
+    message: string,
+    readonly validationMessage: string,
+    readonly rawOutput: string,
+  ) {
+    super(message);
+    this.name = 'LlmValidationError';
+  }
+}
+
+const MAX_VALIDATION_MESSAGE_CHARS = 1500;
+
+function buildRepairPrompt(user: string, badOutput: string, problem: string): string {
+  return (
+    `${user}
+
+---
+
+` +
+    `Your previous reply did not match the required JSON shape.
+` +
+    `Previous reply:
+${badOutput.slice(0, 4000)}
+
+` +
+    `Problem:
+${problem.slice(0, MAX_VALIDATION_MESSAGE_CHARS)}
+
+` +
+    `Reply again with ONLY the corrected JSON object, matching the schema exactly.`
+  );
+}
+
+function tryValidate<T>(
+  text: string,
+  schema: JsonSchemaLike<T>,
+): { ok: true; data: T } | { ok: false; problem: string } {
+  let parsed: unknown;
+  try {
+    parsed = extractJSON<unknown>(text);
+  } catch (err) {
+    return { ok: false, problem: (err as Error).message };
+  }
+  const result = schema.safeParse(parsed);
+  return result.success
+    ? { ok: true, data: result.data }
+    : { ok: false, problem: result.error.message };
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 
-export async function generateJSON<T>(system: string, user: string): Promise<T> {
+async function callProvider(system: string, user: string): Promise<string> {
   const provider = selectProvider();
+  return provider.kind === 'freellmapi'
+    ? callFreellmapi(system, user)
+    : callBridge(system, user, provider.provider);
+}
 
-  const text =
-    provider.kind === 'freellmapi'
-      ? await callFreellmapi(system, user)
-      : await callBridge(system, user, provider.provider);
+/**
+ * Calls the configured LLM and returns parsed JSON.
+ *
+ * With a `schema`, the output is validated (and coerced by the schema); on
+ * failure the model is re-prompted ONCE with the validation error, and if that
+ * also fails a `LlmValidationError` is thrown. Without a schema the output is
+ * returned unvalidated (legacy behavior — avoid for new call sites).
+ */
+export async function generateJSON<T>(
+  system: string,
+  user: string,
+  schema?: JsonSchemaLike<T>,
+): Promise<T> {
+  const text = await callProvider(system, user);
 
-  return extractJSON<T>(text);
+  if (!schema) return extractJSON<T>(text);
+
+  const first = tryValidate(text, schema);
+  if (first.ok) return first.data;
+
+  const repairedText = await callProvider(system, buildRepairPrompt(user, text, first.problem));
+  const second = tryValidate(repairedText, schema);
+  if (second.ok) return second.data;
+
+  throw new LlmValidationError(
+    'LLM output failed schema validation after one repair attempt',
+    second.problem,
+    repairedText.slice(0, 600),
+  );
 }
 
 export async function checkBridge(): Promise<void> {

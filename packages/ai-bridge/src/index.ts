@@ -1,5 +1,6 @@
 export * from './types';
-export { generateJSON, checkBridge } from './llm';
+export { generateJSON, checkBridge, extractJSON, LlmValidationError } from './llm';
+export type { JsonSchemaLike } from './llm';
 export {
   analyzeJob,
   checkCompatibility,
