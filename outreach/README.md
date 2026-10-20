@@ -14,7 +14,7 @@
 ![Postgres](https://img.shields.io/badge/Postgres-Neon-4169e1?logo=postgresql&logoColor=white)
 ![Gmail API](https://img.shields.io/badge/Gmail_API-OAuth_PKCE-ea4335?logo=gmail&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-890_passing-2ea44f)
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-PolyForm%20Strict-red)
 
 </div>
 
@@ -158,7 +158,7 @@ sequenceDiagram
 ### Clone
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USER/cold-outreach-job-agent.git
+git clone https://github.com/yassine-krichen/cold-outreach-job-agent.git
 cd cold-outreach-job-agent
 ```
 
@@ -281,7 +281,15 @@ The agents' file contract (dossier, tailoring, draft, candidates, verdicts) is i
 
 ## License
 
-MIT © 2026 Yassine Krichen
+**Source-available, not open source.** cold-outreach-job-agent is published under the
+[PolyForm Strict License 1.0.0](LICENSE): you may read, run, and learn from the code
+for personal, research, or evaluation use.
+
+You may **not** use it commercially, redistribute it, rebrand it, or publish modified
+versions without written permission. Copyright (c) 2026 Yassine Krichen. All rights
+not granted by the license are reserved.
+
+For commercial licensing or collaboration: krichenyassine22@gmail.com
 
 Built by [Yassine Krichen](https://github.com/yassine-krichen) · Tunis, 2026
 

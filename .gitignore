@@ -16,3 +16,6 @@ apps/api/storage/
 .vercel/
 .DS_Store
 Thumbs.db
+
+# Personal career data: each user keeps their own, never committed
+data_inventory.json
