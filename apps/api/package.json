@@ -15,7 +15,14 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "prisma db seed",
     "scan:jobs": "ts-node --transpile-only scripts/scan-and-ingest.ts",
-    "verify:ingest": "ts-node --transpile-only scripts/verify-ingest-survival.ts"
+    "verify:ingest": "ts-node --transpile-only scripts/verify-ingest-survival.ts",
+    "eval:fixtures": "ts-node --transpile-only eval/build-fixtures.ts",
+    "eval:run": "ts-node --transpile-only eval/run-eval.ts",
+    "eval:labels": "ts-node --transpile-only eval/calibration.ts",
+    "eval:report": "ts-node --transpile-only eval/report.ts",
+    "eval:sanity": "ts-node --transpile-only eval/sanity-check.ts",
+    "eval:test": "jest -c eval/jest.config.js",
+    "eval:type-check": "tsc --noEmit -p eval/tsconfig.json"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

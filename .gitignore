@@ -19,3 +19,8 @@ Thumbs.db
 
 # Personal career data: each user keeps their own, never committed
 data_inventory.json
+
+# Resumiq eval: third-party JD text and derived data stay local; only
+# fixtures/manifest.json (ids, URLs, sha256) is committed. eval/out/ is covered by out/ above.
+apps/api/eval/fixtures/postings.json
+apps/api/eval/fixtures/derived-steps.jsonl

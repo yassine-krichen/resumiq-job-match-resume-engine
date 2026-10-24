@@ -1,0 +1,314 @@
+{
+  "createdAt": "2026-10-23T13:52:40.404Z",
+  "sampling": {
+    "query": "Job where source='scraper' and length(rawJd) >= minJdChars and host in quotas",
+    "seed": 20261023,
+    "minJdChars": 800,
+    "quotas": {
+      "jobs.ashbyhq.com": 10,
+      "remoteok.com": 12,
+      "stripe.com": 6,
+      "jobs.lever.co": 6,
+      "remotive.com": 4,
+      "weworkremotely.com": 2
+    },
+    "perHostCounts": {
+      "jobs.ashbyhq.com": 10,
+      "remoteok.com": 12,
+      "stripe.com": 6,
+      "jobs.lever.co": 6,
+      "remotive.com": 4,
+      "weworkremotely.com": 2
+    }
+  },
+  "inventory": {
+    "rawSha256": "2006cd4af62c08ddbc4c461c0b36499de1d921a16a4cd4ab7b341bdab9ee29f4",
+    "sentToLlmSha256": "692360612383bbefac427514d220eac6778eb257ea2268f705e2599bfa8132e0",
+    "normalizations": [
+      "personal_info.phone and email redacted before any LLM call",
+      "26 missing project startDate/endDate set to ''"
+    ]
+  },
+  "postings": [
+    {
+      "id": "cmu0ljlgo0030kui65d4yh1p3",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/820d0d5a-0930-475c-b494-23e18ad2aa68",
+      "sha256": "1c55dc60355eea8895dfb7aa416c30847c35c0b0d4cb49a74ad0f9348060b1b1",
+      "chars": 4532
+    },
+    {
+      "id": "cmu0ljqbm004qkui6k8hi4elm",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-data-analyst-assistant-arabian-private-holdings-1136217",
+      "sha256": "da224779c8f57bf469fb522bba3ddcfdadd16f2cf6358e2547fe105295c2ec59",
+      "chars": 1005
+    },
+    {
+      "id": "cmtop6kqd00a6sd4pt8620jc0",
+      "host": "stripe.com",
+      "sourceUrl": "https://stripe.com/jobs/search?gh_jid=8122188",
+      "sha256": "0847cc93eef2097421b23f413f53d11852ba3d49e0d8f77e71f90fefd0c807ed",
+      "chars": 4000
+    },
+    {
+      "id": "cmtop88xg00h1sd4pvx3adn1u",
+      "host": "jobs.lever.co",
+      "sourceUrl": "https://jobs.lever.co/leverdemo/d3afdff4-3005-4d29-a548-3b106436eabe",
+      "sha256": "63df63d916b37a1bb1bcf27e3e5ef9fafdacd2e984afa7b0050851f4fc19c248",
+      "chars": 1182
+    },
+    {
+      "id": "cmu0ljtx10066kui650l0ejkd",
+      "host": "remotive.com",
+      "sourceUrl": "https://remotive.com/remote-jobs/artificial-intelligence/ai-response-evaluator-2091126",
+      "sha256": "f9503456433193d51091a60cef490e8f310083657c8fe708f4541dede4e1e131",
+      "chars": 1352
+    },
+    {
+      "id": "cmu0ljw2h006ukui6p2bev8lb",
+      "host": "weworkremotely.com",
+      "sourceUrl": "https://weworkremotely.com/remote-jobs/toptal-senior-security-compliance-consultant-soc-2-grc-specialist",
+      "sha256": "7fd15cf3043272211172417f73e903b1c3b5d8b52cc3ef86f33432af5ca184dc",
+      "chars": 3486
+    },
+    {
+      "id": "cmtop8gk500hxsd4p0rm2r806",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/a8041e0e-350e-47d0-9190-454089216fb8",
+      "sha256": "b1bd517e289609df8e6c1fc61bd1fafdb560cb82f9fc9c4021b8812b56b8cff8",
+      "chars": 5145
+    },
+    {
+      "id": "cmu0ljo52003ukui6izt9gi0j",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-senior-contracts-and-budget-associate-precision-medicine-group-1136844",
+      "sha256": "d4adeef08a4051180aadbb610894733708de4c22b2810f98d7f9a8655d1a1f3a",
+      "chars": 1033
+    },
+    {
+      "id": "cmtop5obl006dsd4pl0besneu",
+      "host": "stripe.com",
+      "sourceUrl": "https://stripe.com/jobs/search?gh_jid=8145119",
+      "sha256": "b0e760bd755a0bc020bcd99183359cd8a9b6122991e600c9d8fd92436621ae79",
+      "chars": 3475
+    },
+    {
+      "id": "cmtop88gc00gzsd4pf0dzf64f",
+      "host": "jobs.lever.co",
+      "sourceUrl": "https://jobs.lever.co/leverdemo/7e10ea46-98be-4bd1-a3ca-57d153b25c61",
+      "sha256": "9afbd018e70dbbf6aee88096ccd218e306e7fb52f9deda190e6578507aa8ae1d",
+      "chars": 909
+    },
+    {
+      "id": "cmtpx9zxz000l1vq6mgu864h8",
+      "host": "remotive.com",
+      "sourceUrl": "https://remotive.com/remote-jobs/customer-service/saas-product-support-jedi-2091087",
+      "sha256": "f1442ccc90f29dabbd290f5a6db7b95f0470f66a8301890490a5bd85e2801f03",
+      "chars": 3833
+    },
+    {
+      "id": "cmu0ljvnt006okui6tbjmd0lk",
+      "host": "weworkremotely.com",
+      "sourceUrl": "https://weworkremotely.com/remote-jobs/toptal-power-platform-solutions-architect",
+      "sha256": "d55147d747a659dd2e9c92b38f528c0ee9faca6a0d192dfed131a51748cfcd62",
+      "chars": 2628
+    },
+    {
+      "id": "cmtop8f4q00hrsd4pkd82yvqo",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/eac7f181-d658-4943-9430-51bae2bcd110",
+      "sha256": "89fedd4c6427cb5ffd013495ed146870dc58a29dcad3419d7fac3ad4e68eaab3",
+      "chars": 5173
+    },
+    {
+      "id": "cmu0ljr4t0052kui6asyudx9t",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-managing-director-berni-and-mick-ireland-1135908",
+      "sha256": "3196b6e3b281d69054f2083044748a5fb2fb1991032c9f239e21402f4a0bce93",
+      "chars": 886
+    },
+    {
+      "id": "cmtop5bc6004usd4p387s65vc",
+      "host": "stripe.com",
+      "sourceUrl": "https://stripe.com/jobs/search?gh_jid=7742552",
+      "sha256": "3c08802faa58e9b946c72448086bd5044e5ca853577c2072fa40dd817ed768ee",
+      "chars": 4000
+    },
+    {
+      "id": "cmu0ljkiu002zkui6a0zfuv3w",
+      "host": "jobs.lever.co",
+      "sourceUrl": "https://jobs.lever.co/leverdemo/314e7f2a-db2f-499a-927c-dc58656205bf",
+      "sha256": "43fd5b7ae56220f7bcdcddde8d87b4b91fea84b12bfcee6143316ee4db7c357c",
+      "chars": 1445
+    },
+    {
+      "id": "cmtpxa004000m1vq6j8nw1oxb",
+      "host": "remotive.com",
+      "sourceUrl": "https://remotive.com/remote-jobs/writing/freelance-writer-1185979",
+      "sha256": "c98edd0f130455c8e5b82e484b16d7d60cfc14f07be935fbf58b010509f287c3",
+      "chars": 1294
+    },
+    {
+      "id": "cmtop8a4a00h6sd4p9gwvixa2",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/d3bc1ced-3ce4-4086-a050-555055dbb1ff",
+      "sha256": "ef5a1370cc570add2d9f92c0837d05554c89c4971054b8203e93a5f4a6351aa0",
+      "chars": 5646
+    },
+    {
+      "id": "cmu0ljnnt003nkui6ot8lwlqe",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-consultant-implementation-engineer-harbor-1136987",
+      "sha256": "9733388258f79c47df7850d4ac2e316a9fc2672f05752b06178c30598d490174",
+      "chars": 1026
+    },
+    {
+      "id": "cmtop4pfd002fsd4pszzc7402",
+      "host": "stripe.com",
+      "sourceUrl": "https://stripe.com/jobs/search?gh_jid=7895287",
+      "sha256": "94d091d4ab1135273142a58dfe1178c13aad030827c41c404422859d554bff6f",
+      "chars": 2664
+    },
+    {
+      "id": "cmtop896100h2sd4p3b9w40m6",
+      "host": "jobs.lever.co",
+      "sourceUrl": "https://jobs.lever.co/leverdemo/82fbbecc-5535-466b-a84b-7957cf49e443",
+      "sha256": "d7e1e7dd4579a47ffa0c19b23b374d834faf125da30fdaa65d3a3f4bee71bad0",
+      "chars": 1837
+    },
+    {
+      "id": "cmtpx9zvn000k1vq6ic5o8g2w",
+      "host": "remotive.com",
+      "sourceUrl": "https://remotive.com/remote-jobs/sales/sales-jedi-2091088",
+      "sha256": "c7196017143bd33f562822b544858bd60c79cb40c82d73217f3eb96a73fb1f19",
+      "chars": 4000
+    },
+    {
+      "id": "cmtop8fug00husd4pvijc977x",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/29aeb82d-f00e-4283-b332-057efd487d6f",
+      "sha256": "a263a88c1998864f3fa0d09ce7d3baf044022da9d944d25705c4daeac876c315",
+      "chars": 4511
+    },
+    {
+      "id": "cmu0ljp5o0049kui6spes197l",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-software-engineer-iii-mobile-stone-1136570",
+      "sha256": "0bbe9c92c3cc4189fb46eb731244b2ec02bc2864e5d775fa57eff9912c7437ab",
+      "chars": 987
+    },
+    {
+      "id": "cmtop7tf700f9sd4pn3ml6jvm",
+      "host": "stripe.com",
+      "sourceUrl": "https://stripe.com/jobs/search?gh_jid=8112043",
+      "sha256": "e2a4d39a4973feb166c47ee3b4ab573e264c66f86b5d800c30deb8a478da1662",
+      "chars": 4000
+    },
+    {
+      "id": "cmtop89el00h3sd4px4iou66l",
+      "host": "jobs.lever.co",
+      "sourceUrl": "https://jobs.lever.co/leverdemo/72c48fc7-e770-495d-98ca-996ea89650c1",
+      "sha256": "747a57431b47ae213d563c02501e789bdefd4721cac1ea1094deae8c88d3b97b",
+      "chars": 1353
+    },
+    {
+      "id": "cmtop8dxu00hmsd4pjb7hfgd0",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/370d9605-f02f-44f9-97fa-ebf769bed93d",
+      "sha256": "12425b97a0fcecbcd6b8fdfe059a2af8221558d6933798a7a779c7c68c2a1029",
+      "chars": 4487
+    },
+    {
+      "id": "cmu0ljo08003skui6twrix7w6",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-hotline-paralegal-legal-services-nyc-1136861",
+      "sha256": "8e399f9dc8c64b90f3b73d5433045310d9b3d22f6d743186473ba28d062640dd",
+      "chars": 1047
+    },
+    {
+      "id": "cmtop5ed40057sd4p5im4be30",
+      "host": "stripe.com",
+      "sourceUrl": "https://stripe.com/jobs/search?gh_jid=8079918",
+      "sha256": "ed6bae8380823b24aaf9f181575b03e4bfc2b04fa7e9b29733b9801611fc5c70",
+      "chars": 4000
+    },
+    {
+      "id": "cmtop87qk00gwsd4pv8dc6br7",
+      "host": "jobs.lever.co",
+      "sourceUrl": "https://jobs.lever.co/leverdemo/ad208490-4052-4f91-a57e-433f2d1e484b",
+      "sha256": "747a57431b47ae213d563c02501e789bdefd4721cac1ea1094deae8c88d3b97b",
+      "chars": 1353
+    },
+    {
+      "id": "cmtop8cic00hgsd4pi57jrzdo",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/a264869e-f058-487c-ab7f-9b77dffa427c",
+      "sha256": "1c9a236b5a87c61511b9f00901c68cc89f672a31bd600fc20a5c451e9cb72043",
+      "chars": 4963
+    },
+    {
+      "id": "cmu0ljmdd0037kui6nm66zudx",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-senior-people-talent-operations-partner-testgorilla-1137378",
+      "sha256": "976e2b18a716425995c455021a10df8a1c4121101ced5c26d1eabcc3d6756802",
+      "chars": 840
+    },
+    {
+      "id": "cmtop8b2o00hasd4p8jz4qez2",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/0c7c2e26-0a98-42cf-a47c-9a3999fb513b",
+      "sha256": "356f1572470fb57929849dce8e7c61fd0e8f4b2a65b50a0a4124552e31870ea3",
+      "chars": 5259
+    },
+    {
+      "id": "cmu0ljmks003akui6vf1ovd3v",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-quality-dispense-technician-north-thatchers-cider-1137374",
+      "sha256": "fe736d6a0a3b191d85ae7b81aba9b0701e8132abf314ae3eb1cb76ec5abcfacc",
+      "chars": 983
+    },
+    {
+      "id": "cmtop8g3000hvsd4pc7bxs2io",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/1aa6f672-5917-49aa-b015-70ebff901923",
+      "sha256": "dbbee64d266d00fa844a5ed16227e034ec28fc514570ed4abf52a7edb0a23362",
+      "chars": 4779
+    },
+    {
+      "id": "cmu0ljphx004ekui68o2zb1eu",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-staff-software-engineer-evolve-1136447",
+      "sha256": "b49e99d0762b2acd8d6b413c36824e584ae8cff8027bba796dd175e2077ad972",
+      "chars": 1026
+    },
+    {
+      "id": "cmtop8dgq00hksd4p1dkmyzfj",
+      "host": "jobs.ashbyhq.com",
+      "sourceUrl": "https://jobs.ashbyhq.com/linear/1d652292-04d9-405c-8101-578efd020e94",
+      "sha256": "a72ebc5a825d7330cbe256b2afb7017e6ac3f0325057433ea0a784d4f0b285b0",
+      "chars": 5931
+    },
+    {
+      "id": "cmu0ljpu7004jkui6lsaetrox",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-architectural-designer-sophies-flats-inc-1136192",
+      "sha256": "e3eca9c2bec9d382ad10c6d0a9a098530a97891e034eede25f19a147d1e05dfd",
+      "chars": 874
+    },
+    {
+      "id": "cmu0ljrem0056kui6yjwrez6e",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-bms-service-technician-johnson-controls-1135997",
+      "sha256": "ee425ef4ae4b41a9475132be926e3c4e44cb8dff265eb76f8751f9a92373982f",
+      "chars": 955
+    },
+    {
+      "id": "cmu0ljqe6004rkui61jd04bns",
+      "host": "remoteok.com",
+      "sourceUrl": "https://remoteOK.com/remote-jobs/remote-business-development-grow10x-1136221",
+      "sha256": "0c60430a5ed6caa06618252b5c05a47ff9d0bf35a35d64e8e430c1dbb5a10f26",
+      "chars": 961
+    }
+  ]
+}
