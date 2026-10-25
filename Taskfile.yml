@@ -88,6 +88,25 @@ tasks:
     cmds:
       - npx turbo run test
 
+  # Read-only MCP server over the career inventory: packages/mcp-server, see its README.
+  mcp:build:
+    desc: Build the Resumiq MCP server (and the schemas package it imports)
+    cmds:
+      - npm run build --workspace=@resumiq/schemas
+      - npm run build --workspace=@resumiq/mcp-server
+
+  mcp:test:
+    desc: Run the MCP server tests (fixture inventories only, never the real data_inventory.json)
+    cmds:
+      - npm run build --workspace=@resumiq/schemas
+      - npm run test --workspace=@resumiq/mcp-server
+
+  mcp:inspect:
+    desc: Open the MCP Inspector (pinned) against the built server; set RESUMIQ_INVENTORY_PATH to point at an inventory
+    cmds:
+      - task: mcp:build
+      - npx -y @modelcontextprotocol/inspector@0.17.2 node packages/mcp-server/dist/main.js
+
   scan-jobs:
     desc: Run a one-off job scan + ingest against the DB (needs DATABASE_URL from apps/api/.env only — no Redis/queue/worker required)
     cmds:
