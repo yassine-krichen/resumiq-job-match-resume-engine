@@ -114,23 +114,24 @@ function project(kind: FieldKind, value: unknown): unknown {
   }
 }
 
-const MIN_CREDENTIAL_ID_LENGTH = 4;
+// Free-text certification fields that usually embed the credential id (verification
+// URLs, "ID: ..." lines). Matching the id inside them is unreliable (case, percent
+// encoding, wrong JSON type, very short ids), so they are dropped whenever an id exists.
+const CREDENTIAL_CARRYING_FIELDS = ['link', 'source', 'description'];
 
-function mentions(value: unknown, needle: string): boolean {
-  return JSON.stringify(value).includes(needle);
+function hasCredentialId(raw: RawEntry): boolean {
+  const id = raw.credential_id;
+  return id !== undefined && id !== null && String(id).trim() !== '';
 }
 
 /** Returns a new object holding only allow-listed, well-typed, non-empty fields. */
 export function projectEntry(section: Section, raw: RawEntry): RawEntry {
-  // Verification links usually embed the credential id, which would undo stripping it.
-  const credentialId =
-    section === 'certifications' && typeof raw.credential_id === 'string' ? raw.credential_id.trim() : '';
+  const dropCredentialCarriers = section === 'certifications' && hasCredentialId(raw);
   const out: RawEntry = {};
   for (const [field, kind] of Object.entries(ALLOWED_FIELDS[section])) {
+    if (dropCredentialCarriers && CREDENTIAL_CARRYING_FIELDS.includes(field)) continue;
     const value = project(kind, raw[field]);
-    if (value === undefined) continue;
-    if (credentialId.length >= MIN_CREDENTIAL_ID_LENGTH && mentions(value, credentialId)) continue;
-    out[field] = value;
+    if (value !== undefined) out[field] = value;
   }
   return out;
 }

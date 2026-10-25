@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'fs';
 
 import { SENTINELS, TempInventory, tempInventory, validInventory } from '../test-support/fixture';
 
-import { createInventoryStore } from './inventory-store';
+import { MAX_INVENTORY_BYTES, createInventoryStore } from './inventory-store';
 
 describe('createInventoryStore', () => {
   let file: TempInventory | undefined;
@@ -93,5 +93,20 @@ describe('createInventoryStore', () => {
     expect(reads).toBe(2);
     expect(first.ok && first.snapshot.view.summary[0].target_role).toBe('Backend Engineer');
     expect(reloaded.ok && reloaded.snapshot.view.summary[0].target_role).toBe('Platform Engineer');
+  });
+
+  it('refuses a file over the size cap without reading it', () => {
+    file = tempInventory();
+    let reads = 0;
+    const store = createInventoryStore(file.path, {
+      stat: () => ({ mtimeMs: 1, size: MAX_INVENTORY_BYTES + 1 }),
+      readFile: () => {
+        reads += 1;
+        return '{}';
+      },
+    });
+
+    expect(store.load()).toEqual({ ok: false, error: 'Inventory file is too large (limit 5 MB)' });
+    expect(reads).toBe(0);
   });
 });

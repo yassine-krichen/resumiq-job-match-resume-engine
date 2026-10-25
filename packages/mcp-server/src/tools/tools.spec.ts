@@ -140,9 +140,26 @@ describe('resumiq MCP tools', () => {
     expect(body).toEqual({ total: 0, truncated: false, gaps: [] });
   });
 
-  it('returns a sanitized error, never a path, when the inventory cannot be read', async () => {
-    const hidden = `${file.dir}/${SENTINELS.key}/missing.json`;
-    const broken = await connect(hidden);
+  it('runs error text through the sanitizer so a path or key in a store error never reaches the caller', async () => {
+    const leakyStore = {
+      load: () => ({ ok: false as const, error: `ENOENT: cannot open ${file.path} (key ${SENTINELS.key})` }),
+    };
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await createServer({ store: leakyStore }).connect(serverSide);
+    const leaky = new Client({ name: 'spec-client', version: '0.0.0' });
+    await leaky.connect(clientSide);
+
+    const { isError, text } = await call(leaky, 'search_profile', { query: 'redis' });
+    await leaky.close();
+
+    expect(isError).toBe(true);
+    expect(text).not.toContain(file.dir);
+    expect(text).not.toContain(SENTINELS.key);
+    expect(text).toContain('[path]');
+  });
+
+  it('returns a path-free error when the inventory file is missing', async () => {
+    const broken = await connect(`${file.dir}/${SENTINELS.key}/missing.json`);
 
     const { isError, text } = await call(broken, 'search_profile', { query: 'redis' });
     await broken.close();
@@ -150,6 +167,29 @@ describe('resumiq MCP tools', () => {
     expect(isError).toBe(true);
     expect(text).not.toContain(file.dir);
     expect(text).not.toContain(SENTINELS.key);
+  });
+
+  it('does not leak a wrongly typed credential id or the fields that embed it', async () => {
+    const data = validInventory();
+    (data.certifications as Record<string, unknown>[]).push({
+      name: 'Numeric Credential Cert',
+      issuer: 'ExampleCloud',
+      date: '2025-03',
+      credential_id: 987654321,
+      link: 'https://example.com/verify/987654321',
+      description: 'Credential 987654321 issued',
+    });
+    file.write(data);
+    file.touch(60);
+
+    const outputs = [
+      await call(client, 'search_profile', { query: 'numeric credential cert 987654321', limit: 25 }),
+      await call(client, 'get_entry', { section: 'certifications', id: 'Numeric Credential Cert' }),
+    ];
+    const everything = outputs.map((o) => o.text).join('\n');
+
+    expect(everything).toContain('Numeric Credential Cert');
+    expect(everything).not.toContain('987654321');
   });
 
   it('never puts a planted phone number, email, key or credential id into any tool result', async () => {

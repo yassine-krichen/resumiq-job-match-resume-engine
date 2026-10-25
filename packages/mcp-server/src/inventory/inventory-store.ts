@@ -9,6 +9,8 @@ import { Gap } from './gaps';
 import { InventoryReadSchema, InventoryView, RawEntry } from './sections';
 
 const MAX_SCHEMA_ISSUES = 200;
+/** A career inventory is a few hundred KB; anything near this is the wrong file. */
+export const MAX_INVENTORY_BYTES = 5 * 1024 * 1024;
 const MAX_SHAPE_ISSUES_IN_ERROR = 5;
 
 export interface InventorySnapshot {
@@ -138,6 +140,10 @@ export function createInventoryStore(path: string, deps: StoreDeps = {}): Invent
       } catch {
         cached = undefined;
         return { ok: false, error: 'Inventory file not found or unreadable (check RESUMIQ_INVENTORY_PATH)' };
+      }
+      if (info.size > MAX_INVENTORY_BYTES) {
+        cached = undefined;
+        return { ok: false, error: 'Inventory file is too large (limit 5 MB)' };
       }
       if (cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
         return { ok: true, snapshot: cached.snapshot };

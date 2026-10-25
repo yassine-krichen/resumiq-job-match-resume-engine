@@ -6,7 +6,10 @@ file into context. Retrieval only: the caller (Claude) does the tailoring itself
 
 - stdio transport, no network, no writes, no file rendering
 - `personal_info` (name, email, phone, links) is never indexed, searchable or returned
-- certification `credential_id` is stripped, together with any field that embeds it (verification links)
+- certification `credential_id` is stripped, and when a certification has one its `link`, `source`
+  and `description` are dropped too (they usually embed the id)
+- `publications_and_speaking` and `interests` are not exposed: they are not indexed, searchable or
+  returnable, and have no section name
 - a fixture-based test suite; the real inventory is never read by tests
 
 ## Tools
@@ -42,7 +45,7 @@ sections have the wrong shape, is reported as a tool error instead.
 | --- | --- | --- |
 | `RESUMIQ_INVENTORY_PATH` | `data_inventory.json` at the repo root | Path of the inventory JSON (must end in `.json`) |
 
-The file is re-read when its modification time or size changes. Logs go to stderr only; stdout
+The file is re-read when its modification time or size changes, and a file over 5 MB is refused. Logs go to stderr only; stdout
 carries nothing but JSON-RPC frames.
 
 ## Build and test
@@ -94,4 +97,6 @@ RESUMIQ_INVENTORY_PATH=/path/to/data_inventory.json node eval/run-eval.js
 ```
 
 It prints recall@5, MRR, latency and bytes per call. The query set is small and written by Claude, so
-treat the numbers as a sanity check, not a benchmark.
+treat the numbers as a sanity check, not a benchmark. The context-saving figure compares a
+`search_profile` response with the whole `data_inventory.json`; a client that reads only the sections
+it needs would save less.

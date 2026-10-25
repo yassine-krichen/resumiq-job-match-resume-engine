@@ -25,8 +25,13 @@ if (!inventoryPath) {
 }
 const { queries } = JSON.parse(readFileSync(join(__dirname, 'queries.json'), 'utf-8'));
 
-const isExpected = (hit, expected) =>
-  hit.section === expected.section && (hit.title === expected.name || hit.title.endsWith(` at ${expected.name}`));
+// Whitespace is collapsed so a stray double space in an entry name does not read as a miss.
+const squash = (text) => text.replace(/\s+/g, ' ').trim();
+const isExpected = (hit, expected) => {
+  const title = squash(hit.title);
+  const name = squash(expected.name);
+  return hit.section === expected.section && (title === name || title.endsWith(` at ${name}`));
+};
 
 async function search(client, query, limit) {
   const started = performance.now();
