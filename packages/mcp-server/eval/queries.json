@@ -1,0 +1,187 @@
+{
+  "_comment": "Claude-built, hand-labelled set (n=20). Expected entries were chosen by reading the inventory and grepping raw text, not by running search_profile. Names only; no inventory text. An entry is expected when it provides direct evidence for the query, not for a passing mention.",
+  "queries": [
+    {
+      "id": 1,
+      "query": "Redis caching layer to reduce API latency",
+      "expected": [{ "section": "experience", "name": "AHEADIT Group" }],
+      "justification": "The only entry that implements a caching layer on Redis; the other Redis entries use it as a job-queue backend or infrastructure, which a caching requirement does not ask for."
+    },
+    {
+      "id": 2,
+      "query": "RAG pipeline with vector database and embeddings",
+      "expected": [
+        { "section": "experience", "name": "ST2i" },
+        { "section": "experience", "name": "Sofrecom Tunisie" }
+      ],
+      "justification": "Both internships build retrieval-augmented pipelines over a vector store (pgvector at one, ChromaDB with sentence-transformers at the other) and report retrieval evaluation."
+    },
+    {
+      "id": 3,
+      "query": "Spring Boot microservices Java",
+      "expected": [{ "section": "experience", "name": "Sofrecom Tunisie" }],
+      "justification": "Only entry that uses Spring Boot (and Java) in both its technology list and its achievements."
+    },
+    {
+      "id": 4,
+      "query": "WebSocket real-time features",
+      "expected": [
+        { "section": "experience", "name": "Sofrecom Tunisie" },
+        { "section": "projects", "name": "QueueFlow" },
+        { "section": "projects", "name": "CodeSync" }
+      ],
+      "justification": "Three entries ship WebSocket-based realtime behaviour (STOMP notifications, queue progress transport, Socket.io messaging). Entries that only use server-sent events are excluded because the query names WebSocket."
+    },
+    {
+      "id": 5,
+      "query": "CUDA GPU kernel optimization",
+      "expected": [
+        { "section": "projects", "name": "CUDA Neural-Net Kernels (Codesign Lab 2)" },
+        { "section": "certifications", "name": "Fundamentals of Deep Learning" }
+      ],
+      "justification": "The CUDA project is the direct evidence; the NVIDIA deep-learning certification validates GPU-accelerated training skills."
+    },
+    {
+      "id": 6,
+      "query": "multi-agent LLM orchestration LangGraph",
+      "expected": [
+        { "section": "experience", "name": "ST2i" },
+        { "section": "projects", "name": "Resumiq" },
+        { "section": "projects", "name": "Claude Code Agentic Engineering Setup" }
+      ],
+      "justification": "A LangGraph agentic platform, an eight-agent LLM pipeline, and a subagent-orchestrated Claude Code setup are the three entries that build multi-agent systems."
+    },
+    {
+      "id": 7,
+      "query": ".NET Core C# backend with Entity Framework",
+      "expected": [
+        { "section": "experience", "name": "AHEADIT Group" },
+        { "section": "projects", "name": "MyRealEstate" }
+      ],
+      "justification": "The two backends built on .NET and Entity Framework Core. The desktop audio app also uses C# but is not a backend."
+    },
+    {
+      "id": 8,
+      "query": "CI/CD pipelines with GitHub Actions or GitLab CI",
+      "expected": [
+        { "section": "experience", "name": "Sofrecom Tunisie" },
+        { "section": "projects", "name": "MyRealEstate" },
+        { "section": "projects", "name": "LLM Web Bridge (formerly Claude Bridge)" }
+      ],
+      "justification": "Entries whose technology lists and achievements include GitLab CI/CD or GitHub Actions workflows."
+    },
+    {
+      "id": 9,
+      "query": "NestJS REST API with PostgreSQL and Prisma",
+      "expected": [
+        { "section": "projects", "name": "Resumiq" },
+        { "section": "projects", "name": "Haffely" },
+        { "section": "projects", "name": "QueueFlow" },
+        { "section": "experience", "name": "Freelance (partnership with Khalid)" }
+      ],
+      "justification": "Four entries combine NestJS with PostgreSQL and Prisma in their technology lists."
+    },
+    {
+      "id": 10,
+      "query": "Zustand state management React",
+      "expected": [{ "section": "experience", "name": "TouchDown Apps by Cappsule" }],
+      "justification": "The only entry that lists and describes Zustand; other React entries do not mention it."
+    },
+    {
+      "id": 11,
+      "query": "background job queue workers BullMQ",
+      "expected": [
+        { "section": "projects", "name": "Resumiq" },
+        { "section": "projects", "name": "Product Intelligence Engine" },
+        { "section": "projects", "name": "YouTube Content Automation Suite" },
+        { "section": "experience", "name": "ST2i" }
+      ],
+      "justification": "BullMQ workers in two projects, and RQ-on-Redis worker queues in the pipeline suite and the AI internship."
+    },
+    {
+      "id": 12,
+      "query": "Playwright browser automation web scraping",
+      "expected": [
+        { "section": "projects", "name": "LLM Web Bridge (formerly Claude Bridge)" },
+        { "section": "projects", "name": "Biz Scraper (Freelance Client Acquisition Tool)" },
+        { "section": "projects", "name": "Oasis" },
+        { "section": "projects", "name": "Axion v2 (Karuta Discord Bot)" }
+      ],
+      "justification": "Entries that automate a real browser (Playwright or its patchright fork) or build scrapers as a core feature."
+    },
+    {
+      "id": 13,
+      "query": "Supabase Postgres row level security authentication",
+      "expected": [
+        { "section": "projects", "name": "Vehicle Inspection Web App" },
+        { "section": "projects", "name": "Alarm Calendar" },
+        { "section": "experience", "name": "Freelance (partnership with Khalid)" }
+      ],
+      "justification": "Entries built on Supabase with RLS or Supabase auth/realtime described in the achievements."
+    },
+    {
+      "id": 14,
+      "query": "text-to-speech audio synthesis pipeline",
+      "expected": [
+        { "section": "projects", "name": "book2audio (EPUB to Audiobook)" },
+        { "section": "projects", "name": "YouTube Content Automation Suite" }
+      ],
+      "justification": "Both generate voice-over audio with TTS engines as part of a pipeline."
+    },
+    {
+      "id": 15,
+      "query": "NLP text classification BERT scikit-learn",
+      "expected": [{ "section": "projects", "name": "ESG Text Classification (GODS 5.0 Hackathon)" }],
+      "justification": "The only entry that trains and evaluates text classifiers with scikit-learn and BERT."
+    },
+    {
+      "id": 16,
+      "query": "Model Context Protocol MCP server tools",
+      "expected": [
+        { "section": "certifications", "name": "Introduction to Model Context Protocol" },
+        { "section": "certifications", "name": "Model Context Protocol: Advanced Topics" },
+        { "section": "projects", "name": "Claude Code Agentic Engineering Setup" }
+      ],
+      "justification": "Two MCP certifications plus the project that runs an MCP server in a daily Claude Code setup."
+    },
+    {
+      "id": 17,
+      "query": "React Native Expo mobile app",
+      "expected": [
+        { "section": "projects", "name": "AnyDeck" },
+        { "section": "experience", "name": "Freelance (partnership with Khalid)" }
+      ],
+      "justification": "AnyDeck is an Expo and React Native app; the freelance entry lists Expo (React Native) for a prototype. Hybrid Capacitor and native Kotlin work is excluded because the query names React Native."
+    },
+    {
+      "id": 18,
+      "query": "Electron desktop application",
+      "expected": [
+        { "section": "projects", "name": "Avrix" },
+        { "section": "projects", "name": "Alarm Calendar" }
+      ],
+      "justification": "The two projects that ship Electron desktop apps."
+    },
+    {
+      "id": 19,
+      "query": "Angular frontend development",
+      "expected": [
+        { "section": "experience", "name": "Sofrecom Tunisie" },
+        { "section": "experience", "name": "AHEADIT Group" }
+      ],
+      "justification": "The two internships that build Angular front ends."
+    },
+    {
+      "id": 20,
+      "query": "Scrum Agile Jira",
+      "expected": [
+        { "section": "certifications", "name": "Scrum Fundamentals Certified" },
+        { "section": "certifications", "name": "Get the Most Out of Jira" },
+        { "section": "certifications", "name": "Apply Agile Practices to Manage Your Work" },
+        { "section": "certifications", "name": "Configure Agile Boards for Jira Spaces" },
+        { "section": "certifications", "name": "Get Started Quickly with Jira" }
+      ],
+      "justification": "Five certifications whose names cover Scrum, Agile practice and Jira. Experience entries that mention agile delivery in passing are not counted."
+    }
+  ]
+}
