@@ -1,0 +1,28 @@
+{
+  "name": "@resumiq/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only MCP server (stdio) exposing search, lookup and gap checks over the Resumiq career inventory.",
+  "main": "./dist/main.js",
+  "bin": {
+    "resumiq-mcp": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit",
+    "test": "jest",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "~1.32.2",
+    "@resumiq/schemas": "*",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.5.0"
+  }
+}
